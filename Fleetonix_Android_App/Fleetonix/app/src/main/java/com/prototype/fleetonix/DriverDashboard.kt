@@ -15,6 +15,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import android.os.Looper
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationResult
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -53,6 +56,8 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -326,7 +331,7 @@ fun DriverDashboard(
 
         val origin = "$currentLatitude,$currentLongitude"
         val destination = when (tripPhase) {
-            "pickup", "pending" -> if (schedule.pickup?.latitude != null) "${schedule.pickup.latitude},${schedule.pickup.longitude}" else null
+            "pickup", "return_pickup" -> if (schedule.pickup?.latitude != null) "${schedule.pickup.latitude},${schedule.pickup.longitude}" else null
             "dropoff" -> if (schedule.dropoff?.latitude != null) "${schedule.dropoff.latitude},${schedule.dropoff.longitude}" else null
             else -> null
         }
@@ -516,15 +521,23 @@ fun DriverDashboard(
         }
     }
 
-    DisposableEffect(Unit) {
-        val receiver = object : android.content.BroadcastReceiver() {
-            override fun onReceive(context: Context?, intent: Intent?) {
-                if (intent?.action == LocationService.ACTION_LOCATION_UPDATE) {
-                    val lat = intent.getDoubleExtra(LocationService.EXTRA_LATITUDE, 0.0)
-                    val lng = intent.getDoubleExtra(LocationService.EXTRA_LONGITUDE, 0.0)
-                    val speed = intent.getFloatExtra(LocationService.EXTRA_SPEED, 0f)
-                    val accuracy = intent.getFloatExtra(LocationService.EXTRA_ACCURACY, 0f)
-                    val bearing = intent.getFloatExtra(LocationService.EXTRA_BEARING, 0f)
+    val locationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+    
+    DisposableEffect(hasLocationPermission, driverDocRef) {
+        if (!hasLocationPermission) return@DisposableEffect onDispose {}
+
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3000)
+            .setMinUpdateIntervalMillis(2000)
+            .build()
+
+        val locationCallback = object : LocationCallback() {
+            override fun onLocationResult(result: LocationResult) {
+                result.lastLocation?.let { location ->
+                    val lat = location.latitude
+                    val lng = location.longitude
+                    val speed = location.speed
+                    val accuracy = location.accuracy
+                    val bearing = location.bearing
 
                     currentLatitude = lat
                     currentLongitude = lng
@@ -534,33 +547,40 @@ fun DriverDashboard(
                     // Basic validation for Philippines region
                     val isInPhilippines = (lat >= 4 && lat <= 21) && (lng >= 116 && lng <= 127)
                     if (isInPhilippines || accuracy <= 50) {
-                        val locData = hashMapOf(
-                            "current_latitude" to lat,
-                            "current_longitude" to lng,
-                            "current_speed" to speed,
-                            "current_heading" to bearing,
-                            "current_accuracy" to accuracy,
-                            "current_route_polyline" to (activePolylineEncoded ?: ""),
-                            "trip_eta" to tripETA,
-                            "trip_distance" to tripDistance,
-                            "last_updated" to FieldValue.serverTimestamp()
-                        )
-
-                        driverDocRef?.update(locData as Map<String, Any>)
-                        Log.d("LocationTracking", "Updated: $lat, $lng (Accuracy: ${accuracy}m)")
+                        scope.launch {
+                            val locData = hashMapOf(
+                                "current_latitude" to lat,
+                                "current_longitude" to lng,
+                                "current_speed" to speed,
+                                "current_heading" to bearing,
+                                "current_accuracy" to accuracy,
+                                "current_route_polyline" to (activePolylineEncoded ?: ""),
+                                "trip_eta" to tripETA,
+                                "trip_distance" to tripDistance,
+                                "last_updated" to FieldValue.serverTimestamp()
+                            )
+                            driverDocRef?.update(locData as Map<String, Any>)
+                            Log.d("LocationTracking", "Foreground Updated: $lat, $lng (Accuracy: ${accuracy}m)")
+                        }
                     }
                 }
             }
         }
-        val filter = android.content.IntentFilter(LocationService.ACTION_LOCATION_UPDATE)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            context.registerReceiver(receiver, filter)
+
+        try {
+            locationClient.requestLocationUpdates(
+                locationRequest,
+                locationCallback,
+                Looper.getMainLooper()
+            )
+            Log.d("LocationTracking", "High-frequency foreground tracking started (3.0s)")
+        } catch (e: SecurityException) {
+            Log.e("LocationTracking", "Error starting updates: ${e.message}")
         }
 
         onDispose {
-            context.unregisterReceiver(receiver)
+            locationClient.removeLocationUpdates(locationCallback)
+            Log.d("LocationTracking", "High-frequency foreground tracking stopped")
         }
     }
 
@@ -1137,122 +1157,7 @@ fun DriverDashboard(
                     )
                 }
 
-                if (nextSchedule != null) {
-                    val assignmentTitle =
-                        if (tripPhase == "pending") "Upcoming Assignment" else "Task Today"
-                    Text(assignmentTitle, color = TextSecondary)
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = CardBlue),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                "Client: ${nextSchedule.client?.company ?: nextSchedule.client?.name ?: "N/A"}",
-                                color = TextPrimary
-                            )
-                            Text(
-                                "Pickup: ${nextSchedule.pickup?.address ?: "N/A"}",
-                                color = TextSecondary,
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                            Text(
-                                "Dropoff: ${nextSchedule.dropoff?.address ?: "N/A"}",
-                                color = TextSecondary,
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                            if (nextSchedule.passengers != null) {
-                                Text(
-                                    "Passengers: ${nextSchedule.passengers}",
-                                    color = TextSecondary,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                            val instructions =
-                                nextSchedule.specialInstructions?.takeIf { it.isNotBlank() }
-                            if (instructions != null) {
-                                Text(
-                                    "Special Instructions",
-                                    color = TextPrimary,
-                                    fontWeight = FontWeight.SemiBold,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                                Text(
-                                    instructions,
-                                    color = TextSecondary,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        }
-                    }
 
-                    // Location Information
-                    Text("Location Information", color = TextSecondary)
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = CardBlue),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            val showPickupLocation = when (tripPhase) {
-                                "pending", "pickup", "return_pickup" -> true
-                                "dropoff" -> false
-                                "ready_to_complete" -> returnToPickup
-                                "completed" -> false
-                                else -> true
-                            }
-                            val targetLat =
-                                if (showPickupLocation) nextSchedule.pickup?.latitude else nextSchedule.dropoff?.latitude
-                            val targetLon =
-                                if (showPickupLocation) nextSchedule.pickup?.longitude else nextSchedule.dropoff?.longitude
-                            val targetAddress =
-                                if (showPickupLocation) nextSchedule.pickup?.address else nextSchedule.dropoff?.address
-                            val locationLabel =
-                                if (showPickupLocation) "Pickup Location" else "Dropoff Location"
-
-                            Text(
-                                locationLabel,
-                                color = TextPrimary,
-                                style = MaterialTheme.typography.titleSmall
-                            )
-                            Text(
-                                targetAddress ?: "N/A",
-                                color = TextSecondary,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-
-                            if (targetLat != null && targetLon != null && targetLat != 0.0 && targetLon != 0.0) {
-                                Button(
-                                    onClick = {
-                                        openExternalMaps(
-                                            context,
-                                            targetLat,
-                                            targetLon,
-                                            targetAddress ?: ""
-                                        )
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = ButtonDefaults.buttonColors(containerColor = AccentBlue)
-                                ) {
-                                    Text(
-                                        "Open External Maps",
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                }
-                            } else {
-                                Text(
-                                    "Location coordinates not available",
-                                    color = TextSecondary,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        }
-                    }
-                }
 
                 Text("Quick Actions", color = TextSecondary)
                 Card(
@@ -1272,19 +1177,38 @@ fun DriverDashboard(
                             )
                         }
 
-                        Button(
+                        OutlinedButton(
                             onClick = onRefresh,
                             modifier = Modifier.fillMaxWidth(),
-                            enabled = !isFeedLoading
+                            enabled = !isFeedLoading,
+                            border = BorderStroke(1.dp, AccentBlue.copy(alpha = 0.5f)),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentBlue)
                         ) {
-                            if (isFeedLoading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    color = Color.White,
-                                    strokeWidth = 2.dp
-                                )
-                            } else {
-                                Text("Refresh Assignments")
+                            Row(
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            ) {
+                                if (isFeedLoading) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        color = AccentBlue,
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = androidx.compose.material.icons.Icons.Default.Notifications,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                                    Text(
+                                        "Sync Assignments",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
                             }
                         }
 
