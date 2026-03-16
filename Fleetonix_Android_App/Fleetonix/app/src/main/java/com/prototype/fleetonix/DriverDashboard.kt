@@ -403,6 +403,8 @@ fun DriverDashboard(
 
     val stopTracking: () -> Unit = {
         isTrackingActive = false
+        val stopIntent = Intent(context, LocationService::class.java).apply { action = LocationService.ACTION_STOP }
+        context.startService(stopIntent)
         Log.d("LocationTracking", "Location tracking stopped due to logout")
     }
 
@@ -500,89 +502,121 @@ fun DriverDashboard(
     }
 
     // Start location tracking
-    LaunchedEffect(session.sessionToken) {
-        val locationClient = LocationServices.getFusedLocationProviderClient(context)
-        isTrackingActive = true
+    var driverDocRef by remember { mutableStateOf<com.google.firebase.firestore.DocumentReference?>(null) }
+    
+    LaunchedEffect(auth.currentUser?.email) {
+        try {
+            val driverSnap = db.collection("drivers")
+                .whereEqualTo("driver_email", auth.currentUser?.email)
+                .get()
+                .await()
+            driverDocRef = driverSnap.documents.firstOrNull()?.reference
+        } catch (e: Exception) {
+            Log.e("LocationTracking", "Error finding driver doc", e)
+        }
+    }
 
-        scope.launch {
-            // Find the driver document once to minimize redundant queries
-            var driverDocRef = try {
-                val driverSnap = db.collection("drivers")
-                    .whereEqualTo("driver_email", auth.currentUser?.email)
-                    .get()
-                    .await()
-                driverSnap.documents.firstOrNull()?.reference
-            } catch (e: Exception) {
-                Log.e("LocationTracking", "Error finding driver doc", e)
-                null
-            }
+    DisposableEffect(Unit) {
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == LocationService.ACTION_LOCATION_UPDATE) {
+                    val lat = intent.getDoubleExtra(LocationService.EXTRA_LATITUDE, 0.0)
+                    val lng = intent.getDoubleExtra(LocationService.EXTRA_LONGITUDE, 0.0)
+                    val speed = intent.getFloatExtra(LocationService.EXTRA_SPEED, 0f)
+                    val accuracy = intent.getFloatExtra(LocationService.EXTRA_ACCURACY, 0f)
+                    val bearing = intent.getFloatExtra(LocationService.EXTRA_BEARING, 0f)
 
-            while (isTrackingActive) {
-                try {
-                    if (hasLocationPermission(context)) {
-                        val locationRequest =
-                            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10000)
-                                .setWaitForAccurateLocation(true)
-                                .setMinUpdateIntervalMillis(5000)
-                                .setMaxUpdateDelayMillis(10000)
-                                .build()
+                    currentLatitude = lat
+                    currentLongitude = lng
+                    currentSpeed = speed
+                    currentAccuracy = accuracy
 
-                        val cancellationTokenSource = CancellationTokenSource()
-                        val location = try {
-                            locationClient.getCurrentLocation(
-                                locationRequest.priority,
-                                cancellationTokenSource.token
-                            ).await()
-                        } catch (securityException: SecurityException) {
-                            Log.e("LocationTracking", "Permission denied: ${securityException.message}")
-                            null
-                        }
+                    // Basic validation for Philippines region
+                    val isInPhilippines = (lat >= 4 && lat <= 21) && (lng >= 116 && lng <= 127)
+                    if (isInPhilippines || accuracy <= 50) {
+                        val locData = hashMapOf(
+                            "current_latitude" to lat,
+                            "current_longitude" to lng,
+                            "current_speed" to speed,
+                            "current_heading" to bearing,
+                            "current_accuracy" to accuracy,
+                            "current_route_polyline" to (activePolylineEncoded ?: ""),
+                            "trip_eta" to tripETA,
+                            "trip_distance" to tripDistance,
+                            "last_updated" to FieldValue.serverTimestamp()
+                        )
 
-                        location?.let { loc ->
-                            val lat = loc.latitude
-                            val lng = loc.longitude
-                            val accuracy = loc.accuracy
-                            
-                            // Update local state for UI
-                            currentLatitude = lat
-                            currentLongitude = lng
-                            currentSpeed = loc.speed
-                            currentAccuracy = loc.accuracy
-
-                            // Basic validation for Philippines region
-                            val isInPhilippines = (lat >= 4 && lat <= 21) && (lng >= 116 && lng <= 127)
-                            if (isInPhilippines || accuracy <= 50) {
-                                val locData = hashMapOf(
-                                    "current_latitude" to lat,
-                                    "current_longitude" to lng,
-                                    "current_speed" to loc.speed,
-                                    "current_heading" to loc.bearing,
-                                    "current_accuracy" to loc.accuracy,
-                                    "current_route_polyline" to (activePolylineEncoded ?: ""),
-                                    "trip_eta" to tripETA,
-                                    "trip_distance" to tripDistance,
-                                    "last_updated" to FieldValue.serverTimestamp()
-                                )
-                                
-                                if (driverDocRef != null) {
-                                    driverDocRef?.update(locData as Map<String, Any>)
-                                } else {
-                                    // Retry finding doc if we lost it
-                                    val driverSnap = db.collection("drivers")
-                                        .whereEqualTo("driver_email", auth.currentUser?.email)
-                                        .get()
-                                        .await()
-                                    driverDocRef = driverSnap.documents.firstOrNull()?.reference
-                                    driverDocRef?.update(locData as Map<String, Any>)
-                                }
-                                Log.d("LocationTracking", "Updated: $lat, $lng (Accuracy: ${accuracy}m)")
-                            }
-                        }
+                        driverDocRef?.update(locData as Map<String, Any>)
+                        Log.d("LocationTracking", "Updated: $lat, $lng (Accuracy: ${accuracy}m)")
                     }
-                } catch (e: Exception) {
-                    Log.e("LocationTracking", "Error in loop: ${e.message}")
                 }
-                delay(10000) // 10s interval
+            }
+        }
+        val filter = android.content.IntentFilter(LocationService.ACTION_LOCATION_UPDATE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            context.registerReceiver(receiver, filter)
+        }
+
+        onDispose {
+            context.unregisterReceiver(receiver)
+        }
+    }
+
+    LaunchedEffect(session.sessionToken) {
+        isTrackingActive = true
+        if (hasLocationPermission(context)) {
+            val startIntent = Intent(context, LocationService::class.java).apply { action = LocationService.ACTION_START }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(startIntent)
+            } else {
+                context.startService(startIntent)
+            }
+        }
+    }
+
+    // Geofencing automation: Adjust geofences based on trip phase
+    LaunchedEffect(tripPhase, nextSchedule) {
+        val schedule = nextSchedule
+        if (schedule != null) {
+            val docId = schedule.docId ?: return@LaunchedEffect
+            val intent = Intent(context, LocationService::class.java)
+
+            when (tripPhase) {
+                "pickup", "return_pickup" -> {
+                    val lat = schedule.pickup?.latitude
+                    val lng = schedule.pickup?.longitude
+                    if (lat != null && lng != null && lat != 0.0 && lng != 0.0) {
+                        intent.action = LocationService.ACTION_SET_GEOFENCE
+                        intent.putExtra(LocationService.EXTRA_GEOFENCE_ID, docId)
+                        intent.putExtra(LocationService.EXTRA_LATITUDE, lat)
+                        intent.putExtra(LocationService.EXTRA_LONGITUDE, lng)
+                        intent.putExtra(LocationService.EXTRA_TARGET_PHASE, "dropoff")
+                        context.startService(intent)
+                    }
+                }
+                "dropoff" -> {
+                    val lat = schedule.dropoff?.latitude
+                    val lng = schedule.dropoff?.longitude
+                    if (lat != null && lng != null && lat != 0.0 && lng != 0.0) {
+                        intent.action = LocationService.ACTION_SET_GEOFENCE
+                        intent.putExtra(LocationService.EXTRA_GEOFENCE_ID, docId)
+                        intent.putExtra(LocationService.EXTRA_LATITUDE, lat)
+                        intent.putExtra(LocationService.EXTRA_LONGITUDE, lng)
+                        
+                        val returnReq = schedule.returnToPickup ?: false
+                        val nextPhase = if (returnReq) "return_pickup" else "ready_to_complete"
+                        
+                        intent.putExtra(LocationService.EXTRA_TARGET_PHASE, nextPhase)
+                        context.startService(intent)
+                    }
+                }
+                else -> {
+                    // Clear geofences for other phases
+                    intent.action = LocationService.ACTION_CLEAR_GEOFENCES
+                    context.startService(intent)
+                }
             }
         }
     }
