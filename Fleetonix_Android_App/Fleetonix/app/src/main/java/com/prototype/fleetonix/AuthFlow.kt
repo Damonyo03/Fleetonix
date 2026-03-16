@@ -53,6 +53,10 @@ fun AuthFlow() {
     var feedLoading by remember { mutableStateOf(false) }
     var feedError by remember { mutableStateOf<String?>(null) }
     
+    var showForgotPassword by remember { mutableStateOf(false) }
+    var showResetPassword by remember { mutableStateOf(false) }
+    var otpData by remember { mutableStateOf<ForgotPasswordData?>(null) }
+    
     val scope = rememberCoroutineScope()
 
     // Listen to Auth State
@@ -181,7 +185,11 @@ fun AuthFlow() {
 
     val currentState = when {
         showSplash -> "splash"
-        currentUser == null -> "login"
+        currentUser == null -> {
+            if (showResetPassword) "reset_password"
+            else if (showForgotPassword) "forgot_password"
+            else "login"
+        }
         userRole == null -> "loading_role"
         userRole != "driver" -> "unauthorized"
         userRole == "driver" && !isDriverVerified -> "verify_otp"
@@ -236,11 +244,37 @@ fun AuthFlow() {
                     currentUser = auth.currentUser
                 },
                 onForgotPassword = {
-                    auth.sendPasswordResetEmail(auth.currentUser?.email ?: "").addOnCompleteListener {
-                        Log.d("AuthFlow", "Reset email sent")
-                    }
+                    showForgotPassword = true
                 }
             )
+            "forgot_password" -> ForgotPasswordScreen(
+                onOTPSent = { data ->
+                    otpData = data
+                    showResetPassword = true
+                    showForgotPassword = false
+                },
+                onBack = {
+                    showForgotPassword = false
+                }
+            )
+            "reset_password" -> {
+                val data = otpData
+                if (data != null) {
+                    ResetPasswordScreen(
+                        userId = data.userId ?: "",
+                        otpCode = data.otp ?: "",
+                        userEmail = data.email ?: "",
+                        onPasswordReset = {
+                            showResetPassword = false
+                            showForgotPassword = false
+                        },
+                        onBack = {
+                            showResetPassword = false
+                            showForgotPassword = true
+                        }
+                    )
+                }
+            }
             "verify_otp" -> {
                 OTPVerifyScreen(
                     userId = currentUser?.uid ?: "",
