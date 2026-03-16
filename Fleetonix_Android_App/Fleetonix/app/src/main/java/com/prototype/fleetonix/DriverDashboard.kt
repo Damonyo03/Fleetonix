@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import android.os.Looper
+import android.content.BroadcastReceiver
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationResult
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -298,6 +299,7 @@ fun DriverDashboard(
     var currentLongitude by remember { mutableStateOf(0.0) }
     var currentSpeed by remember { mutableStateOf(0f) }
     var currentAccuracy by remember { mutableStateOf(0f) }
+    var currentHeading by remember { mutableStateOf(0f) }
 
     // Track current schedule ID - update when feed changes
     var currentScheduleId by remember { mutableStateOf<Int?>(null) }
@@ -341,7 +343,7 @@ fun DriverDashboard(
         if (destination != null) {
             try {
                 val response = GoogleMapsService.api.getDirections(origin, destination, googleMapsApiKey)
-                Log.d("Routing", "API Status: ${response.status}")
+                Log.d("Routing", "API Status: ${response.status} for origin=$origin dest=$destination")
                 if (response.status == "OK" && response.routes.isNotEmpty()) {
                     val route = response.routes[0]
                     activePolylineEncoded = route.overviewPolyline.points
@@ -523,30 +525,25 @@ fun DriverDashboard(
 
     val locationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     
-    DisposableEffect(hasLocationPermission, driverDocRef) {
-        if (!hasLocationPermission) return@DisposableEffect onDispose {}
+    // Listen to LocationService updates via BroadcastReceiver
+    DisposableEffect(driverDocRef) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == LocationService.ACTION_LOCATION_UPDATE) {
+                    val lat = intent.getDoubleExtra(LocationService.EXTRA_LATITUDE, 0.0)
+                    val lng = intent.getDoubleExtra(LocationService.EXTRA_LONGITUDE, 0.0)
+                    val speed = intent.getFloatExtra(LocationService.EXTRA_SPEED, 0f)
+                    val accuracy = intent.getFloatExtra(LocationService.EXTRA_ACCURACY, 0f)
+                    val bearing = intent.getFloatExtra(LocationService.EXTRA_BEARING, 0f)
 
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3000)
-            .setMinUpdateIntervalMillis(2000)
-            .build()
+                    if (lat != 0.0 && lng != 0.0) {
+                        currentLatitude = lat
+                        currentLongitude = lng
+                        currentSpeed = speed
+                        currentAccuracy = accuracy
+                        currentHeading = bearing
 
-        val locationCallback = object : LocationCallback() {
-            override fun onLocationResult(result: LocationResult) {
-                result.lastLocation?.let { location ->
-                    val lat = location.latitude
-                    val lng = location.longitude
-                    val speed = location.speed
-                    val accuracy = location.accuracy
-                    val bearing = location.bearing
-
-                    currentLatitude = lat
-                    currentLongitude = lng
-                    currentSpeed = speed
-                    currentAccuracy = accuracy
-
-                    // Basic validation for Philippines region
-                    val isInPhilippines = (lat >= 4 && lat <= 21) && (lng >= 116 && lng <= 127)
-                    if (isInPhilippines || accuracy <= 50) {
+                        // Sync to Firestore
                         scope.launch {
                             val locData = hashMapOf(
                                 "current_latitude" to lat,
@@ -560,27 +557,23 @@ fun DriverDashboard(
                                 "last_updated" to FieldValue.serverTimestamp()
                             )
                             driverDocRef?.update(locData as Map<String, Any>)
-                            Log.d("LocationTracking", "Foreground Updated: $lat, $lng (Accuracy: ${accuracy}m)")
+                            Log.d("LocationTracking", "Broadcast Updated Firestore: $lat, $lng")
                         }
                     }
                 }
             }
         }
 
-        try {
-            locationClient.requestLocationUpdates(
-                locationRequest,
-                locationCallback,
-                Looper.getMainLooper()
-            )
-            Log.d("LocationTracking", "High-frequency foreground tracking started (3.0s)")
-        } catch (e: SecurityException) {
-            Log.e("LocationTracking", "Error starting updates: ${e.message}")
+        val filter = android.content.IntentFilter(LocationService.ACTION_LOCATION_UPDATE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            context.registerReceiver(receiver, filter)
         }
 
         onDispose {
-            locationClient.removeLocationUpdates(locationCallback)
-            Log.d("LocationTracking", "High-frequency foreground tracking stopped")
+            context.unregisterReceiver(receiver)
+            Log.d("LocationTracking", "Broadcast receiver unregistered")
         }
     }
 
