@@ -1,0 +1,15 @@
+Schedules found: 2
+ID: SCHED_1773130169745
+  driver_email: 'perezralph15@gmail.com'
+  status: pending
+  numeric_booking_id: MISSING
+  schedule_id: MISSING
+  booking_id: TcG8Fb4VnNnvpNtO2XGc
+---
+ID: SCHED_1773134744432
+  driver_email: 'perezralph15@gmail.com'
+  status: pending
+  numeric_booking_id: 1773134744
+  schedule_id: 1773134744
+  booking_id: huQa8WDGygboGCSGpyQy
+---

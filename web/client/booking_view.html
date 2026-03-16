@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fleetonix - View Booking</title>
+    <link rel="icon" type="image/jpeg" href="../img/logo.jpg">
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="../assets/css/admin.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .view-card { background: var(--bg-secondary); border-radius: 12px; border: 1px solid var(--border-color); padding: 30px; max-width: 800px; margin: 0 auto; }
+        .view-row { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 25px; }
+        .view-item label { display: block; color: var(--text-muted); font-size: 0.85em; margin-bottom: 5px; text-transform: uppercase; }
+        .view-item .value { color: var(--text-primary); font-weight: 500; font-size: 1.1em; }
+        .divider { border-top: 1px solid var(--border-color); margin: 25px 0; }
+        .view-item.full { grid-column: span 2; }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <!-- Sidebar Navigation -->
+        <aside class="admin-sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <img src="../img/logo.jpg" alt="Logo" class="sidebar-logo">
+                <span class="sidebar-title">Fleetonix</span>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-section-label">SERVICES</div>
+                <a href="dashboard.html" class="nav-item"><i class="fas fa-home"></i> Dashboard Map</a>
+                <a href="booking_new.html" class="nav-item"><i class="fas fa-plus-circle"></i> New Request</a>
+                
+                <div class="nav-section-label">RECORDS</div>
+                <a href="bookings.html" class="nav-item active"><i class="fas fa-calendar-alt"></i> Booking History</a>
+                <a href="schedules.html" class="nav-item"><i class="fas fa-clock"></i> Scheduled Trips</a>
+
+                <div class="nav-section-label">ALERTS</div>
+                <a href="notifications.html" class="nav-item"><i class="fas fa-bell"></i> Notifications <span class="notif-count">0</span></a>
+                <a href="#" id="logoutBtn" class="nav-item logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="admin-main" id="mainContent">
+            <header class="admin-header">
+                <div class="header-left">
+                    <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
+                    <h2>Booking Details</h2>
+                </div>
+                <div class="header-right">
+                    <a href="notifications.html" class="notification-icon">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge" style="display: none;">0</span>
+                    </a>
+                    <div class="user-menu">
+                        <div class="user-avatar" id="userInitial">C</div>
+                        <span id="userName">Client</span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="admin-content">
+                <div class="page-header">
+                    <div class="header-info">
+                        <h1 class="page-title" id="bookingIdTitle">Booking #...</h1>
+                        <p class="page-subtitle">Detailed information about your request</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-secondary" onclick="window.location.href='bookings.html'">
+                            <i class="fas fa-arrow-left"></i> Back to List
+                        </button>
+                    </div>
+                </div>
+
+                <div class="view-card" id="bookingDetails">
+                    <div style="text-align: center; padding: 40px;">
+                        <i class="fas fa-spinner fa-spin fa-2x"></i>
+                        <p>Loading details...</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="../assets/js/client.js"></script>
+    <script type="module" src="../assets/js/client-booking-view.js"></script>
+</body>
+</html>

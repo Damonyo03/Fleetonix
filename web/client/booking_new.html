@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fleetonix - New Booking</title>
+    <link rel="icon" type="image/jpeg" href="../img/logo.jpg">
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="../assets/css/admin.css">
+    <link rel="stylesheet" href="../assets/css/address-autocomplete-enhanced.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Maps JS -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBWal4kXhImWNvJL2jV4LG0FvftdN2J9DQ&libraries=places"></script>
+    <style>
+        .booking-form-card { background: var(--bg-secondary); padding: 30px; border-radius: 12px; border: 1px solid var(--border-color); max-width: 800px; margin: 0 auto; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .address-suggestions { position: absolute; background: var(--bg-secondary); border: 1px solid var(--border-color); width: 100%; z-index: 1000; border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); margin-top: 5px; }
+        .suggestion-item { padding: 10px 15px; cursor: pointer; border-bottom: 1px solid var(--border-color); }
+        .suggestion-item:hover { background: var(--bg-input); }
+        .suggestion-address { font-weight: 500; font-size: 0.95em; color: var(--text-primary); }
+        .suggestion-region { font-size: 0.8em; color: var(--text-muted); }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <aside class="admin-sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <img src="../img/logo.jpg" alt="Logo" class="sidebar-logo">
+                <span class="sidebar-title">Fleetonix</span>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-section-label">SERVICES</div>
+                <a href="dashboard.html" class="nav-item"><i class="fas fa-home"></i> Dashboard Map</a>
+                <a href="booking_new.html" class="nav-item active"><i class="fas fa-plus-circle"></i> New Request</a>
+                
+                <div class="nav-section-label">RECORDS</div>
+                <a href="bookings.html" class="nav-item"><i class="fas fa-calendar-alt"></i> Booking History</a>
+                <a href="schedules.html" class="nav-item"><i class="fas fa-clock"></i> Scheduled Trips</a>
+
+                <div class="nav-section-label">ALERTS</div>
+                <a href="notifications.html" class="nav-item"><i class="fas fa-bell"></i> Notifications <span class="notif-count">0</span></a>
+                <a href="#" id="logoutBtn" class="nav-item logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
+            </nav>
+        </aside>
+
+        <main class="admin-main" id="mainContent">
+            <header class="admin-header">
+                <div class="header-left">
+                    <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
+                    <h2>New Booking</h2>
+                </div>
+                <div class="header-right">
+                    <a href="notifications.html" class="notification-icon">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge" style="display: none;">0</span>
+                    </a>
+                    <div class="user-menu">
+                        <div class="user-avatar" id="userInitial">C</div>
+                        <span id="userName">Client</span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="admin-content">
+                <div class="page-header">
+                    <h1 class="page-title">Book a Trip</h1>
+                    <p class="page-subtitle">Fill in the details below to request a new fleet service.</p>
+                </div>
+
+                <div class="booking-form-card">
+                    <form id="newBookingForm">
+                        <div class="form-group" style="position: relative;">
+                            <label for="pickup_location">Pickup Location</label>
+                            <div class="input-with-action">
+                                <input type="text" id="pickup_location" class="form-input" placeholder="Search for pickup address..." required autocomplete="off">
+                                <button type="button" class="btn-input-action" id="locatePickup" title="Use current location"><i class="fas fa-location-crosshairs"></i></button>
+                            </div>
+                            <input type="hidden" id="pickup_latitude" value="0">
+                            <input type="hidden" id="pickup_longitude" value="0">
+                        </div>
+
+                        <div class="form-group" style="position: relative;">
+                            <label for="dropoff_location">Dropoff Location</label>
+                            <div class="input-with-action">
+                                <input type="text" id="dropoff_location" class="form-input" placeholder="Search for dropoff address..." required autocomplete="off">
+                                <button type="button" class="btn-input-action" id="locateDropoff" title="Use current location"><i class="fas fa-location-crosshairs"></i></button>
+                            </div>
+                            <input type="hidden" id="dropoff_latitude" value="0">
+                            <input type="hidden" id="dropoff_longitude" value="0">
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="pickup_date">Pickup Date</label>
+                                <input type="date" id="pickup_date" class="form-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="pickup_time">Pickup Time</label>
+                                <input type="time" id="pickup_time" class="form-input" required>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="passengers">Number of Passengers</label>
+                                <input type="number" id="passengers" class="form-input" min="1" value="1" required>
+                            </div>
+                            <div class="form-group" style="display: flex; align-items: center; padding-top: 25px;">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="return_to_pickup">
+                                    <span class="checkbox-custom"></span>
+                                    <span class="checkbox-text">Return to pickup after dropoff</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="special_instructions">Special Instructions (Optional)</label>
+                            <textarea id="special_instructions" class="form-input" rows="3" placeholder="Any specific requirements..."></textarea>
+                        </div>
+
+                        <div class="form-actions" style="margin-top: 20px;">
+                            <button type="submit" id="submitBtn" class="btn btn-primary">Create Booking</button>
+                            <button type="button" class="btn btn-secondary" onclick="window.history.back()">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script type="module" src="../assets/js/client.js"></script>
+    <script type="module" src="../assets/js/client-booking-new.js"></script>
+    <script src="../assets/js/address-autocomplete.js"></script>
+</body>
+</html>

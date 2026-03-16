@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fleetonix - Incident Response Control Flow Diagram</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .diagram-section {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            padding: 24px 24px 32px 24px;
+        }
+
+        .mermaid {
+            background: white;
+            padding: 16px;
+            border-radius: 8px;
+            margin: 12px 0 8px 0;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            .container {
+                max-width: 100%;
+                border-radius: 0;
+                box-shadow: none;
+            }
+        }
+
+        @page {
+            size: A4;
+            margin: 15mm;
+        }
+
+        @media (max-width: 768px) {
+            .diagram-section {
+                padding: 16px 18px 24px 18px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="diagram-section">
+        <div class="mermaid">
+flowchart TB
+    S0([Start])
+    S1[Normal GPS tracking]
+    S2{Shake OR SOS?}
+
+    IR1[Set High-Priority Alert]
+    IR2[Notify admin]
+    IR3[Blink driver marker]
+    IR4[Lock admin screen<br/>Show Take Action popup]
+    D1{Admin takes action?}
+    IR5[Log acknowledgement]
+    IR6[Unlock screen<br/>Stop blinking]
+
+    E0([Back to normal tracking])
+
+    S0 --> S1 --> S2
+    S2 -- Yes --> IR1 --> IR2 --> IR3 --> IR4 --> D1
+    D1 -- No --> IR4
+    D1 -- Yes --> IR5 --> IR6 --> E0 --> S1
+    S2 -- No --> S1
+
+    %% Black and white styling
+    classDef startEnd fill:#ffffff,stroke:#000000,stroke-width:2px,color:#000000;
+    classDef process fill:#f5f5f5,stroke:#000000,stroke-width:2px,color:#000000;
+    classDef decision fill:#ffffff,stroke:#000000,stroke-width:2px,color:#000000;
+    classDef incident fill:#e5e5e5,stroke:#000000,stroke-width:2px,color:#000000;
+
+    class S0,E0 startEnd;
+    class S1 process;
+    class S2,D1 decision;
+    class IR1,IR2,IR3,IR4,IR5,IR6 incident;
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+    </script>
+</body>
+</html>
+

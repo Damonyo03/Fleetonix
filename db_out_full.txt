@@ -1,0 +1,153 @@
+Schedules found: 2
+ID: SCHED_1773130169745
+{
+  "schedule_date": {
+    "stringValue": "2026-03-10"
+  },
+  "driver_email": {
+    "stringValue": "perezralph15@gmail.com"
+  },
+  "driver_name": {
+    "stringValue": "Ralph Perez"
+  },
+  "plate_number": {
+    "stringValue": "123 abc"
+  },
+  "client_phone": {
+    "stringValue": ""
+  },
+  "dropoff_longitude": {
+    "doubleValue": 121.054703
+  },
+  "client_email": {
+    "stringValue": "perezralph15@gmail.com"
+  },
+  "dropoff_location": {
+    "stringValue": "Current Location (14.5627, 121.0547)"
+  },
+  "status": {
+    "stringValue": "pending"
+  },
+  "vehicle_assigned": {
+    "stringValue": "Civic"
+  },
+  "driver_id": {
+    "stringValue": "DRV_1773072267650"
+  },
+  "driver_phone": {
+    "stringValue": "09617252971"
+  },
+  "client_name": {
+    "stringValue": "perezralph15@gmail.com"
+  },
+  "pickup_longitude": {
+    "doubleValue": 121.054703
+  },
+  "schedule_time": {
+    "stringValue": "17:09"
+  },
+  "pickup_location": {
+    "stringValue": "Current Location (14.5627, 121.0547)"
+  },
+  "pickup_latitude": {
+    "doubleValue": 14.5627437
+  },
+  "created_at": {
+    "timestampValue": "2026-03-10T08:09:33.523Z"
+  },
+  "company_name": {
+    "stringValue": "N/A"
+  },
+  "trip_phase": {
+    "stringValue": "pending"
+  },
+  "updated_at": {
+    "timestampValue": "2026-03-10T08:09:33.523Z"
+  },
+  "dropoff_latitude": {
+    "doubleValue": 14.5627437
+  },
+  "booking_id": {
+    "stringValue": "TcG8Fb4VnNnvpNtO2XGc"
+  }
+}
+---
+ID: SCHED_1773134744432
+{
+  "dropoff_longitude": {
+    "doubleValue": 121.0561214
+  },
+  "status": {
+    "stringValue": "pending"
+  },
+  "numeric_booking_id": {
+    "integerValue": "1773134744"
+  },
+  "driver_id": {
+    "stringValue": "DRV_1773072267650"
+  },
+  "trip_phase": {
+    "stringValue": "pending"
+  },
+  "updated_at": {
+    "timestampValue": "2026-03-10T09:25:48.052Z"
+  },
+  "dropoff_latitude": {
+    "doubleValue": 14.5502545
+  },
+  "booking_id": {
+    "stringValue": "huQa8WDGygboGCSGpyQy"
+  },
+  "company_name": {
+    "stringValue": "N/A"
+  },
+  "pickup_latitude": {
+    "doubleValue": 14.5633428
+  },
+  "client_email": {
+    "stringValue": "perezralph15@gmail.com"
+  },
+  "client_phone": {
+    "stringValue": ""
+  },
+  "plate_number": {
+    "stringValue": "123 abc"
+  },
+  "driver_name": {
+    "stringValue": "Ralph Perez"
+  },
+  "driver_email": {
+    "stringValue": "perezralph15@gmail.com"
+  },
+  "schedule_date": {
+    "stringValue": "2026-03-10"
+  },
+  "vehicle_assigned": {
+    "stringValue": "Civic"
+  },
+  "dropoff_location": {
+    "stringValue": "Market! Market!, McKinley Parkway, Taguig, Metro Manila, Philippines"
+  },
+  "pickup_longitude": {
+    "doubleValue": 121.0565387
+  },
+  "schedule_time": {
+    "stringValue": "18:25"
+  },
+  "client_name": {
+    "stringValue": "perezralph15@gmail.com"
+  },
+  "driver_phone": {
+    "stringValue": "09617252971"
+  },
+  "schedule_id": {
+    "integerValue": "1773134744"
+  },
+  "pickup_location": {
+    "stringValue": "University of Makati, J.P. Rizal Extension, West Rembo, Taguig, Metro Manila, Philippines"
+  },
+  "created_at": {
+    "timestampValue": "2026-03-10T09:25:48.052Z"
+  }
+}
+---

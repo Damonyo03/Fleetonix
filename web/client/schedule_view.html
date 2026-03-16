@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fleetonix - Live Tracking</title>
+    <link rel="icon" type="image/jpeg" href="../img/logo.jpg">
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="../assets/css/admin.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Maps JS -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBWal4kXhImWNvJL2jV4LG0FvftdN2J9DQ&libraries=places,geometry"></script>
+    <style>
+        .tracking-grid { display: grid; grid-template-columns: 1fr 350px; gap: 20px; height: calc(100vh - 180px); }
+        #map { height: 100%; border-radius: 12px; border: 1px solid var(--border-color); z-index: 1; }
+        .tracking-info { display: flex; flex-direction: column; gap: 20px; overflow-y: auto; padding-right: 5px; }
+        .info-card { background: var(--bg-secondary); padding: 20px; border-radius: 12px; border: 1px solid var(--border-color); }
+        .info-header { display: flex; align-items: center; gap: 15px; margin-bottom: 20px; }
+        .driver-avatar { width: 50px; height: 50px; border-radius: 50%; background: var(--bg-card); display: flex; align-items: center; justify-content: center; font-size: 1.5em; color: var(--accent-blue); }
+        
+        .phase-timeline { position: relative; padding-left: 30px; }
+        .phase-timeline::before { content: ''; position: absolute; left: 10px; top: 5px; bottom: 5px; width: 2px; background: var(--border-color); }
+        .phase-step { position: relative; margin-bottom: 25px; }
+        .phase-step::before { content: ''; position: absolute; left: -25px; top: 5px; width: 12px; height: 12px; border-radius: 50%; background: var(--bg-card); border: 2px solid var(--border-color); z-index: 2; transition: all 0.3s; }
+        .phase-step.active::before { background: var(--accent-blue); border-color: var(--accent-blue); box-shadow: 0 0 10px var(--glow-blue); }
+        .phase-step.completed::before { background: var(--accent-green); border-color: var(--accent-green); }
+        .phase-label { font-weight: 600; font-size: 0.9em; display: block; }
+        .phase-time { font-size: 0.8em; color: var(--text-muted); }
+        
+        @media (max-width: 992px) {
+            .tracking-grid { grid-template-columns: 1fr; height: auto; }
+            #map { height: 400px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <aside class="admin-sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <img src="../img/logo.jpg" alt="Logo" class="sidebar-logo">
+                <span class="sidebar-title">Fleetonix</span>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-section-label">SERVICES</div>
+                <a href="dashboard.html" class="nav-item"><i class="fas fa-home"></i> Dashboard Map</a>
+                <a href="booking_new.html" class="nav-item"><i class="fas fa-plus-circle"></i> New Request</a>
+                
+                <div class="nav-section-label">RECORDS</div>
+                <a href="bookings.html" class="nav-item"><i class="fas fa-calendar-alt"></i> Booking History</a>
+                <a href="schedules.html" class="nav-item active"><i class="fas fa-clock"></i> Scheduled Trips</a>
+
+                <div class="nav-section-label">ALERTS</div>
+                <a href="notifications.html" class="nav-item"><i class="fas fa-bell"></i> Notifications <span class="notif-count">0</span></a>
+                <a href="#" id="logoutBtn" class="nav-item logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
+            </nav>
+        </aside>
+
+        <main class="admin-main" id="mainContent">
+            <header class="admin-header">
+                <div class="header-left">
+                    <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
+                    <h2>Live Tracking</h2>
+                </div>
+                <div class="header-right">
+                    <a href="notifications.html" class="notification-icon">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge" style="display: none;">0</span>
+                    </a>
+                    <div class="user-menu">
+                        <div class="user-avatar" id="userInitial">C</div>
+                        <span id="userName">Client</span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="admin-content">
+                <div class="page-header">
+                    <div class="header-info">
+                        <h1 class="page-title" id="tripTitle">Trip to ...</h1>
+                        <p class="page-subtitle" id="tripSubtitle">Loading live status from driver...</p>
+                    </div>
+                </div>
+
+                <div class="tracking-grid">
+                    <div id="map"></div>
+                    
+                    <div class="tracking-info">
+                        <div class="info-card">
+                            <div class="info-header">
+                                <div class="driver-avatar" id="driverInitial">D</div>
+                                <div>
+                                    <h3 id="driverName">Driver Name</h3>
+                                    <p class="page-subtitle" style="margin: 0;" id="vehicleInfo">Vehicle Info</p>
+                                </div>
+                            </div>
+                            <button class="btn btn-secondary" style="margin-top: 10px;" id="callDriverBtn">
+                                <i class="fas fa-phone"></i> Call Driver
+                            </button>
+                        </div>
+
+                        <div class="info-card">
+                            <h3 style="margin-bottom: 20px; font-size: 1rem;">Trip Progress</h3>
+                            <div class="phase-timeline" id="phaseTimeline">
+                                <div class="phase-step" id="phase-pending">
+                                    <span class="phase-label">Confirmed</span>
+                                    <span class="phase-time" id="time-pending">--:--</span>
+                                </div>
+                                <div class="phase-step" id="phase-started">
+                                    <span class="phase-label">Trip Started</span>
+                                    <span class="phase-time" id="time-started">--:--</span>
+                                </div>
+                                <div class="phase-step" id="phase-pickup">
+                                    <span class="phase-label">Passenger Picked Up</span>
+                                    <span class="phase-time" id="time-pickup">--:--</span>
+                                </div>
+                                <div class="phase-step" id="phase-dropoff">
+                                    <span class="phase-label">Destination Reached</span>
+                                    <span class="phase-time" id="time-dropoff">--:--</span>
+                                </div>
+                                <div class="phase-step" id="phase-completed">
+                                    <span class="phase-label">Trip Completed</span>
+                                    <span class="phase-time" id="time-completed">--:--</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    <script type="module" src="../assets/js/client.js"></script>
+    <script type="module" src="../assets/js/client-schedule-view.js"></script>
+</body>
+</html>

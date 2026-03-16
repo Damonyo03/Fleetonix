@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fleetonix - Login</title>
+    <link rel="icon" type="image/jpeg" href="img/logo.jpg">
+    <link rel="stylesheet" href="assets/css/style.css">
+    <style>
+        .alert { padding: 10px; margin-bottom: 15px; border-radius: 4px; display: none; }
+        .alert-error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .loading { opacity: 0.7; pointer-events: none; }
+    </style>
+</head>
+<body class="login-body">
+    <div class="login-container">
+        <div class="logo-section">
+            <img src="img/logo.jpg" alt="Fleettonix Logo" class="logo-main">
+        </div>
+
+        <div class="login-card">
+            <div id="errorMessage" class="alert alert-error"></div>
+            
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" class="form-input" placeholder="Enter your email" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" class="form-input" placeholder="Enter your password" required>
+                </div>
+
+                <div class="form-options">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="remember">
+                        <span class="checkbox-custom"></span>
+                        <span class="checkbox-text">Remember me</span>
+                    </label>
+                    <a href="forgot_password.html" class="forgot-link">Forgot password?</a>
+                </div>
+
+                <button type="submit" id="loginBtn" class="btn btn-primary">Log in</button>
+                <button type="button" class="btn btn-secondary" onclick="window.location.href='register.html'">Create an account</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBWal4kXhImWNvJL2jV4LG0FvftdN2J9DQ",
+            authDomain: "appfleetonix.firebaseapp.com",
+            projectId: "appfleetonix",
+            storageBucket: "appfleetonix.firebasestorage.app",
+            messagingSenderId: "1036612951739",
+            appId: "1:1036612951739:web:ca2c08d483baa564b3539e",
+            measurementId: "G-WN03YG2XLC"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        
+        // Ensure we talk to the correct DB if user has multiple (default)
+        const db = getFirestore(app);
+
+        const loginForm = document.getElementById('loginForm');
+        const loginBtn = document.getElementById('loginBtn');
+        const errorMessage = document.getElementById('errorMessage');
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            errorMessage.style.display = 'none';
+            loginBtn.classList.add('loading');
+            loginBtn.innerText = 'Logging in...';
+
+            try {
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                console.log("Logged in:", userCredential.user);
+                
+                // Lookup user by email in Firestore (since UID might not match if not seeded by UID)
+                const q = query(collection(db, "users"), where("email", "==", email));
+                const querySnapshot = await getDocs(q);
+                
+                if (!querySnapshot.empty) {
+                    const userData = querySnapshot.docs[0].data();
+                    console.log("User found in Firestore:", userData);
+                    if (userData.user_type === 'admin') {
+                        window.location.href = 'admin/dashboard.html';
+                    } else if (userData.user_type === 'client') {
+                        window.location.href = 'client/dashboard.html';
+                    } else {
+                        console.warn("User type not recognized:", userData.user_type);
+                        window.location.href = 'login.html?error=invalid_role';
+                    }
+                } else {
+                    console.warn("User auth'd but not found in Firestore meta-data.");
+                    window.location.href = 'login.html?login=partial';
+                }
+            } catch (error) {
+                console.error("Login error:", error);
+                errorMessage.innerText = "Error: " + error.message;
+                errorMessage.style.display = 'block';
+                loginBtn.classList.remove('loading');
+                loginBtn.innerText = 'Log in';
+            }
+        });
+    </script>
+</body>
+</html>

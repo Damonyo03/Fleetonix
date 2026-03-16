@@ -1,0 +1,5 @@
+Users found: 2
+ID: ZK8NNRQzzrhxM8qOtZE6 | Email: perezralph15@gmail.com | Role: client
+---
+ID: eHNFZ1tjJkw9nDEPRlhw | Email: aisenaldersonquia05@gmail.com | Role: admin
+---

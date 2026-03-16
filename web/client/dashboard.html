@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fleetonix - Client - Dashboard</title>
+    <link rel="icon" type="image/jpeg" href="../img/logo.jpg">
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="../assets/css/client.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="admin-container">
+        <!-- Sidebar Navigation -->
+        <aside class="admin-sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <img src="../img/logo.jpg" alt="Logo" class="sidebar-logo">
+                <span class="sidebar-title">Fleetonix</span>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-section-label">MONITORING</div>
+                <a href="dashboard.html" class="nav-item active"><i class="fas fa-chart-line"></i> Overview</a>
+                <a href="bookings.html" class="nav-item"><i class="fas fa-calendar-alt"></i> Booking History</a>
+                
+                <div class="nav-section-label">RECORDS</div>
+                <a href="bookings.html" class="nav-item"><i class="fas fa-history"></i> My Trips</a>
+                <a href="schedules.html" class="nav-item"><i class="fas fa-clock"></i> Scheduled</a>
+
+                <div class="nav-section-label">ALERTS</div>
+                <a href="notifications.html" class="nav-item"><i class="fas fa-bell"></i> Notifications <span class="notif-count">0</span></a>
+                <a href="#" id="logoutBtn" class="nav-item logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
+            </nav>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="admin-main" id="mainContent">
+            <header class="admin-header">
+                <div class="header-left">
+                    <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
+                    <h2>Dashboard</h2>
+                </div>
+                <div class="header-right">
+                    <div class="user-menu">
+                        <div class="user-avatar" id="userInitial">C</div>
+                        <span id="userName">Client</span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="admin-content">
+                <div class="page-header">
+                    <h1 class="page-title">Dashboard Overview</h1>
+                    <p class="page-subtitle" id="welcomeMessage">Welcome back! Manage your fleet bookings here.</p>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="stats-grid" id="statsGrid">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-title">Total Bookings</span>
+                            <div class="stat-icon blue"><i class="fas fa-calendar-alt"></i></div>
+                        </div>
+                        <div class="stat-value" id="totalBookings">0</div>
+                        <div class="stat-change">All-time history</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-title">Pending</span>
+                            <div class="stat-icon orange"><i class="fas fa-clock"></i></div>
+                        </div>
+                        <div class="stat-value" id="pendingBookings">0</div>
+                        <div class="stat-change">Awaiting approval</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-title">Active Schedules</span>
+                            <div class="stat-icon teal"><i class="fas fa-calendar-check"></i></div>
+                        </div>
+                        <div class="stat-value" id="activeSchedules">0</div>
+                        <div class="stat-change">Trips in progress</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-title">Completed</span>
+                            <div class="stat-icon green"><i class="fas fa-check-circle"></i></div>
+                        </div>
+                        <div class="stat-value" id="completedBookings">0</div>
+                        <div class="stat-change">Successful trips</div>
+                    </div>
+                </div>
+
+                <div class="overview-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-top: 20px;">
+                    <!-- Recent Bookings Table -->
+                    <div class="data-table-wrapper">
+                        <div class="table-header">
+                            <h3 class="table-title">Recent Bookings</h3>
+                            <a href="bookings.html" class="view-all-link" style="color: var(--accent-blue); font-size: 0.85em; text-decoration: none;">View All</a>
+                        </div>
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Pickup</th>
+                                        <th>Date</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recentBookingsTable">
+                                    <tr>
+                                        <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 40px;">Loading bookings...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Active Schedules Table -->
+                    <div class="data-table-wrapper">
+                        <div class="table-header">
+                            <h3 class="table-title">Active Schedules</h3>
+                            <a href="schedules.html" class="view-all-link" style="color: var(--accent-blue); font-size: 0.85em; text-decoration: none;">View All</a>
+                        </div>
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Driver</th>
+                                        <th>Phase</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="activeSchedulesTable">
+                                    <tr>
+                                        <td colspan="3" style="text-align: center; color: var(--text-muted); padding: 40px;">No active schedules.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Bar -->
+                <div style="margin-top: 40px; display: flex; justify-content: center; padding-bottom: 40px;">
+                    <a href="booking_new.html" class="btn btn-primary" style="width: auto; min-width: 250px; padding: 15px 40px; font-size: 1.1em; border-radius: 50px; display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0;">
+                        <i class="fas fa-plus"></i> NEW BOOKING
+                    </a>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Firebase Configuration and SDKs -->
+    <script type="module" src="../assets/js/client.js"></script>
+    <script type="module" src="../assets/js/client-dashboard.js"></script>
+</body>
+</html>

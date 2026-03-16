@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fleetonix - Notifications</title>
+    <link rel="icon" type="image/jpeg" href="../img/logo.jpg">
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="../assets/css/admin.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .notifications-container { display: flex; flex-direction: column; gap: 15px; }
+        .notification-card { 
+            background: var(--bg-card); 
+            border: 1px solid var(--border-color); 
+            border-radius: 12px; 
+            padding: 20px; 
+            display: flex; 
+            gap: 15px; 
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .notification-card.unread { border-left: 4px solid var(--accent-blue); background: var(--bg-secondary); }
+        .notification-card.trip-completed { border-left-color: var(--accent-green); }
+        .notification-card.important { border-left-color: #ff6b6b; }
+        
+        .notification-icon-wrap { 
+            width: 45px; height: 45px; border-radius: 10px; 
+            display: flex; align-items: center; justify-content: center; 
+            font-size: 1.2em; flex-shrink: 0;
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .notification-card.unread .notification-icon-wrap { background: rgba(0, 212, 255, 0.1); color: var(--accent-blue); }
+        
+        .notification-content { flex-grow: 1; }
+        .notification-title { font-weight: 600; margin-bottom: 5px; color: var(--text-primary); }
+        .notification-message { color: var(--text-secondary); font-size: 0.95em; line-height: 1.5; margin-bottom: 10px; }
+        .notification-time { font-size: 0.8em; color: var(--text-muted); display: flex; align-items: center; gap: 5px; }
+        
+        .notification-actions { display: flex; align-items: center; gap: 10px; }
+        .mark-read-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent-blue); }
+        
+        .group-header { margin: 20px 0 10px; color: var(--text-muted); font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <!-- Sidebar Navigation -->
+        <aside class="admin-sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <img src="../img/logo.jpg" alt="Logo" class="sidebar-logo">
+                <span class="sidebar-title">Fleetonix</span>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-section-label">SERVICES</div>
+                <a href="dashboard.html" class="nav-item"><i class="fas fa-home"></i> Dashboard Map</a>
+                <a href="booking_new.html" class="nav-item"><i class="fas fa-plus-circle"></i> New Request</a>
+                
+                <div class="nav-section-label">RECORDS</div>
+                <a href="bookings.html" class="nav-item"><i class="fas fa-calendar-alt"></i> Booking History</a>
+                <a href="schedules.html" class="nav-item"><i class="fas fa-clock"></i> Scheduled Trips</a>
+
+                <div class="nav-section-label">ALERTS</div>
+                <a href="notifications.html" class="nav-item active"><i class="fas fa-bell"></i> Notifications <span class="notif-count">0</span></a>
+                <a href="#" id="logoutBtn" class="nav-item logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="admin-main" id="mainContent">
+            <header class="admin-header">
+                <div class="header-left">
+                    <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
+                    <h2>Notifications</h2>
+                </div>
+                <div class="header-right">
+                    <div class="user-menu">
+                        <div class="user-avatar" id="userInitial">C</div>
+                        <span id="userName">Client</span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="admin-content">
+                <div class="page-header">
+                    <div class="header-info">
+                        <h1 class="page-title">Notifications</h1>
+                        <p class="page-subtitle">Stay updated on your trip progress and system alerts</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-secondary" id="markAllReadBtn">
+                            <i class="fas fa-check-double"></i> Mark all as read
+                        </button>
+                    </div>
+                </div>
+
+                <div id="notificationsList" class="notifications-container">
+                    <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                        <i class="fas fa-spinner fa-spin fa-2x"></i>
+                        <p style="margin-top: 15px;">Loading notifications...</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="../assets/js/client.js"></script>
+    <script type="module" src="../assets/js/client-notifications.js"></script>
+</body>
+</html>

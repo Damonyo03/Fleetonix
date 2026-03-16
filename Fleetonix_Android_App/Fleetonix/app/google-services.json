@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1036612951739",
+    "project_id": "appfleetonix",
+    "storage_bucket": "appfleetonix.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1036612951739:android:19dbe847142cc853b3539e",
+        "android_client_info": {
+          "package_name": "com.prototype.fleetonix"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCz5VF2NEE1PtkHiAfyxKspXe95CpEV5dY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

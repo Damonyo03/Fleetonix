@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fleetonix - DFD Level 1</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .diagram-section {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            padding: 24px;
+        }
+
+        .mermaid {
+            background: white;
+            padding: 12px;
+            border-radius: 6px;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            .diagram-section {
+                max-width: 100%;
+                border-radius: 0;
+                box-shadow: none;
+                padding: 10mm;
+            }
+        }
+
+        @page {
+            size: A4;
+            margin: 15mm;
+        }
+    </style>
+</head>
+<body>
+    <div class="diagram-section">
+        <div class="mermaid">
+flowchart LR
+    %% External entities
+    D[Driver App]
+    A[Admin Web Dashboard]
+
+    %% Process
+    P((Fleetonix RESTful API<br/>and Backend Logic))
+
+    %% Data store
+    DS[[MySQL Database]]
+
+    %% Flows from Driver to Backend
+    D -- GPS Coordinates --> P
+    D -- Incident Alerts --> P
+
+    %% Backend to Data Store
+    P -- Store / Update<br/>Locations &amp; Incidents --> DS
+    DS -- Retrieved data --> P
+
+    %% Flows to Admin Dashboard
+    A -- Requests live map data<br/>and incident status --> P
+    P -- Real-time visualization data<br/>GPS positions &amp; alerts --> A
+
+    %% Black and white styling
+    classDef entity fill:#ffffff,stroke:#000000,stroke-width:2px,color:#000000;
+    classDef process fill:#f5f5f5,stroke:#000000,stroke-width:2px,color:#000000;
+    classDef datastore fill:#e5e5e5,stroke:#000000,stroke-width:2px,color:#000000;
+
+    class D,A entity;
+    class P process;
+    class DS datastore;
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+    </script>
+</body>
+</html>
+

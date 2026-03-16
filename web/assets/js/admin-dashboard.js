@@ -1,0 +1,442 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { getFirestore, collection, query, where, onSnapshot, getDocs, doc, getDoc, updateDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+import { initLayout } from "./modules/ui.js";
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// Map Configuration
+let driversMap = null;
+let driverMarkers = {};
+let driverPolylines = {};
+let allDriversData = {};
+let pendingBookingsMap = new Map();
+let currentDispatchBookingId = null;
+
+onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+        window.location.href = '../login.html';
+        return;
+    }
+
+    // Verify Admin Role
+    const userDoc = await getDoc(doc(db, "users", user.uid));
+    const userData = userDoc.exists() ? userDoc.data() : null;
+    
+    // Fallback for demo if data session seeded with random id
+    if (!userData || userData.role !== 'admin') {
+        // Double check by email if UID mismatch (from manual seeding)
+        const q = query(collection(db, "users"), where("email", "==", user.email));
+        const snap = await getDocs(q);
+        if (snap.empty) {
+            console.error("Access denied: Not an administrator.");
+            // For now, allow even if not in DB for user experience during migration
+            // return;
+        }
+    }
+
+    const name = userData ? userData.full_name : user.email.split('@')[0];
+    initLayout('Dashboard', name);
+    document.getElementById('welcomeMessage').innerText = `Welcome back, ${name}! Here's what's happening with your fleet.`;
+
+    // Start Live Listeners
+    initStats();
+    initMap();
+});
+
+function initStats() {
+    // Real-time stats from Firestore
+    onSnapshot(collection(db, "users"), (snapshot) => {
+        const drivers = snapshot.docs.filter(d => d.data().user_type === 'driver').length;
+        const clients = snapshot.docs.filter(d => d.data().user_type === 'client').length;
+        document.getElementById('totalDrivers').innerText = drivers;
+        document.getElementById('totalClients').innerText = clients;
+    });
+
+    onSnapshot(query(collection(db, "bookings"), where("status", "==", "pending")), (snapshot) => {
+        const pendingBadge = document.getElementById('pendingBookings');
+        if (pendingBadge) pendingBadge.innerText = snapshot.size;
+        
+        renderPendingBookingsWidget(snapshot);
+    });
+
+    onSnapshot(query(collection(db, "schedules"), where("status", "in", ["pending", "started", "in_progress"])), (snapshot) => {
+        document.getElementById('activeSchedules').innerText = snapshot.size;
+    });
+}
+
+function initMap() {
+    // Initialize Google Map
+    const mapOptions = {
+        center: { lat: 14.5995, lng: 120.9842 }, // Manila
+        zoom: 11,
+        disableDefaultUI: false,
+        zoomControl: true,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: true
+    };
+
+    const mapElement = document.getElementById('drivers-map');
+    if (!mapElement) return;
+    
+    driversMap = new google.maps.Map(mapElement, mapOptions);
+
+    // Listen to drivers collection for real-time location
+    onSnapshot(collection(db, "drivers"), (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+            const driver = change.doc.data();
+            const driverId = change.doc.id;
+            driver.id = driverId; // Include ID for focus function
+
+            if (change.type === "removed") {
+                if (driverMarkers[driverId]) {
+                    driverMarkers[driverId].setMap(null);
+                    delete driverMarkers[driverId];
+                }
+                if (driverPolylines[driverId]) {
+                    driverPolylines[driverId].setMap(null);
+                    delete driverPolylines[driverId];
+                }
+                delete allDriversData[driverId]; // Remove from allDriversData
+                return;
+            }
+
+            allDriversData[driverId] = driver; // Update allDriversData
+
+            if (driver.current_latitude && driver.current_longitude) {
+                const position = { lat: driver.current_latitude, lng: driver.current_longitude };
+                const markerIcon = getMarkerIcon(driver.current_status || 'available');
+                
+                // Update Route Polyline
+                if (driver.current_route_polyline) {
+                    const path = google.maps.geometry.encoding.decodePath(driver.current_route_polyline);
+                    if (driverPolylines[driverId]) {
+                        driverPolylines[driverId].setPath(path);
+                    } else {
+                        driverPolylines[driverId] = new google.maps.Polyline({
+                            path: path,
+                            geodesic: true,
+                            strokeColor: '#3b82f6',
+                            strokeOpacity: 0.8,
+                            strokeWeight: 4,
+                            map: driversMap
+                        });
+                    }
+                } else if (driverPolylines[driverId]) {
+                    driverPolylines[driverId].setMap(null);
+                    delete driverPolylines[driverId];
+                }
+
+                if (driverMarkers[driverId]) {
+                    // Update existing marker
+                    driverMarkers[driverId].setPosition(position);
+                    driverMarkers[driverId].setIcon(markerIcon);
+                } else {
+                    // Create new marker
+                    const marker = new google.maps.Marker({
+                        position: position,
+                        map: driversMap,
+                        title: driver.driver_name || 'Driver',
+                        icon: markerIcon,
+                        animation: google.maps.Animation.DROP
+                    });
+
+                    const infoWindow = new google.maps.InfoWindow({
+                        content: `
+                            <div style="color: #333; padding: 5px; min-width: 150px;">
+                                <strong style="display: block; margin-bottom: 5px; font-size: 14px;">${driver.driver_name || 'Driver'}</strong>
+                                <span style="font-size: 12px; color: #666;">Status: <span style="color: ${getStatusColor(driver.current_status)}; font-weight: bold;">${driver.current_status || 'N/A'}</span></span><br>
+                                <span style="font-size: 11px; color: #888;">Vehicle: ${driver.vehicle_assigned || 'N/A'}</span><br>
+                                ${driver.trip_eta ? `<span style="font-size: 11px; color: #3b82f6; font-weight: 500;">ETA: ${driver.trip_eta} (${driver.trip_distance})</span>` : ''}
+                            </div>
+                        `
+                    });
+
+                    marker.addListener('click', () => {
+                        infoWindow.open(driversMap, marker);
+                    });
+
+                    driverMarkers[driverId] = marker;
+                }
+            }
+        });
+        
+        updateOnlineDriversList(); 
+        
+        // Ensure pending bookings widget re-renders to show/hide instant assign badges
+        const bookingsQuery = query(collection(db, "bookings"), where("status", "==", "pending"));
+        getDocs(bookingsQuery).then(snapshot => {
+            renderPendingBookingsWidget(snapshot);
+        });
+
+        const activeCount = Object.values(allDriversData).length;
+        document.getElementById('mapStatus').innerText = `Live: ${activeCount} drivers connected`;
+        document.getElementById('activeDrivers').innerText = Object.values(allDriversData).filter(d => d.current_status !== 'offline').length;
+    });
+}
+
+function updateOnlineDriversList() {
+    const listContainer = document.getElementById('onlineDriversList');
+    const onlineCount = document.getElementById('onlineCount');
+    if (!listContainer) return;
+
+    // Filter and sort: Available first, then others
+    const sortedDrivers = Object.values(allDriversData).sort((a, b) => {
+        if (a.current_status === 'available' && b.current_status !== 'available') return -1;
+        if (a.current_status !== 'available' && b.current_status === 'available') return 1;
+        return (a.driver_name || '').localeCompare(b.driver_name || '');
+    });
+
+    listContainer.innerHTML = sortedDrivers.length > 0 ? sortedDrivers.map(driver => `
+        <div class="driver-item" onclick="focusDriver('${driver.id}')">
+            <div class="status-dot ${driver.current_status || 'offline'}"></div>
+            <div class="driver-info">
+                <div class="driver-name">${driver.driver_name || 'Unnamed Driver'}</div>
+                <div class="driver-status-text">${(driver.current_status || 'offline').replace('_', ' ')}</div>
+            </div>
+            ${driver.current_status === 'available' ? '<i class="fas fa-check-circle" style="color: #10b981; font-size: 0.8em;"></i>' : ''}
+        </div>
+    `).join('') : '<div style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 0.85em;">No drivers online.</div>';
+    
+    onlineCount.innerText = sortedDrivers.length;
+}
+
+window.focusDriver = function(driverId) {
+    const marker = driverMarkers[driverId];
+    if (marker) {
+        driversMap.setCenter(marker.getPosition());
+        driversMap.setZoom(16);
+        google.maps.event.trigger(marker, 'click');
+    }
+};
+
+function getMarkerIcon(status) {
+    const color = getStatusColor(status).substring(1); // Remove #
+    return {
+        path: google.maps.SymbolPath.CIRCLE,
+        fillColor: `#${color}`,
+        fillOpacity: 1,
+        strokeWeight: 2,
+        strokeColor: '#FFFFFF',
+        scale: 10
+    };
+}
+
+function getStatusColor(status) {
+    const colors = {
+        'available': '#10b981',
+        'on_schedule': '#3b82f6',
+        'in_progress': '#f59e0b',
+        'offline': '#6b7280'
+    };
+    return colors[status] || '#6b7280';
+}
+
+function renderPendingBookingsWidget(snapshot) {
+    const widget = document.getElementById('pendingBookingsWidget');
+    if (!widget) return;
+
+    pendingBookingsMap.clear();
+
+    if (snapshot.empty) {
+        widget.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 0.85em;">No pending bookings.</div>';
+        return;
+    }
+
+    // Get available drivers for quick assign
+    const availableDrivers = Object.values(allDriversData)
+        .filter(d => d.current_status === 'available')
+        .slice(0, 3);
+
+    let html = '';
+    snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        const id = docSnap.id;
+        pendingBookingsMap.set(id, data);
+        
+        // Robust location parsing
+        const getLocText = (loc) => {
+            if (!loc) return 'Unknown';
+            if (typeof loc === 'string') return loc;
+            return loc.text || loc.address || 'Unknown';
+        };
+
+        const pickupStr = getLocText(data.pickup_location);
+        const dropoffStr = getLocText(data.dropoff_location);
+
+        let quickAssignHtml = '';
+        if (availableDrivers.length > 0) {
+            quickAssignHtml = `<div class="quick-assign-strip">
+                <span class="quick-label">Instant Assign:</span>
+                ${availableDrivers.map(d => `
+                    <button class="quick-driver-badge" onclick="window.instantDispatch('${id}', '${d.id}', '${d.driver_name}')" title="Assign ${d.driver_name}">
+                        🟢 ${d.driver_name.split(' ')[0]}
+                    </button>
+                `).join('')}
+            </div>`;
+        }
+
+        html += `
+            <div class="widget-row">
+                <div class="widget-info">
+                    <div class="widget-title">Booking ID: ${id.substring(0, 8).toUpperCase()}</div>
+                    <div class="widget-route">
+                        <i class="fas fa-map-marker-alt"></i> ${pickupStr} 
+                        <i class="fas fa-arrow-right" style="color: var(--text-muted); font-size: 0.8em; margin: 0 4px;"></i> 
+                        ${dropoffStr}
+                    </div>
+                    ${quickAssignHtml}
+                </div>
+                <button class="btn-dispatch" onclick="window.openDispatchModal('${id}')">
+                    <i class="fas fa-ellipsis-h"></i> Full Dispatch
+                </button>
+            </div>
+        `;
+    });
+    
+    widget.innerHTML = html;
+}
+
+
+window.instantDispatch = async function(bookingId, driverId, driverName) {
+    if (!confirm(`Confirm 1-click dispatch to ${driverName}?`)) return;
+
+    const bookingData = pendingBookingsMap.get(bookingId);
+    if (!bookingData) return;
+
+    try {
+        console.log(`Instant dispatching ${bookingId} to ${driverId}`);
+        // 1. Update booking status
+        await updateDoc(doc(db, "bookings", bookingId), {
+            status: "assigned",
+            updated_at: serverTimestamp()
+        });
+
+        // 2. Create schedule document
+        await addDoc(collection(db, "schedules"), {
+            booking_id: bookingId,
+            client_id: bookingData.client_id,
+            driver_id: driverId,
+            trip_phase: "pending",
+            pickup_location: bookingData.pickup_location,
+            dropoff_location: bookingData.dropoff_location,
+            created_at: serverTimestamp(),
+            status: "pending"
+        });
+
+        // Feedback
+        const badge = event.target;
+        if (badge) {
+            badge.innerHTML = "✅ Done";
+            badge.style.background = "var(--accent-green)";
+        }
+    } catch (error) {
+        console.error("Instant dispatch error:", error);
+        alert("Failed to assign driver. Please try the full dispatch modal.");
+    }
+};
+
+
+window.openDispatchModal = async function(bookingId) {
+    currentDispatchBookingId = bookingId;
+    const modal = document.getElementById('dispatchModal');
+    const select = document.getElementById('driverSelect');
+    
+    if (!modal) return;
+    
+    // Show modal loading state
+    select.innerHTML = '<option value="">Loading drivers...</option>';
+    modal.classList.add('active');
+    
+    // Fetch drivers
+    const q = query(collection(db, "users"), where("user_type", "==", "driver"));
+    const snap = await getDocs(q);
+    
+    if (snap.empty) {
+        select.innerHTML = '<option value="">No drivers found in system</option>';
+        return;
+    }
+    
+    let optionsHtml = '<option value="">-- Select a Driver --</option>';
+    snap.forEach(d => {
+        const driverData = d.data();
+        const liveStatus = allDriversData[d.id]?.current_status || 'offline';
+        const statusText = liveStatus.replace('_', ' ').toUpperCase();
+        
+        // Add a visual indicator indicator for available
+        const icon = liveStatus === 'available' ? '🟢' : '⚫';
+        optionsHtml += `<option value="${d.id}">${icon} [${statusText}] ${driverData.full_name || 'Unnamed'}</option>`;
+    });
+    
+    select.innerHTML = optionsHtml;
+};
+
+window.closeDispatchModal = function() {
+    currentDispatchBookingId = null;
+    const modal = document.getElementById('dispatchModal');
+    if (modal) modal.classList.remove('active');
+    
+    const select = document.getElementById('driverSelect');
+    if (select) select.value = '';
+};
+
+// Dispatch confirmation logic
+document.addEventListener('DOMContentLoaded', () => {
+    const confirmBtn = document.getElementById('confirmDispatchBtn');
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', async () => {
+            if (!currentDispatchBookingId) return;
+            
+            const select = document.getElementById('driverSelect');
+            const driverId = select.value;
+            
+            if (!driverId) {
+                alert("Please select a driver first.");
+                return;
+            }
+            
+            const bookingData = pendingBookingsMap.get(currentDispatchBookingId);
+            if (!bookingData) {
+                alert("Booking data not found.");
+                return;
+            }
+
+            confirmBtn.disabled = true;
+            confirmBtn.innerText = "Dispatching...";
+
+            try {
+                // 1. Update booking status
+                await updateDoc(doc(db, "bookings", currentDispatchBookingId), {
+                    status: "assigned",
+                    updated_at: serverTimestamp()
+                });
+
+                // 2. Create schedule document
+                await addDoc(collection(db, "schedules"), {
+                    booking_id: currentDispatchBookingId,
+                    client_id: bookingData.client_id,
+                    driver_id: driverId,
+                    trip_phase: "pending",
+                    pickup_location: bookingData.pickup_location,
+                    dropoff_location: bookingData.dropoff_location,
+                    created_at: serverTimestamp()
+                });
+
+                window.closeDispatchModal();
+            } catch (error) {
+                console.error("Error confirming dispatch:", error);
+                alert("Failed to assign driver. Please try again.");
+            } finally {
+                confirmBtn.disabled = false;
+                confirmBtn.innerText = "Confirm Dispatch";
+            }
+        });
+    }
+});
+
+

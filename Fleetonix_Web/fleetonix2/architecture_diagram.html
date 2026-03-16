@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fleetonix - System Architecture Diagram</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .diagram-section {
+            padding: 40px;
+            background: white;
+        }
+
+        .diagram-title {
+            font-size: 1.8em;
+            color: #667eea;
+            margin-bottom: 30px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .mermaid {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .explanation {
+            padding: 40px;
+            background: #f8f9fa;
+            border-top: 3px solid #667eea;
+        }
+
+        .explanation h2 {
+            color: #667eea;
+            font-size: 2em;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .explanation-section {
+            margin-bottom: 40px;
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .explanation-section h3 {
+            color: #764ba2;
+            font-size: 1.5em;
+            margin-bottom: 15px;
+            padding-left: 15px;
+            border-left: 4px solid #764ba2;
+        }
+
+        .explanation-section p {
+            margin-bottom: 15px;
+            text-align: justify;
+            line-height: 1.8;
+        }
+
+        .explanation-section ul, .explanation-section ol {
+            margin-left: 30px;
+            margin-bottom: 15px;
+        }
+
+        .explanation-section li {
+            margin-bottom: 10px;
+            line-height: 1.8;
+        }
+
+        .component-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .component-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid #e0e0e0;
+            transition: all 0.3s;
+        }
+
+        .component-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);
+        }
+
+        .component-card h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+        }
+
+        .component-card ul {
+            list-style: none;
+            margin-left: 0;
+        }
+
+        .component-card li {
+            padding: 5px 0;
+            color: #666;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .component-card li:before {
+            content: "▸";
+            position: absolute;
+            left: 0;
+            color: #667eea;
+        }
+
+        .highlight {
+            background: #fff3cd;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: 500;
+        }
+
+        .legend {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 2px solid #e0e0e0;
+        }
+
+        .legend h4 {
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+
+        .legend-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .legend-color {
+            width: 30px;
+            height: 20px;
+            border-radius: 4px;
+        }
+
+        @media print {
+            body {
+                background: white;
+            }
+            .container {
+                box-shadow: none;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .component-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Fleetonix System Architecture</h1>
+            <p>Comprehensive Architectural Diagram & Documentation</p>
+        </div>
+
+        <div class="diagram-section">
+            <div class="diagram-title">System Architecture Diagram</div>
+            
+            <div class="legend">
+                <h4>Diagram Legend</h4>
+                <div class="legend-items">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #667eea;"></div>
+                        <span>User Interface Layer</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #f093fb;"></div>
+                        <span>Application Layer</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #4facfe;"></div>
+                        <span>Data Layer</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #43e97b;"></div>
+                        <span>External Services</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mermaid">
+graph TB
+    subgraph "User Interface Layer"
+        UI1[Client Web Interface<br/>HTML/CSS/JavaScript]
+        UI2[Admin Web Interface<br/>HTML/CSS/JavaScript]
+        UI3[Driver Mobile App<br/>Android/iOS]
+    end
+
+    subgraph "Web Server - Apache/XAMPP"
+        subgraph "Presentation Layer"
+            P1[Login Pages<br/>login.php, register.php]
+            P2[Client Pages<br/>dashboard.php, bookings.php]
+            P3[Admin Pages<br/>dashboard.php, users.php]
+        end
+
+        subgraph "Application Layer - PHP"
+            A1[Authentication Module<br/>auth.php, login_handler.php]
+            A2[OTP Handler<br/>otp_helper.php, otp_verify_handler.php]
+            A3[Booking Management<br/>booking_new.php, booking_view.php]
+            A4[Schedule Management<br/>schedules.php, schedule_edit.php]
+            A5[User Management<br/>user_add.php, user_edit.php]
+            A6[Notification System<br/>notifications.php]
+            A7[Location Service<br/>driver_location.php]
+            A8[Accident Reporting<br/>driver_accident_report.php]
+        end
+
+        subgraph "API Layer - RESTful"
+            API1[Driver Login API<br/>driver_login.php]
+            API2[Location API<br/>driver_location.php, driver_locations.php]
+            API3[Trip Management API<br/>trip_start, trip_pickup, trip_dropoff]
+            API4[Accident API<br/>driver_accident_report.php]
+            API5[Vehicle Issue API<br/>driver_vehicle_issue.php]
+            API6[Address Search API<br/>address_search.php]
+        end
+
+        subgraph "Business Logic Layer"
+            B1[Client Functions<br/>client_functions.php]
+            B2[Admin Functions<br/>admin_functions.php]
+            B3[API Helper<br/>api_helper.php]
+            B4[Email Helper<br/>email_helper.php]
+        end
+    end
+
+    subgraph "Data Access Layer"
+        DAL1[Database Connection<br/>db_connect.php]
+        DAL2[Query Handlers<br/>Prepared Statements]
+        DAL3[Data Validation<br/>Input Sanitization]
+    end
+
+    subgraph "Database Layer - MySQL"
+        DB1[(Users Table<br/>user_id, email, password)]
+        DB2[(Clients Table<br/>client_id, user_id)]
+        DB3[(Drivers Table<br/>driver_id, user_id, vehicle)]
+        DB4[(Bookings Table<br/>booking_id, client_id, driver_id)]
+        DB5[(Schedules Table<br/>schedule_id, booking_id)]
+        DB6[(Notifications Table<br/>notification_id, user_id)]
+        DB7[(Locations Table<br/>location_id, driver_id, coordinates)]
+        DB8[(Accidents Table<br/>accident_id, driver_id, details)]
+        DB9[(OTP Table<br/>otp_id, user_id, code)]
+    end
+
+    subgraph "External Services"
+        EXT1[SMTP Server<br/>Gmail SMTP<br/>PHPMailer]
+        EXT2[Geocoding Service<br/>Address Search API]
+        EXT3[GPS Service<br/>Mobile Device GPS]
+    end
+
+    %% User Interface to Presentation Layer
+    UI1 -->|HTTP/HTTPS| P2
+    UI2 -->|HTTP/HTTPS| P3
+    UI3 -->|HTTP/HTTPS| API1
+    UI1 -->|HTTP/HTTPS| P1
+    UI2 -->|HTTP/HTTPS| P1
+
+    %% Presentation to Application Layer
+    P1 --> A1
+    P2 --> A3
+    P2 --> A4
+    P3 --> A5
+    P3 --> A3
+    P3 --> A4
+
+    %% Application Layer Internal Flow
+    A1 --> A2
+    A2 --> B4
+    A3 --> B1
+    A4 --> B1
+    A5 --> B2
+    A6 --> B1
+    A6 --> B2
+    A7 --> B3
+    A8 --> B3
+
+    %% Application to API Layer
+    A7 --> API2
+    A8 --> API4
+
+    %% API Layer to Business Logic
+    API1 --> A1
+    API2 --> B3
+    API3 --> B3
+    API4 --> B3
+    API5 --> B3
+    API6 --> B3
+
+    %% Business Logic to Data Access
+    B1 --> DAL1
+    B2 --> DAL1
+    B3 --> DAL1
+    B4 --> EXT1
+
+    %% Data Access to Database
+    DAL1 --> DAL2
+    DAL2 --> DAL3
+    DAL3 --> DB1
+    DAL3 --> DB2
+    DAL3 --> DB3
+    DAL3 --> DB4
+    DAL3 --> DB5
+    DAL3 --> DB6
+    DAL3 --> DB7
+    DAL3 --> DB8
+    DAL3 --> DB9
+
+    %% External Services
+    B4 -->|SMTP| EXT1
+    API6 -->|HTTP Request| EXT2
+    UI3 -->|GPS Data| EXT3
+    EXT3 -->|Location Updates| API2
+
+    %% Database Relationships
+    DB1 -.->|Foreign Key| DB2
+    DB1 -.->|Foreign Key| DB3
+    DB2 -.->|Foreign Key| DB4
+    DB3 -.->|Foreign Key| DB4
+    DB4 -.->|Foreign Key| DB5
+    DB1 -.->|Foreign Key| DB6
+    DB1 -.->|Foreign Key| DB9
+
+    style UI1 fill:#667eea,stroke:#333,stroke-width:2px,color:#fff
+    style UI2 fill:#667eea,stroke:#333,stroke-width:2px,color:#fff
+    style UI3 fill:#667eea,stroke:#333,stroke-width:2px,color:#fff
+    style P1 fill:#f093fb,stroke:#333,stroke-width:2px,color:#fff
+    style P2 fill:#f093fb,stroke:#333,stroke-width:2px,color:#fff
+    style P3 fill:#f093fb,stroke:#333,stroke-width:2px,color:#fff
+    style A1 fill:#f093fb,stroke:#333,stroke-width:2px,color:#fff
+    style A2 fill:#f093fb,stroke:#333,stroke-width:2px,color:#fff
+    style A3 fill:#f093fb,stroke:#333,stroke-width:2px,color:#fff
+    style A4 fill:#f093fb,stroke:#333,stroke-width:2px,color:#fff
+    style A5 fill:#f093fb,stroke:#333,stroke-width:2px,color:#fff
+    style A6 fill:#f093fb,stroke:#333,stroke-width:2px,color:#fff
+    style A7 fill:#f093fb,stroke:#333,stroke-width:2px,color:#fff
+    style A8 fill:#f093fb,stroke:#333,stroke-width:2px,color:#fff
+    style API1 fill:#f5576c,stroke:#333,stroke-width:2px,color:#fff
+    style API2 fill:#f5576c,stroke:#333,stroke-width:2px,color:#fff
+    style API3 fill:#f5576c,stroke:#333,stroke-width:2px,color:#fff
+    style API4 fill:#f5576c,stroke:#333,stroke-width:2px,color:#fff
+    style API5 fill:#f5576c,stroke:#333,stroke-width:2px,color:#fff
+    style API6 fill:#f5576c,stroke:#333,stroke-width:2px,color:#fff
+    style B1 fill:#ffa726,stroke:#333,stroke-width:2px,color:#fff
+    style B2 fill:#ffa726,stroke:#333,stroke-width:2px,color:#fff
+    style B3 fill:#ffa726,stroke:#333,stroke-width:2px,color:#fff
+    style B4 fill:#ffa726,stroke:#333,stroke-width:2px,color:#fff
+    style DAL1 fill:#4facfe,stroke:#333,stroke-width:2px,color:#fff
+    style DAL2 fill:#4facfe,stroke:#333,stroke-width:2px,color:#fff
+    style DAL3 fill:#4facfe,stroke:#333,stroke-width:2px,color:#fff
+    style DB1 fill:#43e97b,stroke:#333,stroke-width:2px,color:#000
+    style DB2 fill:#43e97b,stroke:#333,stroke-width:2px,color:#000
+    style DB3 fill:#43e97b,stroke:#333,stroke-width:2px,color:#000
+    style DB4 fill:#43e97b,stroke:#333,stroke-width:2px,color:#000
+    style DB5 fill:#43e97b,stroke:#333,stroke-width:2px,color:#000
+    style DB6 fill:#43e97b,stroke:#333,stroke-width:2px,color:#000
+    style DB7 fill:#43e97b,stroke:#333,stroke-width:2px,color:#000
+    style DB8 fill:#43e97b,stroke:#333,stroke-width:2px,color:#000
+    style DB9 fill:#43e97b,stroke:#333,stroke-width:2px,color:#000
+    style EXT1 fill:#ff9800,stroke:#333,stroke-width:2px,color:#fff
+    style EXT2 fill:#ff9800,stroke:#333,stroke-width:2px,color:#fff
+    style EXT3 fill:#ff9800,stroke:#333,stroke-width:2px,color:#fff
+            </div>
+        </div>
+
+        <div class="explanation">
+            <h2>Architecture Documentation</h2>
+
+            <div class="explanation-section">
+                <h3>1. System Architecture Overview</h3>
+                <p>
+                    The <strong>Fleetonix</strong> system follows a <span class="highlight">multi-tier architecture</span> pattern, 
+                    also known as a <span class="highlight">layered architecture</span>. This architecture separates concerns into 
+                    distinct layers, each with specific responsibilities, promoting maintainability, scalability, and security.
+                </p>
+                <p>
+                    The system is deployed on an <span class="highlight">Apache web server</span> (via XAMPP) and uses 
+                    <span class="highlight">PHP</span> as the server-side scripting language, <span class="highlight">MySQL</span> 
+                    as the relational database management system, and standard web technologies (HTML, CSS, JavaScript) for the 
+                    client-side interface.
+                </p>
+            </div>
+
+            <div class="explanation-section">
+                <h3>2. User Interface Layer</h3>
+                <p>
+                    The User Interface Layer consists of three distinct interfaces serving different user roles:
+                </p>
+                <div class="component-grid">
+                    <div class="component-card">
+                        <h4>Client Web Interface</h4>
+                        <ul>
+                            <li>Dashboard for booking overview</li>
+                            <li>Booking creation and management</li>
+                            <li>Schedule viewing and tracking</li>
+                            <li>Real-time driver location tracking</li>
+                            <li>Notification center</li>
+                            <li>Profile management</li>
+                        </ul>
+                    </div>
+                    <div class="component-card">
+                        <h4>Admin Web Interface</h4>
+                        <ul>
+                            <li>System-wide dashboard</li>
+                            <li>User management (CRUD operations)</li>
+                            <li>Booking approval and management</li>
+                            <li>Schedule creation and editing</li>
+                            <li>Driver performance monitoring</li>
+                            <li>Accident report management</li>
+                            <li>System notifications</li>
+                        </ul>
+                    </div>
+                    <div class="component-card">
+                        <h4>Driver Mobile App</h4>
+                        <ul>
+                            <li>Mobile-optimized interface</li>
+                            <li>Login and authentication</li>
+                            <li>Trip assignment viewing</li>
+                            <li>Real-time GPS location updates</li>
+                            <li>Trip status updates (start, pickup, dropoff)</li>
+                            <li>Accident reporting with photos</li>
+                            <li>Vehicle issue reporting</li>
+                        </ul>
+                    </div>
+                </div>
+                <p>
+                    All interfaces communicate with the server using <span class="highlight">HTTP/HTTPS protocols</span>, 
+                    with the mobile app using <span class="highlight">RESTful API endpoints</span> for data exchange.
+                </p>
+            </div>
+
+            <div class="explanation-section">
+                <h3>3. Presentation Layer</h3>
+                <p>
+                    The Presentation Layer handles the initial request processing and user interaction:
+                </p>
+                <ul>
+                    <li><strong>Login Pages:</strong> Handle user authentication requests, registration, password recovery, and OTP verification. These pages serve as entry points for all user types.</li>
+                    <li><strong>Client Pages:</strong> Serve dynamic content for client users, including dashboards, booking interfaces, and schedule views. These pages require client-level authentication.</li>
+                    <li><strong>Admin Pages:</strong> Provide administrative interfaces for system management. These pages enforce admin-level access control and display system-wide data and statistics.</li>
+                </ul>
+                <p>
+                    The presentation layer acts as a <span class="highlight">controller</span> that routes requests to appropriate 
+                    application layer modules based on user actions and permissions.
+                </p>
+            </div>
+
+            <div class="explanation-section">
+                <h3>4. Application Layer</h3>
+                <p>
+                    The Application Layer contains the core business logic modules that process user requests:
+                </p>
+                <div class="component-grid">
+                    <div class="component-card">
+                        <h4>Authentication Module</h4>
+                        <ul>
+                            <li>User credential validation</li>
+                            <li>Session management</li>
+                            <li>Role-based access control (RBAC)</li>
+                            <li>Password hashing and verification</li>
+                        </ul>
+                    </div>
+                    <div class="component-card">
+                        <h4>OTP Handler</h4>
+                        <ul>
+                            <li>OTP code generation</li>
+                            <li>OTP storage and expiration</li>
+                            <li>OTP verification logic</li>
+                            <li>Integration with email service</li>
+                        </ul>
+                    </div>
+                    <div class="component-card">
+                        <h4>Booking Management</h4>
+                        <ul>
+                            <li>Booking creation and validation</li>
+                            <li>Driver assignment logic</li>
+                            <li>Booking status updates</li>
+                            <li>Booking cancellation</li>
+                        </ul>
+                    </div>
+                    <div class="component-card">
+                        <h4>Schedule Management</h4>
+                        <ul>
+                            <li>Recurring schedule creation</li>
+                            <li>One-time schedule handling</li>
+                            <li>Schedule editing and deletion</li>
+                            <li>Schedule-to-booking conversion</li>
+                        </ul>
+                    </div>
+                    <div class="component-card">
+                        <h4>User Management</h4>
+                        <ul>
+                            <li>User CRUD operations</li>
+                            <li>Client profile management</li>
+                            <li>Driver profile management</li>
+                            <li>Account activation/deactivation</li>
+                        </ul>
+                    </div>
+                    <div class="component-card">
+                        <h4>Notification System</h4>
+                        <ul>
+                            <li>Notification generation</li>
+                            <li>Notification delivery</li>
+                            <li>Read status tracking</li>
+                            <li>Notification filtering</li>
+                        </ul>
+                    </div>
+                    <div class="component-card">
+                        <h4>Location Service</h4>
+                        <ul>
+                            <li>GPS coordinate reception</li>
+                            <li>Location data storage</li>
+                            <li>Real-time location retrieval</li>
+                            <li>Location history tracking</li>
+                        </ul>
+                    </div>
+                    <div class="component-card">
+                        <h4>Accident Reporting</h4>
+                        <ul>
+                            <li>Accident report creation</li>
+                            <li>Image upload handling</li>
+                            <li>Location data association</li>
+                            <li>Administrator notification</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="explanation-section">
+                <h3>5. API Layer (RESTful Services)</h3>
+                <p>
+                    The API Layer provides standardized RESTful endpoints for mobile application integration:
+                </p>
+                <ul>
+                    <li><strong>Driver Login API:</strong> Authenticates driver credentials, generates OTP, and returns session tokens. Endpoint: <code>POST /api/driver_login.php</code></li>
+                    <li><strong>Location API:</strong> Accepts GPS coordinates from mobile devices and stores location data. Provides real-time location retrieval. Endpoints: <code>POST /api/driver_location.php</code>, <code>GET /api/driver_locations.php</code></li>
+                    <li><strong>Trip Management API:</strong> Handles trip lifecycle events including trip start, pickup confirmation, dropoff confirmation, return to pickup, and trip completion. Updates booking status in real-time.</li>
+                    <li><strong>Accident API:</strong> Processes accident reports with details, images, and location data. Creates notifications for administrators. Endpoint: <code>POST /api/driver_accident_report.php</code></li>
+                    <li><strong>Vehicle Issue API:</strong> Allows drivers to report vehicle problems that may affect trip execution. Endpoint: <code>POST /api/driver_vehicle_issue.php</code></li>
+                    <li><strong>Address Search API:</strong> Provides address autocomplete functionality using external geocoding services. Endpoint: <code>GET /api/address_search.php</code></li>
+                </ul>
+                <p>
+                    All API endpoints implement <span class="highlight">CORS (Cross-Origin Resource Sharing)</span> policies, 
+                    <span class="highlight">input validation</span>, <span class="highlight">error handling</span>, and return 
+                    responses in <span class="highlight">JSON format</span> for consistent client-side processing.
+                </p>
+            </div>
+
+            <div class="explanation-section">
+                <h3>6. Business Logic Layer</h3>
+                <p>
+                    The Business Logic Layer contains reusable helper functions and business rules:
+                </p>
+                <ul>
+                    <li><strong>Client Functions:</strong> Contains business logic specific to client operations, including booking statistics, schedule retrieval, and client-specific data processing.</li>
+                    <li><strong>Admin Functions:</strong> Provides administrative business logic including system statistics, user management operations, and system-wide data aggregation.</li>
+                    <li><strong>API Helper:</strong> Contains utility functions for API endpoints including request parsing, response formatting, CORS handling, and input validation.</li>
+                    <li><strong>Email Helper:</strong> Manages email operations using PHPMailer library, including OTP email sending, notification emails, and email template management.</li>
+                </ul>
+                <p>
+                    This layer promotes <span class="highlight">code reusability</span> and <span class="highlight">separation of concerns</span>, 
+                    ensuring that business logic is centralized and maintainable.
+                </p>
+            </div>
+
+            <div class="explanation-section">
+                <h3>7. Data Access Layer</h3>
+                <p>
+                    The Data Access Layer abstracts database operations from the business logic:
+                </p>
+                <ul>
+                    <li><strong>Database Connection:</strong> Manages MySQL database connections using connection pooling. Handles connection errors gracefully and sets appropriate timezone (Asia/Manila) and character encoding (UTF-8) for internationalization support.</li>
+                    <li><strong>Query Handlers:</strong> Executes prepared statements to prevent SQL injection attacks. Handles transactions for data integrity and implements proper error handling and logging. All database queries use parameterized statements.</li>
+                    <li><strong>Data Validation:</strong> Validates input data before database operations, sanitizes user inputs to prevent XSS attacks, and ensures data consistency and referential integrity through validation rules.</li>
+                </ul>
+                <p>
+                    This layer uses <span class="highlight">prepared statements</span> and <span class="highlight">parameterized queries</span> 
+                    exclusively to prevent SQL injection vulnerabilities and ensure secure database interactions.
+                </p>
+            </div>
+
+            <div class="explanation-section">
+                <h3>8. Database Layer</h3>
+                <p>
+                    The MySQL database stores all system data in normalized relational tables:
+                </p>
+                <ul>
+                    <li><strong>Users Table:</strong> Central user account information including email, hashed passwords (bcrypt), user types (admin, client, driver), account status, and timestamps.</li>
+                    <li><strong>Clients Table:</strong> Client-specific information linked to user accounts via foreign key, including company details, contact information, and preferences.</li>
+                    <li><strong>Drivers Table:</strong> Driver profiles linked to user accounts, including vehicle assignments, license information, performance metrics, and availability status.</li>
+                    <li><strong>Bookings Table:</strong> Booking records including pickup/dropoff locations, dates, times, status (pending, approved, in-progress, completed, cancelled), assigned drivers, client information, and pricing details.</li>
+                    <li><strong>Schedules Table:</strong> Stores recurring and one-time schedules, frequency settings (daily, weekly, monthly), associated bookings, and schedule status.</li>
+                    <li><strong>Notifications Table:</strong> Tracks all system notifications, their recipients (linked to users), read status, delivery timestamps, and notification types.</li>
+                    <li><strong>Locations Table:</strong> Stores historical GPS coordinates from drivers with timestamps, enabling location tracking, route analysis, and real-time position display.</li>
+                    <li><strong>Accidents Table:</strong> Records accident reports with details, image file paths, location data, driver information, resolution status, and administrator notes.</li>
+                    <li><strong>OTP Table:</strong> Stores one-time password codes with user associations, expiration timestamps, and usage status for two-factor authentication.</li>
+                </ul>
+                <p>
+                    The database implements <span class="highlight">foreign key constraints</span> to maintain referential integrity, 
+                    <span class="highlight">indexes</span> on frequently queried columns (user_id, booking_id, driver_id, etc.) for 
+                    performance optimization, and a <span class="highlight">normalized structure</span> (3NF) to minimize data redundancy.
+                </p>
+            </div>
+
+            <div class="explanation-section">
+                <h3>9. External Services Integration</h3>
+                <p>
+                    The system integrates with external services to extend functionality:
+                </p>
+                <ul>
+                    <li><strong>SMTP Server (Gmail):</strong> Uses PHPMailer library to send emails through Gmail's SMTP service. Handles OTP emails, password reset emails, and system notifications. Configured with app-specific passwords for secure authentication.</li>
+                    <li><strong>Geocoding Service:</strong> Integrates with external address search APIs to provide address autocomplete functionality. Converts addresses to coordinates and vice versa for location-based features.</li>
+                    <li><strong>GPS Service:</strong> Receives GPS coordinates from mobile devices (Android/iOS) through the mobile application. The mobile app uses device GPS hardware to provide real-time location updates to the system.</li>
+                </ul>
+            </div>
+
+            <div class="explanation-section">
+                <h3>10. Data Flow Example: Complete Booking Process</h3>
+                <p>
+                    To illustrate the architecture in action, here's the complete data flow for a booking process:
+                </p>
+                <ol>
+                    <li><strong>Client Request:</strong> Client accesses the web interface and navigates to create a new booking.</li>
+                    <li><strong>Address Search:</strong> Client enters pickup/dropoff addresses. System calls Address Search API which queries external geocoding service to validate and complete addresses.</li>
+                    <li><strong>Form Submission:</strong> Client submits booking form. Data is sent via HTTP POST to <code>client/booking_new.php</code>.</li>
+                    <li><strong>Authentication Check:</strong> Presentation layer verifies client session and permissions through Authentication Module.</li>
+                    <li><strong>Business Logic:</strong> Booking Management module validates booking data, checks driver availability, and applies business rules.</li>
+                    <li><strong>Database Operation:</strong> Data Access Layer executes prepared INSERT statement to create booking record in Bookings Table.</li>
+                    <li><strong>Driver Assignment:</strong> System queries Drivers Table for available drivers and assigns appropriate driver based on business rules.</li>
+                    <li><strong>Notification Generation:</strong> Notification System creates notifications for assigned driver and administrator, storing them in Notifications Table.</li>
+                    <li><strong>Email Notification:</strong> Email Helper sends email notification to driver using SMTP service (Gmail).</li>
+                    <li><strong>Response:</strong> Success response is sent back to client interface, which updates to show the new booking.</li>
+                    <li><strong>Driver Action:</strong> Driver receives notification via mobile app, views booking details through API, and starts trip.</li>
+                    <li><strong>Location Updates:</strong> Mobile app periodically sends GPS coordinates to Location API, which stores them in Locations Table.</li>
+                    <li><strong>Real-time Tracking:</strong> Client can view real-time driver location by querying Locations Table through Location Service.</li>
+                </ol>
+            </div>
+
+            <div class="explanation-section">
+                <h3>11. Security Architecture</h3>
+                <p>
+                    Security is implemented at multiple layers:
+                </p>
+                <ul>
+                    <li><strong>Authentication Security:</strong> Passwords are hashed using bcrypt algorithm before storage. Two-factor authentication (2FA) via OTP adds an extra security layer.</li>
+                    <li><strong>Session Security:</strong> PHP sessions are used with secure cookie settings. Sessions are regenerated on login to prevent session fixation attacks.</li>
+                    <li><strong>Authorization:</strong> Role-based access control (RBAC) ensures users can only access resources appropriate to their role (admin, client, driver).</li>
+                    <li><strong>Input Validation:</strong> All user inputs are validated and sanitized at multiple layers (client-side JavaScript, server-side PHP) to prevent XSS and injection attacks.</li>
+                    <li><strong>SQL Injection Prevention:</strong> All database queries use prepared statements with parameterized queries, completely preventing SQL injection vulnerabilities.</li>
+                    <li><strong>CORS Policy:</strong> API endpoints implement proper CORS policies to control cross-origin access and prevent unauthorized API usage.</li>
+                    <li><strong>HTTPS Support:</strong> System is designed to work with HTTPS for encrypted data transmission (when SSL certificates are configured).</li>
+                </ul>
+            </div>
+
+            <div class="explanation-section">
+                <h3>12. Deployment Architecture</h3>
+                <p>
+                    The system is deployed using the following infrastructure:
+                </p>
+                <ul>
+                    <li><strong>Web Server:</strong> Apache HTTP Server (via XAMPP) handles HTTP requests, serves static files, and executes PHP scripts.</li>
+                    <li><strong>Application Server:</strong> PHP runtime environment processes server-side logic, manages sessions, and handles database connections.</li>
+                    <li><strong>Database Server:</strong> MySQL database server (via XAMPP) stores and manages all persistent data.</li>
+                    <li><strong>File System:</strong> Server file system stores uploaded files (accident images, documents) and application code.</li>
+                    <li><strong>Network:</strong> System communicates over HTTP/HTTPS protocols. Mobile apps communicate via RESTful API over HTTP/HTTPS.</li>
+                </ul>
+                <p>
+                    The architecture supports <span class="highlight">horizontal scaling</span> potential - the stateless API design 
+                    allows API endpoints to be deployed across multiple servers behind a load balancer if needed for high-traffic scenarios.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'default',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+    </script>
+</body>
+</html>

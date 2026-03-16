@@ -1,0 +1,122 @@
+/* 
+ * Enhanced Address Autocomplete Styles
+ * Premium "Grab/MoveIt" inspired UI
+ */
+
+.address-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #1e2338; /* Matches --bg-card */
+    border: 1px solid #2d3447; /* Matches --border-color */
+    border-radius: 12px;
+    margin-top: 8px;
+    max-height: 350px;
+    overflow-y: auto;
+    z-index: 1000;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 212, 255, 0.1);
+    backdrop-filter: blur(15px);
+    animation: dropdownFadeIn 0.2s ease-out;
+}
+
+@keyframes dropdownFadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.suggestion-item {
+    padding: 14px 18px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(45, 52, 71, 0.5);
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    transition: all 0.2s ease;
+}
+
+.suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.suggestion-item:hover,
+.suggestion-item.selected {
+    background: rgba(0, 212, 255, 0.1);
+}
+
+.suggestion-icon {
+    width: 32px;
+    height: 32px;
+    background: rgba(0, 212, 255, 0.15);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #00d4ff; /* Matches --accent-blue */
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.suggestion-icon.current-location {
+    background: rgba(0, 255, 136, 0.15);
+    color: #00ff88; /* Matches --accent-green */
+}
+
+.suggestion-content {
+    flex-grow: 1;
+}
+
+.suggestion-address {
+    color: #ffffff;
+    font-size: 0.95rem;
+    font-weight: 500;
+    margin-bottom: 4px;
+    line-height: 1.4;
+}
+
+.suggestion-address strong {
+    color: #00d4ff;
+    font-weight: 600;
+}
+
+.suggestion-details {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #6b7280;
+    font-size: 0.8rem;
+}
+
+.suggestion-region {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+/* Custom indicator for current location item */
+.suggestion-item.current-item .suggestion-address {
+    color: #00ff88;
+    font-weight: 600;
+}
+
+/* Loading state */
+.suggestion-item.loading {
+    justify-content: center;
+    color: #6b7280;
+    font-style: italic;
+}
+
+/* Scrollbar styling */
+.address-suggestions::-webkit-scrollbar {
+    width: 6px;
+}
+.address-suggestions::-webkit-scrollbar-track {
+    background: transparent;
+}
+.address-suggestions::-webkit-scrollbar-thumb {
+    background: #2d3447;
+    border-radius: 10px;
+}
+.address-suggestions::-webkit-scrollbar-thumb:hover {
+    background: #00d4ff;
+}

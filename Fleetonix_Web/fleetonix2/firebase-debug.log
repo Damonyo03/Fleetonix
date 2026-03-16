@@ -1,0 +1,48 @@
+[debug] [2025-11-24T09:04:00.101Z] ----------------------------------------------------------------------
+[debug] [2025-11-24T09:04:00.103Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\QUIA\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js init hosting
+[debug] [2025-11-24T09:04:00.104Z] CLI Version:   14.26.0
+[debug] [2025-11-24T09:04:00.104Z] Platform:      win32
+[debug] [2025-11-24T09:04:00.104Z] Node Version:  v24.11.1
+[debug] [2025-11-24T09:04:00.104Z] Time:          Mon Nov 24 2025 17:04:00 GMT+0800 (Singapore Standard Time)
+[debug] [2025-11-24T09:04:00.104Z] ----------------------------------------------------------------------
+[debug] 
+[info] 
+     ######## #### ########  ######## ########     ###     ######  ########
+     ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##
+     ######    ##  ########  ######   ########  #########  ######  ######
+     ##        ##  ##    ##  ##       ##     ## ##     ##       ## ##
+     ##       #### ##     ## ######## ########  ##     ##  ######  ########
+
+You're about to initialize a Firebase project in this directory:
+
+  C:\xampp\htdocs\fleetonix2
+
+Before we get started, keep in mind:
+
+  * You are currently outside your home directory
+
+[info] 
+=== Project Setup
+[info] 
+[info] First, let's associate this project directory with a Firebase project.
+[info] You can create multiple project aliases by running firebase use --add, 
+[info] 
+[debug] [2025-11-24T09:04:32.859Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2025-11-24T09:04:32.859Z] > authorizing via signed-in user (aquia.k12043091@umak.edu.ph)
+[debug] [2025-11-24T09:04:32.860Z] Checked if tokens are valid: true, expires at: 1763977894877
+[debug] [2025-11-24T09:04:32.860Z] Checked if tokens are valid: true, expires at: 1763977894877
+[debug] [2025-11-24T09:04:32.862Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects pageSize=100
+[debug] [2025-11-24T09:04:34.276Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects 200
+[debug] [2025-11-24T09:04:34.276Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects [omitted]
+[info] 
+=== Hosting Setup
+[debug] [2025-11-24T09:04:37.621Z] Checked if tokens are valid: true, expires at: 1763977894877
+[debug] [2025-11-24T09:04:37.621Z] Checked if tokens are valid: true, expires at: 1763977894877
+[debug] [2025-11-24T09:04:37.621Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/fleetonix-a49d2 [none]
+[debug] [2025-11-24T09:04:38.316Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/fleetonix-a49d2 200
+[debug] [2025-11-24T09:04:38.316Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/fleetonix-a49d2 {"projectId":"fleetonix-a49d2","projectNumber":"1079158523250","displayName":"Fleetonix","name":"projects/fleetonix-a49d2","resources":{"hostingSite":"fleetonix-a49d2"},"state":"ACTIVE","etag":"1_61eb093f-b6c7-470c-9ba5-e1fb969207bf"}
+[info] 
+[info] Your public directory is the folder (relative to your project directory) that
+[info] will contain Hosting assets to be uploaded with firebase deploy. If you
+[info] have a build process for your assets, use your build's output directory.
+[info] 
