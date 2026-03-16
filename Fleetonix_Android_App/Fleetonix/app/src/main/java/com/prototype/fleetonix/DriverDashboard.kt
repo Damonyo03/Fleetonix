@@ -331,7 +331,7 @@ fun DriverDashboard(
 
         val origin = "$currentLatitude,$currentLongitude"
         val destination = when (tripPhase) {
-            "pickup", "return_pickup" -> if (schedule.pickup?.latitude != null) "${schedule.pickup.latitude},${schedule.pickup.longitude}" else null
+            "pending", "assigned", "pickup", "return_pickup" -> if (schedule.pickup?.latitude != null) "${schedule.pickup.latitude},${schedule.pickup.longitude}" else null
             "dropoff" -> if (schedule.dropoff?.latitude != null) "${schedule.dropoff.latitude},${schedule.dropoff.longitude}" else null
             else -> null
         }

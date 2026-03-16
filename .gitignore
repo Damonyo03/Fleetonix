@@ -1,1 +1,16 @@
-\nappfleetonix-firebase-adminsdk-fbsvc-b6aecf2c1e.json
+appfleetonix-firebase-adminsdk-fbsvc-b6aecf2c1e.json
+*.json
+!firebase.json
+!firestore.indexes.json
+node_modules/
+.idea/
+build/
+.gradle/
+*.iml
+local.properties
+captures/
+.externalNativeBuild
+.DS_Store
+*.apk
+*.output.txt
+*.log

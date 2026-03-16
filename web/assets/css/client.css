@@ -114,11 +114,17 @@ body {
 .admin-header {
     background: var(--bg-card);
     border-bottom: 1px solid var(--border-color);
-    padding: 20px 30px;
+    padding: 20px 60px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     min-height: 70px;
+}
+
+.admin-content {
+    padding: 40px 60px;
+    overflow-y: auto;
+    flex: 1;
 }
 
 .menu-toggle {
@@ -576,4 +582,9 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
     background: var(--text-muted);
+}
+@media (max-width: 768px) {
+    .admin-content {
+        padding: 20px;
+    }
 }
