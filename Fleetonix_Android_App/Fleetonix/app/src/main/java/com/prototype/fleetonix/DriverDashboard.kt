@@ -496,7 +496,7 @@ fun DriverDashboard(
                         currentAccuracy = accuracy
                         currentHeading = bearing
 
-                        // Sync to Firestore if docRef is ready
+                         // Sync to Firestore if docRef is ready
                         scope.launch {
                             val locData = hashMapOf(
                                 "current_latitude" to lat,
@@ -507,6 +507,8 @@ fun DriverDashboard(
                                 "current_route_polyline" to (activePolylineEncoded ?: ""),
                                 "trip_eta" to tripETA,
                                 "trip_distance" to tripDistance,
+                                "current_trip_id" to (nextSchedule?.docId ?: ""),
+                                "current_trip_phase" to tripPhase,
                                 "last_updated" to FieldValue.serverTimestamp()
                             )
                             driverDocRef?.update(locData as Map<String, Any>)
@@ -1478,13 +1480,17 @@ fun DriverDashboard(
                                                         "accepted_at", FieldValue.serverTimestamp()
                                                     ).await()
                                                     
-                                                    // Update driver status
+                                                     // Update driver status
                                                     val email = auth.currentUser?.email
                                                     if (email != null) {
                                                         val driverSnap = db.collection("drivers")
                                                             .whereEqualTo("driver_email", email)
                                                             .get().await()
-                                                        driverSnap.documents.firstOrNull()?.reference?.update("current_status", "on_schedule")
+                                                        driverSnap.documents.firstOrNull()?.reference?.update(
+                                                            "current_status", "on_schedule",
+                                                            "current_trip_id", docId,
+                                                            "current_trip_phase", "pickup"
+                                                        )
                                                     }
                                                 } catch (e: Exception) {
                                                     tripActionError = "Failed: ${e.message}"
@@ -1510,10 +1516,13 @@ fun DriverDashboard(
                                                 try {
                                                     isMarkingPickup = true
                                                     tripActionError = null
-                                                    db.collection("schedules").document(docId).update(
+                                                     db.collection("schedules").document(docId).update(
                                                         "trip_phase", "dropoff",
                                                         "picked_up_at", FieldValue.serverTimestamp()
                                                     ).await()
+                                                    
+                                                    // Sync to driver doc
+                                                    driverDocRef?.update("current_trip_phase", "dropoff")
                                                 } catch (e: Exception) {
                                                     tripActionError = "Failed: ${e.message}"
                                                 } finally {
@@ -1541,8 +1550,11 @@ fun DriverDashboard(
                                                     val docRef = db.collection("schedules").document(docId)
                                                     val doc = docRef.get().await()
                                                     val returnReq = doc.getBoolean("return_to_pickup") ?: false
-                                                    val nextP = if (returnReq) "return_pickup" else "ready_to_complete"
+                                                     val nextP = if (returnReq) "return_pickup" else "ready_to_complete"
                                                     docRef.update("trip_phase", nextP, "dropped_off_at", FieldValue.serverTimestamp()).await()
+                                                    
+                                                    // Sync to driver doc
+                                                    driverDocRef?.update("current_trip_phase", nextP)
                                                 } catch (e: Exception) {
                                                     tripActionError = "Failed: ${e.message}"
                                                 } finally {
@@ -1567,10 +1579,13 @@ fun DriverDashboard(
                                                 try {
                                                     isMarkingReturnPickup = true
                                                     tripActionError = null
-                                                    db.collection("schedules").document(docId).update(
+                                                     db.collection("schedules").document(docId).update(
                                                         "trip_phase", "ready_to_complete",
                                                         "return_picked_up_at", FieldValue.serverTimestamp()
                                                     ).await()
+                                                    
+                                                    // Sync to driver doc
+                                                    driverDocRef?.update("current_trip_phase", "ready_to_complete")
                                                 } catch (e: Exception) {
                                                     tripActionError = "Failed: ${e.message}"
                                                 } finally {
@@ -1595,11 +1610,18 @@ fun DriverDashboard(
                                                 try {
                                                     isCompletingTrip = true
                                                     tripActionError = null
-                                                    db.collection("schedules").document(docId).update(
+                                                     db.collection("schedules").document(docId).update(
                                                         "status", "completed",
                                                         "trip_phase", "completed",
                                                         "completed_at", FieldValue.serverTimestamp()
                                                     ).await()
+                                                    
+                                                    // Update driver back to available
+                                                    driverDocRef?.update(
+                                                        "current_status", "available",
+                                                        "current_trip_id", "",
+                                                        "current_trip_phase", "completed"
+                                                    )
                                                 } catch (e: Exception) {
                                                     tripActionError = "Failed: ${e.message}"
                                                 } finally {
