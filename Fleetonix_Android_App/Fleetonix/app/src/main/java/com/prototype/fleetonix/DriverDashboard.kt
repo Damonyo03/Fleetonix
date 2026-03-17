@@ -527,14 +527,18 @@ fun DriverDashboard(
     
     // Listen to LocationService updates via BroadcastReceiver
     DisposableEffect(driverDocRef) {
+        val appContext = context.applicationContext
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
+                Log.d("LocationTracking", "Received Broadcast: ${intent?.action}")
                 if (intent?.action == LocationService.ACTION_LOCATION_UPDATE) {
                     val lat = intent.getDoubleExtra(LocationService.EXTRA_LATITUDE, 0.0)
                     val lng = intent.getDoubleExtra(LocationService.EXTRA_LONGITUDE, 0.0)
                     val speed = intent.getFloatExtra(LocationService.EXTRA_SPEED, 0f)
                     val accuracy = intent.getFloatExtra(LocationService.EXTRA_ACCURACY, 0f)
                     val bearing = intent.getFloatExtra(LocationService.EXTRA_BEARING, 0f)
+
+                    Log.d("LocationTracking", "Broadcast Data: lat=$lat, lng=$lng, acc=$accuracy")
 
                     if (lat != 0.0 && lng != 0.0) {
                         currentLatitude = lat
@@ -557,7 +561,7 @@ fun DriverDashboard(
                                 "last_updated" to FieldValue.serverTimestamp()
                             )
                             driverDocRef?.update(locData as Map<String, Any>)
-                            Log.d("LocationTracking", "Broadcast Updated Firestore: $lat, $lng")
+                            Log.d("LocationTracking", "Firestore Sync: $lat, $lng")
                         }
                     }
                 }
@@ -565,15 +569,25 @@ fun DriverDashboard(
         }
 
         val filter = android.content.IntentFilter(LocationService.ACTION_LOCATION_UPDATE)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            context.registerReceiver(receiver, filter)
+        Log.d("LocationTracking", "Registering Receiver for ${LocationService.ACTION_LOCATION_UPDATE}")
+        
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                appContext.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                appContext.registerReceiver(receiver, filter)
+            }
+        } catch (e: Exception) {
+            Log.e("LocationTracking", "Registration failed: ${e.message}")
         }
 
         onDispose {
-            context.unregisterReceiver(receiver)
-            Log.d("LocationTracking", "Broadcast receiver unregistered")
+            try {
+                appContext.unregisterReceiver(receiver)
+                Log.d("LocationTracking", "Receiver unregistered")
+            } catch (e: Exception) {
+                Log.e("LocationTracking", "Unregistration failed", e)
+            }
         }
     }
 
