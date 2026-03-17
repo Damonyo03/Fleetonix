@@ -525,7 +525,7 @@ fun DriverDashboard(
 
     val locationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     
-    Log.d("DriverDashboard", "Composing Dashboard: phase=$tripPhase, schedules=${feed.schedules.size}")
+    Log.d("DriverDashboard", "Composing Dashboard: phase=$tripPhase, schedules=${feed?.schedules?.size ?: 0}")
 
     // Listen to LocationService updates via BroadcastReceiver
     DisposableEffect(Unit) {
