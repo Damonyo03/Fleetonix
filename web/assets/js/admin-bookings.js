@@ -43,21 +43,60 @@ window.showAdminBookingModal = async () => {
         const clients = clientsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
         const content = `
-            <div class="form-group">
-                <label>Select Client</label>
-                <select id="modal_client" class="form-input" required>
-                    <option value="">-- Choose a Client --</option>
-                    ${clients.map(c => `<option value="${c.id}" data-name="${c.full_name || ''}" data-email="${c.email || ''}">${c.full_name || c.email}</option>`).join('')}
-                </select>
+            <div class="form-group" style="background: rgba(59, 130, 246, 0.05); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <label style="font-weight: 700; color: var(--accent-blue); display: block; margin-bottom: 10px;">Client Type</label>
+                <div style="display: flex; gap: 20px;">
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                        <input type="radio" name="client_type" value="existing" checked style="width: auto;"> Registered Client
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                        <input type="radio" name="client_type" value="new" style="width: auto;"> New / Guest
+                    </label>
+                </div>
             </div>
+
+            <!-- Existing Client Section -->
+            <div id="existing_client_section">
+                <div class="form-group">
+                    <label>Select Client</label>
+                    <select id="modal_client" class="form-input">
+                        <option value="">-- Choose a Client --</option>
+                        ${clients.map(c => `<option value="${c.id}" data-name="${c.full_name || ''}" data-email="${c.email || ''}">${c.full_name || c.email}</option>`).join('')}
+                    </select>
+                </div>
+            </div>
+
+            <!-- New Client Section (Hidden by default) -->
+            <div id="new_client_section" style="display: none;">
+                <div class="form-group">
+                    <label>Guest Full Name</label>
+                    <input type="text" id="modal_guest_name" class="form-input" placeholder="e.g. John Doe">
+                </div>
+                <div class="form-group">
+                    <label>Guest Email</label>
+                    <input type="email" id="modal_guest_email" class="form-input" placeholder="john@example.com">
+                </div>
+                <div class="form-group">
+                    <label>Company / Organization (Optional)</label>
+                    <input type="text" id="modal_company" class="form-input" placeholder="Company Name">
+                </div>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 20px 0;">
+
             <div class="form-group">
                 <label>Pickup Location</label>
-                <input type="text" id="modal_pickup" class="form-input" placeholder="Start typing address..." required>
+                <input type="text" id="modal_pickup" class="form-input" placeholder="Search for pickup address..." required>
+                <input type="hidden" id="modal_pickup_lat" value="0">
+                <input type="hidden" id="modal_pickup_lng" value="0">
             </div>
             <div class="form-group">
                 <label>Dropoff Location</label>
-                <input type="text" id="modal_dropoff" class="form-input" placeholder="Destination..." required>
+                <input type="text" id="modal_dropoff" class="form-input" placeholder="Search for destination..." required>
+                <input type="hidden" id="modal_dropoff_lat" value="0">
+                <input type="hidden" id="modal_dropoff_lng" value="0">
             </div>
+
             <div class="grid-2">
                 <div class="form-group">
                     <label>Pickup Date</label>
@@ -68,33 +107,65 @@ window.showAdminBookingModal = async () => {
                     <input type="time" id="modal_time" class="form-input" required>
                 </div>
             </div>
-            <div class="form-group">
-                <label>Passengers (Pax)</label>
-                <input type="number" id="modal_pax" class="form-input" value="1" min="1" required>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Passengers (Pax)</label>
+                    <input type="number" id="modal_pax" class="form-input" value="1" min="1" required>
+                </div>
+                <div class="form-group" style="display: flex; align-items: center; padding-top: 25px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9em;">
+                        <input type="checkbox" id="modal_return" style="width: auto;"> Return to Pickup
+                    </label>
+                </div>
             </div>
-            <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-top: 10px; background: rgba(59, 130, 246, 0.05); padding: 10px; border-radius: 8px;">
-                <input type="checkbox" id="modal_auto_dispatch" style="width: auto; height: auto;">
-                <label for="modal_auto_dispatch" style="margin: 0; cursor: pointer; color: var(--accent-blue); font-weight: 600;">Auto-Approve & Dispatch</label>
+
+            <div class="form-group">
+                <label>Special Instructions (Optional)</label>
+                <textarea id="modal_instructions" class="form-input" rows="2" placeholder="e.g. Near the main gate..."></textarea>
+            </div>
+
+            <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-top: 10px; background: rgba(16, 185, 129, 0.05); padding: 12px; border-radius: 8px; border: 1px dashed var(--accent-green);">
+                <input type="checkbox" id="modal_auto_dispatch" style="width: auto;">
+                <label for="modal_auto_dispatch" style="margin: 0; cursor: pointer; color: var(--accent-green); font-weight: 700;">Auto-Approve & Send to Dispatch</label>
             </div>
         `;
 
         showModal('admin-booking-modal', 'New Client Booking', content, async () => {
+            const isExisting = document.querySelector('input[name="client_type"]:checked').value === 'existing';
             const clientSelect = document.getElementById('modal_client');
+            
             const data = {
-                client_id: clientSelect.value,
-                client_name: clientSelect.options[clientSelect.selectedIndex].getAttribute('data-name'),
-                client_email: clientSelect.options[clientSelect.selectedIndex].getAttribute('data-email'),
+                client_id: isExisting ? clientSelect.value : 'guest',
+                client_name: isExisting ? clientSelect.options[clientSelect.selectedIndex].getAttribute('data-name') : document.getElementById('modal_guest_name').value,
+                client_email: isExisting ? clientSelect.options[clientSelect.selectedIndex].getAttribute('data-email') : document.getElementById('modal_guest_email').value,
+                company_name: isExisting ? '' : document.getElementById('modal_company').value,
+                
                 pickup_location: document.getElementById('modal_pickup').value,
+                pickup_latitude: parseFloat(document.getElementById('modal_pickup_lat').value) || 0,
+                pickup_longitude: parseFloat(document.getElementById('modal_pickup_lng').value) || 0,
+                
                 dropoff_location: document.getElementById('modal_dropoff').value,
+                dropoff_latitude: parseFloat(document.getElementById('modal_dropoff_lat').value) || 0,
+                dropoff_longitude: parseFloat(document.getElementById('modal_dropoff_lng').value) || 0,
+                
                 pickup_date: document.getElementById('modal_date').value,
                 pickup_time: document.getElementById('modal_time').value,
-                pax: document.getElementById('modal_pax').value,
+                pax: parseInt(document.getElementById('modal_pax').value),
+                return_to_pickup: document.getElementById('modal_return').checked,
+                special_instructions: document.getElementById('modal_instructions').value,
+                
                 status: document.getElementById('modal_auto_dispatch').checked ? 'approved' : 'pending',
                 createdBy: 'admin',
                 created_at: serverTimestamp()
             };
 
-            if (!data.client_id) throw new Error("Please select a client.");
+            // Basic Validation
+            if (isExisting && !data.client_id) throw new Error("Please select a registered client.");
+            if (!isExisting && (!data.client_name || !data.client_email)) throw new Error("Please enter Guest name and email.");
+            if (data.pickup_latitude === 0 || data.dropoff_latitude === 0) {
+                if (!confirm("Locations weren't selected from the suggestions. Lat/Lng will be 0. Continue?")) return;
+            }
 
             const bookingId = generateNumericId().toString();
             await setDoc(doc(db, "bookings", bookingId), sanitizeFirestoreData(data));
@@ -102,11 +173,39 @@ window.showAdminBookingModal = async () => {
             alert("Booking created successfully!");
         });
 
-        // Initialize Google Places Autocomplete if available
-        if (window.google && google.maps && google.maps.places) {
-            new google.maps.places.Autocomplete(document.getElementById('modal_pickup'));
-            new google.maps.places.Autocomplete(document.getElementById('modal_dropoff'));
-        }
+        // Initialize Toggle Logic
+        setTimeout(() => {
+            const radios = document.querySelectorAll('input[name="client_type"]');
+            radios.forEach(r => r.addEventListener('change', (e) => {
+                document.getElementById('existing_client_section').style.display = e.target.value === 'existing' ? 'block' : 'none';
+                document.getElementById('new_client_section').style.display = e.target.value === 'new' ? 'block' : 'none';
+            }));
+
+            // Initialize Autocomplete
+            if (window.google && google.maps && google.maps.places) {
+                const pInput = document.getElementById('modal_pickup');
+                const dInput = document.getElementById('modal_dropoff');
+                
+                const pAuto = new google.maps.places.Autocomplete(pInput, { componentRestrictions: { country: "ph" } });
+                const dAuto = new google.maps.places.Autocomplete(dInput, { componentRestrictions: { country: "ph" } });
+
+                pAuto.addListener("place_changed", () => {
+                    const place = pAuto.getPlace();
+                    if (place.geometry) {
+                        document.getElementById('modal_pickup_lat').value = place.geometry.location.lat();
+                        document.getElementById('modal_pickup_lng').value = place.geometry.location.lng();
+                    }
+                });
+
+                dAuto.addListener("place_changed", () => {
+                    const place = dAuto.getPlace();
+                    if (place.geometry) {
+                        document.getElementById('modal_dropoff_lat').value = place.geometry.location.lat();
+                        document.getElementById('modal_dropoff_lng').value = place.geometry.location.lng();
+                    }
+                });
+            }
+        }, 100);
 
     } catch (error) {
         console.error("Error opening booking modal:", error);
