@@ -164,6 +164,8 @@ window.assignDriver = async (id) => {
         // Update driver status
         await updateDoc(doc(db, "drivers", driverId), { 
             current_status: "on_schedule",
+            current_trip_id: id,
+            current_trip_phase: "pending",
             updated_at: serverTimestamp()
         });
 

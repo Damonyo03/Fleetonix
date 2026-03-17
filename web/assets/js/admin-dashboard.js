@@ -3,6 +3,7 @@ import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/fi
 import { getFirestore, collection, query, where, onSnapshot, getDocs, doc, getDoc, updateDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { initLayout } from "./modules/ui.js";
+import { sanitizeFirestoreData, generateNumericId } from "./modules/data.js";
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
@@ -311,23 +312,61 @@ window.instantDispatch = async function(bookingId, driverId, driverName) {
 
     try {
         console.log(`Instant dispatching ${bookingId} to ${driverId}`);
+        
+        // Fetch Driver Details (specifically email)
+        const driverUserDoc = await getDoc(doc(db, "users", driverId));
+        const driverUserData = driverUserDoc.exists() ? driverUserDoc.data() : {};
+        const driverEmail = driverUserData.email || "";
+
         // 1. Update booking status
         await updateDoc(doc(db, "bookings", bookingId), {
-            status: "assigned",
+            status: "scheduled",
+            driver_id: driverId,
             updated_at: serverTimestamp()
         });
 
-        // 2. Create schedule document
-        await addDoc(collection(db, "schedules"), {
+        // 2. Create schedule document with ALL fields for Android synchronization
+        const scheduleData = sanitizeFirestoreData({
             booking_id: bookingId,
+            numeric_booking_id: bookingData.numeric_booking_id || generateNumericId(), 
+            schedule_id: generateNumericId(),
             client_id: bookingData.client_id,
+            client_name: bookingData.client_name || "",
+            client_phone: bookingData.client_phone || "",
+            client_email: bookingData.client_email || "",
+            company_name: bookingData.company_name || "",
             driver_id: driverId,
+            driver_email: driverEmail.toLowerCase().trim(), 
+            driver_name: driverName,
             trip_phase: "pending",
-            pickup_location: bookingData.pickup_location,
-            dropoff_location: bookingData.dropoff_location,
+            status: "pending",
+            pickup_location: bookingData.pickup_location?.text || bookingData.pickup_location || "",
+            pickup_latitude: bookingData.pickup_location?.latitude || null,
+            pickup_longitude: bookingData.pickup_location?.longitude || null,
+            dropoff_location: bookingData.dropoff_location?.text || bookingData.dropoff_location || "",
+            dropoff_latitude: bookingData.dropoff_location?.latitude || null,
+            dropoff_longitude: bookingData.dropoff_location?.longitude || null,
+            schedule_date: bookingData.pickup_date || "",
+            schedule_time: bookingData.pickup_time || "",
+            return_to_pickup: bookingData.return_to_pickup || false,
+            special_instructions: bookingData.special_instructions || "",
             created_at: serverTimestamp(),
-            status: "pending"
+            updated_at: serverTimestamp()
         });
+
+        await addDoc(collection(db, "schedules"), scheduleData);
+
+        // 3. Update Driver Status to 'on_schedule'
+        const driverQuery = query(collection(db, "drivers"), where("driver_email", "==", driverEmail));
+        const driverSnap = await getDocs(driverQuery);
+        if (!driverSnap.empty) {
+            await updateDoc(driverSnap.docs[0].ref, {
+                current_status: "on_schedule",
+                current_trip_id: bookingId,
+                current_trip_phase: "pending",
+                updated_at: serverTimestamp()
+            });
+        }
 
         // Feedback
         const badge = event.target;
@@ -340,6 +379,8 @@ window.instantDispatch = async function(bookingId, driverId, driverName) {
         alert("Failed to assign driver. Please try the full dispatch modal.");
     }
 };
+
+// Polyfill for hashCode removed - using generateNumericId() from modules/data.js
 
 
 window.openDispatchModal = async function(bookingId) {
@@ -410,22 +451,61 @@ document.addEventListener('DOMContentLoaded', () => {
             confirmBtn.innerText = "Dispatching...";
 
             try {
+                // Fetch Driver Details (specifically email and name)
+                const driverUserDoc = await getDoc(doc(db, "users", driverId));
+                const driverUserData = driverUserDoc.exists() ? driverUserDoc.data() : {};
+                const driverEmail = driverUserData.email || "";
+                const driverName = driverUserData.full_name || "Driver";
+
                 // 1. Update booking status
                 await updateDoc(doc(db, "bookings", currentDispatchBookingId), {
-                    status: "assigned",
+                    status: "scheduled",
+                    driver_id: driverId,
                     updated_at: serverTimestamp()
                 });
 
-                // 2. Create schedule document
-                await addDoc(collection(db, "schedules"), {
+                // 2. Create schedule document with ALL fields
+                const scheduleData = sanitizeFirestoreData({
                     booking_id: currentDispatchBookingId,
+                    numeric_booking_id: bookingData.numeric_booking_id || generateNumericId(),
+                    schedule_id: generateNumericId(),
                     client_id: bookingData.client_id,
+                    client_name: bookingData.client_name || "",
+                    client_phone: bookingData.client_phone || "",
+                    client_email: bookingData.client_email || "",
+                    company_name: bookingData.company_name || "",
                     driver_id: driverId,
+                    driver_email: driverEmail.toLowerCase().trim(),
+                    driver_name: driverName,
                     trip_phase: "pending",
-                    pickup_location: bookingData.pickup_location,
-                    dropoff_location: bookingData.dropoff_location,
-                    created_at: serverTimestamp()
+                    status: "pending",
+                    pickup_location: bookingData.pickup_location?.text || bookingData.pickup_location || "",
+                    pickup_latitude: bookingData.pickup_location?.latitude || null,
+                    pickup_longitude: bookingData.pickup_location?.longitude || null,
+                    dropoff_location: bookingData.dropoff_location?.text || bookingData.dropoff_location || "",
+                    dropoff_latitude: bookingData.dropoff_location?.latitude || null,
+                    dropoff_longitude: bookingData.dropoff_location?.longitude || null,
+                    schedule_date: bookingData.pickup_date || "",
+                    schedule_time: bookingData.pickup_time || "",
+                    return_to_pickup: bookingData.return_to_pickup || false,
+                    special_instructions: bookingData.special_instructions || "",
+                    created_at: serverTimestamp(),
+                    updated_at: serverTimestamp()
                 });
+
+                await addDoc(collection(db, "schedules"), scheduleData);
+
+                // 3. Update Driver Status to 'on_schedule'
+                const driverQuery = query(collection(db, "drivers"), where("driver_email", "==", driverEmail));
+                const driverSnap = await getDocs(driverQuery);
+                if (!driverSnap.empty) {
+                    await updateDoc(driverSnap.docs[0].ref, {
+                        current_status: "on_schedule",
+                        current_trip_id: currentDispatchBookingId,
+                        current_trip_phase: "pending",
+                        updated_at: serverTimestamp()
+                    });
+                }
 
                 window.closeDispatchModal();
             } catch (error) {
