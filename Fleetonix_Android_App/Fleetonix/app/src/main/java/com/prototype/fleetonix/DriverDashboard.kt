@@ -525,12 +525,13 @@ fun DriverDashboard(
 
     val locationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
     
+    Log.d("DriverDashboard", "Composing Dashboard: phase=$tripPhase, schedules=${feed.schedules.size}")
+
     // Listen to LocationService updates via BroadcastReceiver
-    DisposableEffect(driverDocRef) {
+    DisposableEffect(Unit) {
         val appContext = context.applicationContext
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                Log.d("LocationTracking", "Received Broadcast: ${intent?.action}")
                 if (intent?.action == LocationService.ACTION_LOCATION_UPDATE) {
                     val lat = intent.getDoubleExtra(LocationService.EXTRA_LATITUDE, 0.0)
                     val lng = intent.getDoubleExtra(LocationService.EXTRA_LONGITUDE, 0.0)
@@ -538,7 +539,7 @@ fun DriverDashboard(
                     val accuracy = intent.getFloatExtra(LocationService.EXTRA_ACCURACY, 0f)
                     val bearing = intent.getFloatExtra(LocationService.EXTRA_BEARING, 0f)
 
-                    Log.d("LocationTracking", "Broadcast Data: lat=$lat, lng=$lng, acc=$accuracy")
+                    Log.d("LocationTracking", "Received: $lat, $lng (Acc: $accuracy)")
 
                     if (lat != 0.0 && lng != 0.0) {
                         currentLatitude = lat
@@ -547,7 +548,7 @@ fun DriverDashboard(
                         currentAccuracy = accuracy
                         currentHeading = bearing
 
-                        // Sync to Firestore
+                        // Sync to Firestore if docRef is ready
                         scope.launch {
                             val locData = hashMapOf(
                                 "current_latitude" to lat,
@@ -561,7 +562,6 @@ fun DriverDashboard(
                                 "last_updated" to FieldValue.serverTimestamp()
                             )
                             driverDocRef?.update(locData as Map<String, Any>)
-                            Log.d("LocationTracking", "Firestore Sync: $lat, $lng")
                         }
                     }
                 }
@@ -569,7 +569,7 @@ fun DriverDashboard(
         }
 
         val filter = android.content.IntentFilter(LocationService.ACTION_LOCATION_UPDATE)
-        Log.d("LocationTracking", "Registering Receiver for ${LocationService.ACTION_LOCATION_UPDATE}")
+        Log.d("LocationTracking", "Registering Dashboard Receiver")
         
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -578,15 +578,15 @@ fun DriverDashboard(
                 appContext.registerReceiver(receiver, filter)
             }
         } catch (e: Exception) {
-            Log.e("LocationTracking", "Registration failed: ${e.message}")
+            Log.e("LocationTracking", "Reg failed: ${e.message}")
         }
 
         onDispose {
             try {
                 appContext.unregisterReceiver(receiver)
-                Log.d("LocationTracking", "Receiver unregistered")
+                Log.d("LocationTracking", "Unregistered Dashboard Receiver")
             } catch (e: Exception) {
-                Log.e("LocationTracking", "Unregistration failed", e)
+                Log.e("LocationTracking", "Unreg failed", e)
             }
         }
     }
