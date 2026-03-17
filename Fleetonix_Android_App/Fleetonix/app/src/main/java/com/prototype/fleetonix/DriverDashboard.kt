@@ -301,6 +301,27 @@ fun DriverDashboard(
     var currentAccuracy by remember { mutableStateOf(0f) }
     var currentHeading by remember { mutableStateOf(0f) }
 
+    // INITIAL LOCATION LOGIC: Get last known location immediately
+    LaunchedEffect(Unit) {
+        if (hasLocationPermission(context)) {
+            try {
+                val locationClient = LocationServices.getFusedLocationProviderClient(context)
+                locationClient.lastLocation.addOnSuccessListener { location ->
+                    if (location != null && currentLatitude == 0.0) {
+                        Log.d("LocationTracking", "Found last known location: ${location.latitude}, ${location.longitude}")
+                        currentLatitude = location.latitude
+                        currentLongitude = location.longitude
+                        currentSpeed = location.speed
+                        currentAccuracy = location.accuracy
+                        currentHeading = location.bearing
+                    }
+                }
+            } catch (e: SecurityException) {
+                Log.e("LocationTracking", "Permission denied for last location")
+            }
+        }
+    }
+
     // Track current schedule ID - update when feed changes
     var currentScheduleId by remember { mutableStateOf<Int?>(null) }
     var lastCompletedScheduleId by remember { mutableStateOf<Int?>(null) }
@@ -1039,22 +1060,29 @@ fun DriverDashboard(
                                 }
                             }
 
-                            GoogleMap(
-                                modifier = Modifier.fillMaxSize(),
-                                cameraPositionState = cameraPositionState,
-                                properties = MapProperties(
+                            val mapProperties = remember(currentLatitude) {
+                                MapProperties(
                                     isMyLocationEnabled = currentLatitude != 0.0,
                                     isTrafficEnabled = true
-                                ),
-                                uiSettings = MapUiSettings(
+                                )
+                            }
+                            val mapUiSettings = remember {
+                                MapUiSettings(
                                     myLocationButtonEnabled = true,
                                     zoomControlsEnabled = true,
                                     compassEnabled = true,
                                     mapToolbarEnabled = true
                                 )
+                            }
+
+                            GoogleMap(
+                                modifier = Modifier.fillMaxSize(),
+                                cameraPositionState = cameraPositionState,
+                                properties = mapProperties,
+                                uiSettings = mapUiSettings
                             ) {
                                 Marker(
-                                    state = MarkerState(position = driverPos),
+                                    state = com.google.maps.android.compose.rememberMarkerState(position = driverPos),
                                     title = "You are here"
                                 )
                                 
@@ -1070,7 +1098,7 @@ fun DriverDashboard(
                                     val dest = polylinePoints.last()
                                     val isPickup = tripPhase == "pickup" || tripPhase == "pending"
                                     Marker(
-                                        state = MarkerState(position = dest),
+                                        state = com.google.maps.android.compose.rememberMarkerState(position = dest),
                                         title = if (isPickup) "Pickup Location" else "Dropoff Location",
                                         snippet = if (isPickup) "Destination for Pickup" else "Customer Destination"
                                     )
