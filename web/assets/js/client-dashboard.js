@@ -35,7 +35,22 @@ onAuthStateChanged(auth, async (user) => {
 
     // Initialize Dashboard Data
     listenForDashboardData();
+    initDashboardUI();
 });
+
+function initDashboardUI() {
+    const toggleBtn = document.getElementById('toggleStatsBtn');
+    const secondaryStats = document.getElementById('secondaryStats');
+    
+    if (toggleBtn && secondaryStats) {
+        toggleBtn.addEventListener('click', () => {
+            const isShowing = secondaryStats.classList.toggle('show');
+            toggleBtn.innerHTML = isShowing ? 
+                '<i class="fas fa-chevron-up"></i> Less Insights' : 
+                '<i class="fas fa-chevron-down"></i> More Insights';
+        });
+    }
+}
 
 // Implementation of Status-First Dashboard Logic
 function listenForDashboardData() {

@@ -47,7 +47,22 @@ onAuthStateChanged(auth, async (user) => {
     // Start Live Listeners
     initStats();
     initMap();
+    initDashboardUI();
 });
+
+function initDashboardUI() {
+    const toggleBtn = document.getElementById('toggleStatsBtn');
+    const secondaryStats = document.getElementById('secondaryStats');
+    
+    if (toggleBtn && secondaryStats) {
+        toggleBtn.addEventListener('click', () => {
+            const isShowing = secondaryStats.classList.toggle('show');
+            toggleBtn.innerHTML = isShowing ? 
+                '<i class="fas fa-chevron-up"></i> Less Insights' : 
+                '<i class="fas fa-chevron-down"></i> More Insights';
+        });
+    }
+}
 
 function initStats() {
     // Real-time stats from Firestore
@@ -169,12 +184,8 @@ function initMap() {
         
         updateOnlineDriversList(); 
         
-        // Ensure pending bookings widget re-renders to show/hide instant assign badges
-        const bookingsQuery = query(collection(db, "bookings"), where("status", "==", "pending"));
-        getDocs(bookingsQuery).then(snapshot => {
-            renderPendingBookingsWidget(snapshot);
-        });
-
+        updateOnlineDriversList(); 
+        
         const activeCount = Object.values(allDriversData).length;
         document.getElementById('mapStatus').innerText = `Live: ${activeCount} drivers connected`;
         document.getElementById('activeDrivers').innerText = Object.values(allDriversData).filter(d => d.current_status !== 'offline').length;

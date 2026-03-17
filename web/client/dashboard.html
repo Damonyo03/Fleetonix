@@ -8,6 +8,12 @@
     <link rel="stylesheet" href="../assets/css/style.css">
     <link rel="stylesheet" href="../assets/css/client.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .secondary-stats { display: none; margin-top: 20px; transition: all 0.3s ease; }
+        .secondary-stats.show { display: grid; }
+        .toggle-stats-btn { background: none; border: 1px solid var(--border-color); color: var(--text-muted); padding: 5px 15px; border-radius: 20px; cursor: pointer; font-size: 0.85em; display: flex; align-items: center; gap: 8px; margin-bottom: 20px; width: fit-content; }
+        .toggle-stats-btn:hover { color: var(--accent-blue); border-color: var(--accent-blue); }
+    </style>
 </head>
 <body>
     <div class="admin-container">
@@ -57,15 +63,7 @@
                 <div class="stats-grid" id="statsGrid">
                     <div class="stat-card">
                         <div class="stat-header">
-                            <span class="stat-title">Total Bookings</span>
-                            <div class="stat-icon blue"><i class="fas fa-calendar-alt"></i></div>
-                        </div>
-                        <div class="stat-value" id="totalBookings">0</div>
-                        <div class="stat-change">All-time history</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-header">
-                            <span class="stat-title">Pending</span>
+                            <span class="stat-title">Pending Bookings</span>
                             <div class="stat-icon orange"><i class="fas fa-clock"></i></div>
                         </div>
                         <div class="stat-value" id="pendingBookings">0</div>
@@ -79,9 +77,24 @@
                         <div class="stat-value" id="activeSchedules">0</div>
                         <div class="stat-change">Trips in progress</div>
                     </div>
+                </div>
+
+                <button class="toggle-stats-btn" id="toggleStatsBtn">
+                    <i class="fas fa-chevron-down"></i> More Insights
+                </button>
+
+                <div class="stats-grid secondary-stats" id="secondaryStats">
                     <div class="stat-card">
                         <div class="stat-header">
-                            <span class="stat-title">Completed</span>
+                            <span class="stat-title">Total Bookings</span>
+                            <div class="stat-icon blue"><i class="fas fa-calendar-alt"></i></div>
+                        </div>
+                        <div class="stat-value" id="totalBookings">0</div>
+                        <div class="stat-change">All-time history</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <span class="stat-title">Completed Trips</span>
                             <div class="stat-icon green"><i class="fas fa-check-circle"></i></div>
                         </div>
                         <div class="stat-value" id="completedBookings">0</div>

@@ -31,6 +31,11 @@
         .list-header { font-size: 0.9em; font-weight: 600; color: var(--text-secondary); margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; }
         .driver-list-content { flex: 1; overflow-y: auto; padding-right: 5px; }
 
+        .secondary-stats { display: none; margin-top: 20px; transition: all 0.3s ease; }
+        .secondary-stats.show { display: grid; }
+        .toggle-stats-btn { background: none; border: 1px solid var(--border-color); color: var(--text-muted); padding: 5px 15px; border-radius: 20px; cursor: pointer; font-size: 0.85em; display: flex; align-items: center; gap: 8px; margin-bottom: 20px; width: fit-content; }
+        .toggle-stats-btn:hover { color: var(--accent-blue); border-color: var(--accent-blue); }
+
         @media (max-width: 1024px) {
             .map-grid { grid-template-columns: 1fr; }
             .driver-list-panel { height: 300px; }
@@ -91,16 +96,6 @@
 
                 <div class="stats-grid" id="statsGrid">
                     <div class="stat-card">
-                        <div class="stat-header"><span class="stat-title">Total Drivers</span><div class="stat-icon blue"><i class="fas fa-car"></i></div></div>
-                        <div class="stat-value" id="totalDrivers">0</div>
-                        <div class="stat-change"><span id="activeDrivers">0</span> online</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-header"><span class="stat-title">Total Clients</span><div class="stat-icon teal"><i class="fas fa-building"></i></div></div>
-                        <div class="stat-value" id="totalClients">0</div>
-                        <div class="stat-change">Registered companies</div>
-                    </div>
-                    <div class="stat-card">
                         <div class="stat-header"><span class="stat-title">Pending Bookings</span><div class="stat-icon blue"><i class="fas fa-calendar-check"></i></div></div>
                         <div class="stat-value" id="pendingBookings">0</div>
                         <div class="stat-change">Awaiting approval</div>
@@ -109,6 +104,23 @@
                         <div class="stat-header"><span class="stat-title">Active Schedules</span><div class="stat-icon green"><i class="fas fa-calendar-alt"></i></div></div>
                         <div class="stat-value" id="activeSchedules">0</div>
                         <div class="stat-change">In progress</div>
+                    </div>
+                </div>
+
+                <button class="toggle-stats-btn" id="toggleStatsBtn">
+                    <i class="fas fa-chevron-down"></i> More Insights
+                </button>
+
+                <div class="stats-grid secondary-stats" id="secondaryStats">
+                    <div class="stat-card">
+                        <div class="stat-header"><span class="stat-title">Total Drivers</span><div class="stat-icon blue"><i class="fas fa-car"></i></div></div>
+                        <div class="stat-value" id="totalDrivers">0</div>
+                        <div class="stat-change"><span id="activeDrivers">0</span> online</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header"><span class="stat-title">Total Clients</span><div class="stat-icon teal"><i class="fas fa-building"></i></div></div>
+                        <div class="stat-value" id="totalClients">0</div>
+                        <div class="stat-change">Registered companies</div>
                     </div>
                 </div>
 
