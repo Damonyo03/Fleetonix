@@ -8,6 +8,11 @@
     <link rel="stylesheet" href="../assets/css/style.css">
     <link rel="stylesheet" href="../assets/css/admin.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        #newAdminBookingBtn { display: flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 8px; font-weight: 500; }
+    </style>
 </head>
 <body>
     <div class="admin-container">
@@ -55,6 +60,7 @@
             <div class="admin-content">
                 <div class="page-header">
                     <h1 class="page-title">Booking Requests</h1>
+                    <button class="btn btn-primary" id="newAdminBookingBtn"><i class="fas fa-plus"></i> New Client Booking</button>
                 </div>
 
                 <div class="data-table-wrapper">

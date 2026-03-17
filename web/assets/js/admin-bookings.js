@@ -12,6 +12,7 @@ const db = getFirestore(app);
 
 const bookingTableBody = document.getElementById('bookingTableBody');
 const statusFilter = document.getElementById('statusFilter');
+const newAdminBookingBtn = document.getElementById('newAdminBookingBtn');
 
 let allBookings = [];
 
@@ -26,7 +27,92 @@ onAuthStateChanged(auth, async (user) => {
     initLayout('Bookings', name);
 
     initBookingList();
+    initAdminBooking();
 });
+
+function initAdminBooking() {
+    if (newAdminBookingBtn) {
+        newAdminBookingBtn.addEventListener('click', window.showAdminBookingModal);
+    }
+}
+
+window.showAdminBookingModal = async () => {
+    try {
+        // Fetch clients
+        const clientsSnap = await getDocs(query(collection(db, "users"), where("user_type", "==", "client")));
+        const clients = clientsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        const content = `
+            <div class="form-group">
+                <label>Select Client</label>
+                <select id="modal_client" class="form-input" required>
+                    <option value="">-- Choose a Client --</option>
+                    ${clients.map(c => `<option value="${c.id}" data-name="${c.full_name || ''}" data-email="${c.email || ''}">${c.full_name || c.email}</option>`).join('')}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Pickup Location</label>
+                <input type="text" id="modal_pickup" class="form-input" placeholder="Start typing address..." required>
+            </div>
+            <div class="form-group">
+                <label>Dropoff Location</label>
+                <input type="text" id="modal_dropoff" class="form-input" placeholder="Destination..." required>
+            </div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Pickup Date</label>
+                    <input type="date" id="modal_date" class="form-input" value="${new Date().toISOString().split('T')[0]}" required>
+                </div>
+                <div class="form-group">
+                    <label>Pickup Time</label>
+                    <input type="time" id="modal_time" class="form-input" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Passengers (Pax)</label>
+                <input type="number" id="modal_pax" class="form-input" value="1" min="1" required>
+            </div>
+            <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-top: 10px; background: rgba(59, 130, 246, 0.05); padding: 10px; border-radius: 8px;">
+                <input type="checkbox" id="modal_auto_dispatch" style="width: auto; height: auto;">
+                <label for="modal_auto_dispatch" style="margin: 0; cursor: pointer; color: var(--accent-blue); font-weight: 600;">Auto-Approve & Dispatch</label>
+            </div>
+        `;
+
+        showModal('admin-booking-modal', 'New Client Booking', content, async () => {
+            const clientSelect = document.getElementById('modal_client');
+            const data = {
+                client_id: clientSelect.value,
+                client_name: clientSelect.options[clientSelect.selectedIndex].getAttribute('data-name'),
+                client_email: clientSelect.options[clientSelect.selectedIndex].getAttribute('data-email'),
+                pickup_location: document.getElementById('modal_pickup').value,
+                dropoff_location: document.getElementById('modal_dropoff').value,
+                pickup_date: document.getElementById('modal_date').value,
+                pickup_time: document.getElementById('modal_time').value,
+                pax: document.getElementById('modal_pax').value,
+                status: document.getElementById('modal_auto_dispatch').checked ? 'approved' : 'pending',
+                createdBy: 'admin',
+                created_at: serverTimestamp()
+            };
+
+            if (!data.client_id) throw new Error("Please select a client.");
+
+            const bookingId = generateNumericId().toString();
+            await setDoc(doc(db, "bookings", bookingId), sanitizeFirestoreData(data));
+            
+            alert("Booking created successfully!");
+        });
+
+        // Initialize Google Places Autocomplete if available
+        if (window.google && google.maps && google.maps.places) {
+            new google.maps.places.Autocomplete(document.getElementById('modal_pickup'));
+            new google.maps.places.Autocomplete(document.getElementById('modal_dropoff'));
+        }
+
+    } catch (error) {
+        console.error("Error opening booking modal:", error);
+        alert("Failed to load clients: " + error.message);
+    }
+};
 
 function initBookingList() {
     onSnapshot(query(collection(db, "bookings"), orderBy("created_at", "desc")), (snapshot) => {
