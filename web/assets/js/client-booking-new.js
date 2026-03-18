@@ -2,6 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebas
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { getFirestore, collection, addDoc, serverTimestamp, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
+import { initLayout } from "./modules/ui.js";
 import { sanitizeFirestoreData } from "./modules/data.js";
 
 // Initialize Firebase
@@ -20,8 +21,10 @@ onAuthStateChanged(auth, async (user) => {
     const userDoc = await getDoc(doc(db, "users", user.uid));
     if (userDoc.exists()) {
         currentUserData = userDoc.data();
-        document.getElementById('userName').innerText = currentUserData.full_name;
-        document.getElementById('userInitial').innerText = currentUserData.full_name.charAt(0).toUpperCase();
+        const name = currentUserData.full_name || user.email.split('@')[0];
+        initLayout('New Booking', name);
+    } else {
+        initLayout('New Booking', user.email.split('@')[0]);
     }
 });
 

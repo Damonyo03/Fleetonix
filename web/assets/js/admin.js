@@ -85,6 +85,7 @@ import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebase
 import { getAuth, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
+import { clearUserCache } from "./modules/ui.js";
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
@@ -104,6 +105,7 @@ document.addEventListener('click', (e) => {
     if (logoutBtn) {
         e.preventDefault();
         if (confirm("Are you sure you want to logout?")) {
+            clearUserCache();
             signOut(auth).then(() => {
                 window.location.href = '../login.html';
             }).catch(error => {

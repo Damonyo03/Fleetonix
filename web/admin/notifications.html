@@ -3,21 +3,68 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fleetonix - Admin - Notifications</title>
+    <title>Fleetonix - Admin - System Notifications</title>
     <link rel="icon" type="image/jpeg" href="../img/logo.jpg">
     <link rel="stylesheet" href="../assets/css/style.css">
     <link rel="stylesheet" href="../assets/css/admin.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        .notification-list { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; }
-        .notification-card { background: var(--bg-secondary); border-radius: 12px; border: 1px solid var(--border-color); padding: 20px; display: flex; gap: 15px; align-items: flex-start; }
-        .notification-card.unread { border-left: 4px solid #3b82f6; }
-        .notif-icon { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-        .notif-icon.info { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
-        .notif-icon.warning { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
-        .notif-content h4 { margin-bottom: 5px; color: var(--text-primary); }
-        .notif-content p { color: var(--text-secondary); font-size: 0.9em; line-height: 1.4; }
-        .notif-time { font-size: 0.8em; color: var(--text-muted); margin-top: 8px; }
+        .notif-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--border-color);
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin-bottom: 12px;
+            transition: box-shadow 0.2s;
+        }
+        .notif-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.12); }
+        .notif-card.unread  { border-left-color: var(--accent-blue); background: rgba(59,130,246,0.04); }
+        .notif-card.warning { border-left-color: var(--accent-orange); }
+        .notif-card.danger  { border-left-color: #ef4444; }
+        .notif-card.success { border-left-color: var(--accent-green); }
+
+        .notif-icon {
+            width: 38px; height: 38px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1em; flex-shrink: 0;
+        }
+        .notif-icon.info    { background: rgba(59,130,246,0.15); color: var(--accent-blue); }
+        .notif-icon.warning { background: rgba(245,158,11,0.15); color: var(--accent-orange); }
+        .notif-icon.danger  { background: rgba(239,68,68,0.15);  color: #ef4444; }
+        .notif-icon.success { background: rgba(16,185,129,0.15); color: var(--accent-green); }
+        .notif-icon.booking { background: rgba(139,92,246,0.15); color: #8b5cf6; }
+
+        .notif-body { flex: 1; }
+        .notif-title { font-weight: 700; font-size: 0.95em; color: var(--text-primary); margin-bottom: 4px; }
+        .notif-message { font-size: 0.87em; color: var(--text-secondary); margin-bottom: 6px; }
+        .notif-meta { font-size: 0.78em; color: var(--text-muted); display: flex; gap: 12px; }
+
+        .filter-tabs {
+            display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px;
+        }
+        .filter-tab {
+            padding: 6px 16px; border-radius: 20px; border: 1px solid var(--border-color);
+            background: var(--card-bg); color: var(--text-secondary); cursor: pointer;
+            font-size: 0.85em; transition: all 0.2s;
+        }
+        .filter-tab.active, .filter-tab:hover {
+            background: var(--accent-blue); color: #fff; border-color: var(--accent-blue);
+        }
+
+        .summary-row {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 12px; margin-bottom: 24px;
+        }
+        .summary-box {
+            background: var(--card-bg); border: 1px solid var(--border-color);
+            border-radius: 10px; padding: 14px; text-align: center;
+        }
+        .summary-box .val { font-size: 1.8em; font-weight: 800; color: var(--accent-blue); }
+        .summary-box .lbl { font-size: 0.78em; color: var(--text-muted); margin-top: 4px; }
     </style>
 </head>
 <body>
@@ -30,17 +77,18 @@
             <nav class="sidebar-nav">
                 <div class="nav-section-label">MONITORING</div>
                 <a href="dashboard.html" class="nav-item"><i class="fas fa-chart-line"></i> Dashboard Map</a>
-                <a href="drivers.html" class="nav-item"><i class="fas fa-truck-moving"></i> Asset List</a>
-                
+                <a href="drivers.html" class="nav-item"><i class="fas fa-id-card"></i> Drivers Information</a>
+
                 <div class="nav-section-label">OPERATIONS</div>
                 <a href="bookings.html" class="nav-item"><i class="fas fa-calendar-check"></i> Bookings</a>
-                <a href="schedules.html" class="nav-item"><i class="fas fa-tasks"></i> Dispatch Console</a>
-                <a href="clients.html" class="nav-item"><i class="fas fa-building"></i> Client Accounts</a>
-                <a href="users.html" class="nav-item"><i class="fas fa-user-shield"></i> System Users</a>
+                <a href="schedules.html" class="nav-item"><i class="fas fa-list-alt"></i> List of Trips</a>
+                <a href="trip-tickets.html" class="nav-item"><i class="fas fa-ticket-alt"></i> Trip Tickets</a>
 
-                <div class="nav-section-label">SAFETY & LOGS</div>
-                <a href="activity.html" class="nav-item"><i class="fas fa-history"></i> Activity Logs</a>
-                <a href="notifications.html" class="nav-item active"><i class="fas fa-bell"></i> System Alerts <span class="notif-count">0</span></a>
+                <div class="nav-section-label">SYSTEM</div>
+                <a href="registered-users.html" class="nav-item"><i class="fas fa-users"></i> Registered Users</a>
+
+                <div class="nav-section-label">NOTIFICATIONS</div>
+                <a href="notifications.html" class="nav-item active"><i class="fas fa-bell"></i> System Notifications <span class="notif-count">0</span></a>
                 <a href="#" id="logoutBtn" class="nav-item logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
             </nav>
         </aside>
@@ -49,7 +97,7 @@
             <header class="admin-header">
                 <div class="header-left">
                     <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
-                    <h2>Notifications</h2>
+                    <h2>System Notifications</h2>
                 </div>
                 <div class="header-right">
                     <a href="notifications.html" class="notification-icon">
@@ -65,20 +113,45 @@
 
             <div class="admin-content">
                 <div class="page-header">
-                    <h1 class="page-title">Notifications</h1>
+                    <h1 class="page-title">System Notifications & Logs</h1>
+                    <button onclick="markAllRead()" class="btn btn-secondary" style="display:flex; align-items:center; gap:6px; font-size:0.9em;">
+                        <i class="fas fa-check-double"></i> Mark All as Read
+                    </button>
                 </div>
 
-                <div class="notification-list" id="notificationList">
-                    <p style="text-align: center; padding: 40px;">Loading notifications...</p>
+                <!-- Summary -->
+                <div class="summary-row">
+                    <div class="summary-box"><div class="val" id="totalCount">0</div><div class="lbl">Total</div></div>
+                    <div class="summary-box"><div class="val" id="unreadCount" style="color:var(--accent-blue);">0</div><div class="lbl">Unread</div></div>
+                    <div class="summary-box"><div class="val" id="warningCount" style="color:var(--accent-orange);">0</div><div class="lbl">Warnings</div></div>
+                    <div class="summary-box"><div class="val" id="bookingCount" style="color:#8b5cf6;">0</div><div class="lbl">Bookings</div></div>
+                </div>
+
+                <!-- Filter Tabs -->
+                <div class="filter-tabs">
+                    <button class="filter-tab active" onclick="filterBy('all', this)">All</button>
+                    <button class="filter-tab" onclick="filterBy('booking', this)">📋 Bookings</button>
+                    <button class="filter-tab" onclick="filterBy('trip', this)">🚗 Trips</button>
+                    <button class="filter-tab" onclick="filterBy('warning', this)">⚠️ Warnings</button>
+                    <button class="filter-tab" onclick="filterBy('accident', this)">🚨 Accidents</button>
+                    <button class="filter-tab" onclick="filterBy('system', this)">⚙️ System</button>
+                </div>
+
+                <!-- Notification List -->
+                <div id="notificationList">
+                    <div style="text-align:center; padding:60px; color:var(--text-muted);">
+                        <i class="fas fa-spinner fa-spin" style="font-size:2em; margin-bottom:12px; display:block;"></i>
+                        Loading notifications...
+                    </div>
                 </div>
             </div>
         </main>
     </div>
 
-    <!-- Modal Placeholder -->
     <div id="modalContainer"></div>
-
     <script type="module" src="../assets/js/admin.js"></script>
     <script type="module" src="../assets/js/admin-notifications.js"></script>
 </body>
 </html>
+
+

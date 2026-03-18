@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, updateDoc, deleteDoc, orderBy, getDocs, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, updateDoc, deleteDoc, orderBy, getDocs, setDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { initLayout, showModal, hideModal } from "./modules/ui.js";
 import { sanitizeFirestoreData, generateNumericId } from "./modules/data.js";
@@ -16,6 +16,13 @@ const newAdminBookingBtn = document.getElementById('newAdminBookingBtn');
 
 let allBookings = [];
 
+// Attach the button right away (don't wait for auth)
+if (newAdminBookingBtn) {
+    newAdminBookingBtn.addEventListener('click', () => {
+        showAdminBookingModal();
+    });
+}
+
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
         window.location.href = '../login.html';
@@ -23,172 +30,196 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     const userDoc = await getDoc(doc(db, "users", user.uid));
-    const name = userDoc.exists() ? userDoc.data().full_name : user.email.split('@')[0];
+    const name = userDoc.exists() ? (userDoc.data().full_name || user.email.split('@')[0]) : user.email.split('@')[0];
     initLayout('Bookings', name);
 
     initBookingList();
-    initAdminBooking();
 });
 
-function initAdminBooking() {
-    if (newAdminBookingBtn) {
-        newAdminBookingBtn.addEventListener('click', window.showAdminBookingModal);
-    }
-}
-
-window.showAdminBookingModal = async () => {
+// --- Admin Booking Modal ---
+async function showAdminBookingModal() {
+    // Try fetching clients by both `role` and `user_type` fields to handle schema differences
+    let clients = [];
     try {
-        // Fetch clients
-        const clientsSnap = await getDocs(query(collection(db, "users"), where("user_type", "==", "client")));
-        const clients = clientsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-        const content = `
-            <div class="form-group" style="background: rgba(59, 130, 246, 0.05); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                <label style="font-weight: 700; color: var(--accent-blue); display: block; margin-bottom: 10px;">Client Type</label>
-                <div style="display: flex; gap: 20px;">
-                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                        <input type="radio" name="client_type" value="existing" checked style="width: auto;"> Registered Client
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
-                        <input type="radio" name="client_type" value="new" style="width: auto;"> New / Guest
-                    </label>
-                </div>
-            </div>
-
-            <!-- Existing Client Section -->
-            <div id="existing_client_section">
-                <div class="form-group">
-                    <label>Select Client</label>
-                    <select id="modal_client" class="form-input">
-                        <option value="">-- Choose a Client --</option>
-                        ${clients.map(c => `<option value="${c.id}" data-name="${c.full_name || ''}" data-email="${c.email || ''}">${c.full_name || c.email}</option>`).join('')}
-                    </select>
-                </div>
-            </div>
-
-            <!-- New Client Section (Hidden by default) -->
-            <div id="new_client_section" style="display: none;">
-                <div class="form-group">
-                    <label>Guest Full Name</label>
-                    <input type="text" id="modal_guest_name" class="form-input" placeholder="e.g. John Doe">
-                </div>
-                <div class="form-group">
-                    <label>Guest Email</label>
-                    <input type="email" id="modal_guest_email" class="form-input" placeholder="john@example.com">
-                </div>
-                <div class="form-group">
-                    <label>Company / Organization (Optional)</label>
-                    <input type="text" id="modal_company" class="form-input" placeholder="Company Name">
-                </div>
-            </div>
-
-            <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 20px 0;">
-
-            <div class="form-group">
-                <label>Pickup Location</label>
-                <input type="text" id="modal_pickup" class="form-input" placeholder="Search for pickup address..." required>
-                <input type="hidden" id="modal_pickup_lat" value="0">
-                <input type="hidden" id="modal_pickup_lng" value="0">
-            </div>
-            <div class="form-group">
-                <label>Dropoff Location</label>
-                <input type="text" id="modal_dropoff" class="form-input" placeholder="Search for destination..." required>
-                <input type="hidden" id="modal_dropoff_lat" value="0">
-                <input type="hidden" id="modal_dropoff_lng" value="0">
-            </div>
-
-            <div class="grid-2">
-                <div class="form-group">
-                    <label>Pickup Date</label>
-                    <input type="date" id="modal_date" class="form-input" value="${new Date().toISOString().split('T')[0]}" required>
-                </div>
-                <div class="form-group">
-                    <label>Pickup Time</label>
-                    <input type="time" id="modal_time" class="form-input" required>
-                </div>
-            </div>
-
-            <div class="grid-2">
-                <div class="form-group">
-                    <label>Passengers (Pax)</label>
-                    <input type="number" id="modal_pax" class="form-input" value="1" min="1" required>
-                </div>
-                <div class="form-group" style="display: flex; align-items: center; padding-top: 25px;">
-                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9em;">
-                        <input type="checkbox" id="modal_return" style="width: auto;"> Return to Pickup
-                    </label>
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label>Special Instructions (Optional)</label>
-                <textarea id="modal_instructions" class="form-input" rows="2" placeholder="e.g. Near the main gate..."></textarea>
-            </div>
-
-            <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-top: 10px; background: rgba(16, 185, 129, 0.05); padding: 12px; border-radius: 8px; border: 1px dashed var(--accent-green);">
-                <input type="checkbox" id="modal_auto_dispatch" style="width: auto;">
-                <label for="modal_auto_dispatch" style="margin: 0; cursor: pointer; color: var(--accent-green); font-weight: 700;">Auto-Approve & Send to Dispatch</label>
-            </div>
-        `;
-
-        showModal('admin-booking-modal', 'New Client Booking', content, async () => {
-            const isExisting = document.querySelector('input[name="client_type"]:checked').value === 'existing';
-            const clientSelect = document.getElementById('modal_client');
-            
-            const data = {
-                client_id: isExisting ? clientSelect.value : 'guest',
-                client_name: isExisting ? clientSelect.options[clientSelect.selectedIndex].getAttribute('data-name') : document.getElementById('modal_guest_name').value,
-                client_email: isExisting ? clientSelect.options[clientSelect.selectedIndex].getAttribute('data-email') : document.getElementById('modal_guest_email').value,
-                company_name: isExisting ? '' : document.getElementById('modal_company').value,
-                
-                pickup_location: document.getElementById('modal_pickup').value,
-                pickup_latitude: parseFloat(document.getElementById('modal_pickup_lat').value) || 0,
-                pickup_longitude: parseFloat(document.getElementById('modal_pickup_lng').value) || 0,
-                
-                dropoff_location: document.getElementById('modal_dropoff').value,
-                dropoff_latitude: parseFloat(document.getElementById('modal_dropoff_lat').value) || 0,
-                dropoff_longitude: parseFloat(document.getElementById('modal_dropoff_lng').value) || 0,
-                
-                pickup_date: document.getElementById('modal_date').value,
-                pickup_time: document.getElementById('modal_time').value,
-                pax: parseInt(document.getElementById('modal_pax').value),
-                return_to_pickup: document.getElementById('modal_return').checked,
-                special_instructions: document.getElementById('modal_instructions').value,
-                
-                status: document.getElementById('modal_auto_dispatch').checked ? 'approved' : 'pending',
-                createdBy: 'admin',
-                created_at: serverTimestamp()
-            };
-
-            // Basic Validation
-            if (isExisting && !data.client_id) throw new Error("Please select a registered client.");
-            if (!isExisting && (!data.client_name || !data.client_email)) throw new Error("Please enter Guest name and email.");
-            if (data.pickup_latitude === 0 || data.dropoff_latitude === 0) {
-                if (!confirm("Locations weren't selected from the suggestions. Lat/Lng will be 0. Continue?")) return;
+        const snap1 = await getDocs(query(collection(db, "users"), where("role", "==", "client")));
+        const snap2 = await getDocs(query(collection(db, "users"), where("user_type", "==", "client")));
+        const seen = new Set();
+        [...snap1.docs, ...snap2.docs].forEach(d => {
+            if (!seen.has(d.id)) {
+                seen.add(d.id);
+                clients.push({ id: d.id, ...d.data() });
             }
+        });
+    } catch (error) {
+        console.warn("Could not fetch clients:", error.message);
+    }
 
-            const bookingId = generateNumericId().toString();
-            await setDoc(doc(db, "bookings", bookingId), sanitizeFirestoreData(data));
-            
-            alert("Booking created successfully!");
+    const clientOptions = clients.length > 0
+        ? clients.map(c => `<option value="${c.id}" data-name="${c.full_name || ''}" data-email="${c.email || ''}">${c.full_name || c.email || c.id}</option>`).join('')
+        : '<option value="">No registered clients found</option>';
+
+    const today = new Date().toISOString().split('T')[0];
+
+    const content = `
+        <div class="form-group" style="background: rgba(59, 130, 246, 0.05); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <label style="font-weight: 700; color: var(--accent-blue); display: block; margin-bottom: 10px;">Client Type</label>
+            <div style="display: flex; gap: 20px;">
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                    <input type="radio" name="client_type" value="existing" checked style="width: auto;"> Registered Client
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                    <input type="radio" name="client_type" value="new" style="width: auto;"> New / Guest
+                </label>
+            </div>
+        </div>
+
+        <!-- Existing Client Section -->
+        <div id="existing_client_section">
+            <div class="form-group">
+                <label>Select Client</label>
+                <select id="modal_client" class="form-input">
+                    <option value="">-- Choose a Client --</option>
+                    ${clientOptions}
+                </select>
+            </div>
+        </div>
+
+        <!-- New Client Section (Hidden by default) -->
+        <div id="new_client_section" style="display: none;">
+            <div class="form-group">
+                <label>Guest Full Name</label>
+                <input type="text" id="modal_guest_name" class="form-input" placeholder="e.g. John Doe">
+            </div>
+            <div class="form-group">
+                <label>Guest Email</label>
+                <input type="email" id="modal_guest_email" class="form-input" placeholder="john@example.com">
+            </div>
+            <div class="form-group">
+                <label>Company / Organization (Optional)</label>
+                <input type="text" id="modal_company" class="form-input" placeholder="Company Name">
+            </div>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 20px 0;">
+
+        <div class="form-group">
+            <label>Pickup Location</label>
+            <input type="text" id="modal_pickup" class="form-input" placeholder="Enter pickup address..." required>
+            <input type="hidden" id="modal_pickup_lat" value="0">
+            <input type="hidden" id="modal_pickup_lng" value="0">
+        </div>
+        <div class="form-group">
+            <label>Dropoff Location</label>
+            <input type="text" id="modal_dropoff" class="form-input" placeholder="Enter destination..." required>
+            <input type="hidden" id="modal_dropoff_lat" value="0">
+            <input type="hidden" id="modal_dropoff_lng" value="0">
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div class="form-group">
+                <label>Pickup Date</label>
+                <input type="date" id="modal_date" class="form-input" value="${today}" required>
+            </div>
+            <div class="form-group">
+                <label>Pickup Time</label>
+                <input type="time" id="modal_time" class="form-input" required>
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div class="form-group">
+                <label>Passengers (Pax)</label>
+                <input type="number" id="modal_pax" class="form-input" value="1" min="1" required>
+            </div>
+            <div class="form-group" style="display: flex; align-items: center; padding-top: 25px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9em;">
+                    <input type="checkbox" id="modal_return" style="width: auto;"> Return to Pickup
+                </label>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Special Instructions (Optional)</label>
+            <textarea id="modal_instructions" class="form-input" rows="2" placeholder="e.g. Near the main gate..."></textarea>
+        </div>
+
+        <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-top: 10px; background: rgba(16, 185, 129, 0.05); padding: 12px; border-radius: 8px; border: 1px dashed var(--accent-green);">
+            <input type="checkbox" id="modal_auto_dispatch" style="width: auto;">
+            <label for="modal_auto_dispatch" style="margin: 0; cursor: pointer; color: var(--accent-green); font-weight: 700;">Auto-Approve & Send to Dispatch</label>
+        </div>
+    `;
+
+    showModal('admin-booking-modal', 'New Client Booking', content, async () => {
+        const isExisting = document.querySelector('input[name="client_type"]:checked').value === 'existing';
+        const clientSelect = document.getElementById('modal_client');
+        const selectedOption = clientSelect?.options[clientSelect.selectedIndex];
+
+        const clientId = isExisting ? (clientSelect?.value || '') : 'guest';
+        const clientName = isExisting
+            ? (selectedOption?.getAttribute('data-name') || selectedOption?.text || '')
+            : document.getElementById('modal_guest_name').value;
+        const clientEmail = isExisting
+            ? (selectedOption?.getAttribute('data-email') || '')
+            : document.getElementById('modal_guest_email').value;
+
+        if (isExisting && !clientId) throw new Error("Please select a registered client.");
+        if (!isExisting && (!clientName || !clientEmail)) throw new Error("Please enter Guest name and email.");
+
+        const pickup = document.getElementById('modal_pickup').value.trim();
+        const dropoff = document.getElementById('modal_dropoff').value.trim();
+        if (!pickup || !dropoff) throw new Error("Please enter pickup and dropoff locations.");
+
+        const date = document.getElementById('modal_date').value;
+        const time = document.getElementById('modal_time').value;
+        if (!date || !time) throw new Error("Please enter a date and time.");
+
+        const autoDispatch = document.getElementById('modal_auto_dispatch').checked;
+
+        const data = sanitizeFirestoreData({
+            client_id: clientId,
+            client_name: clientName,
+            client_email: clientEmail,
+            company_name: isExisting ? '' : (document.getElementById('modal_company')?.value || ''),
+
+            pickup_location: pickup,
+            pickup_latitude: parseFloat(document.getElementById('modal_pickup_lat').value) || 0,
+            pickup_longitude: parseFloat(document.getElementById('modal_pickup_lng').value) || 0,
+
+            dropoff_location: dropoff,
+            dropoff_latitude: parseFloat(document.getElementById('modal_dropoff_lat').value) || 0,
+            dropoff_longitude: parseFloat(document.getElementById('modal_dropoff_lng').value) || 0,
+
+            pickup_date: date,
+            pickup_time: time,
+            pax: parseInt(document.getElementById('modal_pax').value) || 1,
+            return_to_pickup: document.getElementById('modal_return').checked,
+            special_instructions: document.getElementById('modal_instructions').value || '',
+
+            status: autoDispatch ? 'approved' : 'pending',
+            createdBy: 'admin',
+            created_at: serverTimestamp()
         });
 
-        // Initialize Toggle Logic
-        setTimeout(() => {
-            const radios = document.querySelectorAll('input[name="client_type"]');
-            radios.forEach(r => r.addEventListener('change', (e) => {
-                document.getElementById('existing_client_section').style.display = e.target.value === 'existing' ? 'block' : 'none';
-                document.getElementById('new_client_section').style.display = e.target.value === 'new' ? 'block' : 'none';
-            }));
+        const bookingId = generateNumericId().toString();
+        await setDoc(doc(db, "bookings", bookingId), data);
+        alert("Booking created successfully! " + (autoDispatch ? "It has been sent to dispatch." : "It is now pending approval."));
+    });
 
-            // Initialize Autocomplete
-            if (window.google && google.maps && google.maps.places) {
-                const pInput = document.getElementById('modal_pickup');
-                const dInput = document.getElementById('modal_dropoff');
-                
+    // Initialize Toggle Logic after modal renders
+    setTimeout(() => {
+        const radios = document.querySelectorAll('input[name="client_type"]');
+        radios.forEach(r => r.addEventListener('change', (e) => {
+            document.getElementById('existing_client_section').style.display = e.target.value === 'existing' ? 'block' : 'none';
+            document.getElementById('new_client_section').style.display = e.target.value === 'new' ? 'block' : 'none';
+        }));
+
+        // Initialize Google Places Autocomplete if available
+        if (window.google && google.maps && google.maps.places) {
+            const pInput = document.getElementById('modal_pickup');
+            const dInput = document.getElementById('modal_dropoff');
+
+            if (pInput) {
                 const pAuto = new google.maps.places.Autocomplete(pInput, { componentRestrictions: { country: "ph" } });
-                const dAuto = new google.maps.places.Autocomplete(dInput, { componentRestrictions: { country: "ph" } });
-
                 pAuto.addListener("place_changed", () => {
                     const place = pAuto.getPlace();
                     if (place.geometry) {
@@ -196,7 +227,10 @@ window.showAdminBookingModal = async () => {
                         document.getElementById('modal_pickup_lng').value = place.geometry.location.lng();
                     }
                 });
+            }
 
+            if (dInput) {
+                const dAuto = new google.maps.places.Autocomplete(dInput, { componentRestrictions: { country: "ph" } });
                 dAuto.addListener("place_changed", () => {
                     const place = dAuto.getPlace();
                     if (place.geometry) {
@@ -205,14 +239,11 @@ window.showAdminBookingModal = async () => {
                     }
                 });
             }
-        }, 100);
+        }
+    }, 150);
+}
 
-    } catch (error) {
-        console.error("Error opening booking modal:", error);
-        alert("Failed to load clients: " + error.message);
-    }
-};
-
+// --- Booking List ---
 function initBookingList() {
     onSnapshot(query(collection(db, "bookings"), orderBy("created_at", "desc")), (snapshot) => {
         allBookings = snapshot.docs;
@@ -226,29 +257,31 @@ function initBookingList() {
 
 function applyFilters() {
     if (!bookingTableBody) return;
-    const status = statusFilter.value;
+    const status = statusFilter?.value || 'all';
     const filtered = allBookings.filter(d => status === 'all' || d.data().status === status);
     renderBookings(filtered);
 }
 
 function renderBookings(docs) {
+    if (!bookingTableBody) return;
     if (docs.length === 0) {
-        bookingTableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px;">No bookings found.</td></tr>';
+        bookingTableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">No bookings found.</td></tr>';
         return;
     }
 
     bookingTableBody.innerHTML = docs.map(d => {
         const booking = d.data();
         const id = d.id;
+        const statusClass = booking.status || 'pending';
         return `
             <tr>
                 <td>${booking.client_name || 'N/A'}</td>
                 <td>${booking.pickup_location || 'N/A'}</td>
                 <td>${booking.dropoff_location || 'N/A'}</td>
                 <td>${booking.pickup_date || 'N/A'} ${booking.pickup_time || ''}</td>
-                <td><span class="status-badge ${booking.status}">${booking.status}</span></td>
+                <td><span class="status-badge ${statusClass}">${statusClass}</span></td>
                 <td class="table-actions">
-                    <button class="btn-icon view" title="View Details" onclick="alert('Pickup Lat: ${booking.pickup_latitude}, Long: ${booking.pickup_longitude}')"><i class="fas fa-eye"></i></button>
+                    <button class="btn-icon view" title="View Details" onclick="window.viewBookingDetails('${id}')"><i class="fas fa-eye"></i></button>
                     ${booking.status === 'pending' ? `<button class="btn-icon approve" title="Assign Driver" onclick="window.assignDriver('${id}')"><i class="fas fa-user-check"></i></button>` : ''}
                     <button class="btn-icon delete" title="Delete" onclick="window.deleteBooking('${id}')"><i class="fas fa-trash"></i></button>
                 </td>
@@ -256,6 +289,29 @@ function renderBookings(docs) {
         `;
     }).join('');
 }
+
+window.viewBookingDetails = async (id) => {
+    const bookingDoc = await getDoc(doc(db, "bookings", id));
+    if (!bookingDoc.exists()) { alert("Booking not found."); return; }
+    const b = bookingDoc.data();
+    showModal('view-booking-modal', `Booking #${id}`, `
+        <div style="display:grid; gap:10px;">
+            <div><strong>Client:</strong> ${b.client_name || 'N/A'} (${b.client_email || 'N/A'})</div>
+            <div><strong>Pickup:</strong> ${b.pickup_location || 'N/A'}</div>
+            <div><strong>Dropoff:</strong> ${b.dropoff_location || 'N/A'}</div>
+            <div><strong>Date/Time:</strong> ${b.pickup_date || ''} ${b.pickup_time || ''}</div>
+            <div><strong>Pax:</strong> ${b.pax || 1}</div>
+            <div><strong>Return?:</strong> ${b.return_to_pickup ? 'Yes' : 'No'}</div>
+            <div><strong>Status:</strong> <span class="status-badge ${b.status}">${b.status}</span></div>
+            <div><strong>Notes:</strong> ${b.special_instructions || '-'}</div>
+        </div>
+    `, async () => { /* read-only, no save action */ });
+    // Change save button to Close
+    setTimeout(() => {
+        const saveBtn = document.querySelector('.save-modal');
+        if (saveBtn) { saveBtn.textContent = 'Close'; saveBtn.classList.replace('btn-primary', 'btn-secondary'); }
+    }, 50);
+};
 
 window.assignDriver = async (id) => {
     const bookingDoc = await getDoc(doc(db, "bookings", id));
@@ -282,23 +338,21 @@ window.assignDriver = async (id) => {
                     </option>`).join('')}
             </select>
         </div>
+        ${drivers.length === 0 ? '<p style="color:var(--accent-orange);"><i class="fas fa-exclamation-triangle"></i> No available drivers at the moment.</p>' : ''}
         <div class="form-group">
             <label>Schedule Date</label>
-            <input type="date" id="modal_date" class="form-input" value="${booking.booking_date}" required>
+            <input type="date" id="modal_sched_date" class="form-input" value="${booking.pickup_date || ''}" required>
         </div>
         <div class="form-group">
             <label>Schedule Time</label>
-            <input type="time" id="modal_time" class="form-input" value="${booking.booking_time}" required>
+            <input type="time" id="modal_sched_time" class="form-input" value="${booking.pickup_time || ''}" required>
         </div>
     `;
 
-    showModal('assign-modal', 'Assign Driver to Schedule', content, async () => {
+    showModal('assign-modal', 'Assign Driver to Booking', content, async () => {
         const driverSelect = document.getElementById('modal_driver');
         const selectedOption = driverSelect.options[driverSelect.selectedIndex];
-        if (!selectedOption.value) {
-            alert("Please select a driver");
-            return;
-        }
+        if (!selectedOption.value) throw new Error("Please select a driver.");
 
         const driverId = selectedOption.value;
         const driverEmail = selectedOption.getAttribute('data-email')?.toLowerCase().trim();
@@ -306,20 +360,14 @@ window.assignDriver = async (id) => {
         const driverPhone = selectedOption.getAttribute('data-phone');
         const plateNumber = selectedOption.getAttribute('data-plate');
         const vehicleAssigned = selectedOption.getAttribute('data-vehicle');
-        const date = document.getElementById('modal_date').value;
-        const time = document.getElementById('modal_time').value;
+        const date = document.getElementById('modal_sched_date').value;
+        const time = document.getElementById('modal_sched_time').value;
 
-        // Create the schedule
-        // Use a numeric ID for the 'schedule_id' field specifically for Android Int models
-        const numericId = generateNumericId();
         const schedId = 'SCHED_' + Date.now();
-        
-        console.log("Creating schedule for driver:", driverEmail);
 
         const scheduleData = sanitizeFirestoreData({
-            booking_id: id, // Keep original booking string ID
-            numeric_booking_id: generateNumericId(), // Fallback for Int models
-            schedule_id: numericId, // Numeric ID for Android Int model mapping
+            booking_id: id,
+            schedule_id: generateNumericId(),
             driver_id: driverId,
             driver_email: driverEmail,
             driver_name: driverName,
@@ -331,35 +379,36 @@ window.assignDriver = async (id) => {
             schedule_date: date,
             schedule_time: time,
             pickup_location: booking.pickup_location,
-            pickup_latitude: booking.pickup_latitude,
-            pickup_longitude: booking.pickup_longitude,
+            pickup_latitude: booking.pickup_latitude || 0,
+            pickup_longitude: booking.pickup_longitude || 0,
             dropoff_location: booking.dropoff_location,
-            dropoff_latitude: booking.dropoff_latitude,
-            dropoff_longitude: booking.dropoff_longitude,
-            company_name: booking.company_name,
-            client_name: booking.client_name,
-            client_phone: booking.client_phone,
-            client_email: booking.client_email,
+            dropoff_latitude: booking.dropoff_latitude || 0,
+            dropoff_longitude: booking.dropoff_longitude || 0,
+            company_name: booking.company_name || '',
+            client_name: booking.client_name || '',
+            client_phone: booking.client_phone || '',
+            client_email: booking.client_email || '',
+            return_to_pickup: booking.return_to_pickup || false,
+            special_instructions: booking.special_instructions || '',
             created_at: serverTimestamp(),
             updated_at: serverTimestamp()
         });
 
         await setDoc(doc(db, "schedules", schedId), scheduleData);
 
-        // Update driver status
-        await updateDoc(doc(db, "drivers", driverId), { 
+        await updateDoc(doc(db, "drivers", driverId), {
             current_status: "on_schedule",
             current_trip_id: id,
             current_trip_phase: "pending",
             updated_at: serverTimestamp()
         });
 
-        // Update booking status
-        await updateDoc(doc(db, "bookings", id), { 
+        await updateDoc(doc(db, "bookings", id), {
             status: "scheduled",
+            driver_id: driverId,
             updated_at: serverTimestamp()
         });
-        
+
         alert("Driver assigned and schedule created!");
     });
 };
@@ -369,5 +418,3 @@ window.deleteBooking = async (id) => {
         await deleteDoc(doc(db, "bookings", id));
     }
 };
-
-

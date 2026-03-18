@@ -109,6 +109,14 @@ body {
     display: flex;
     flex-direction: column;
     height: 100vh;
+    overflow: hidden; /* Prevent body-level scrolling */
+}
+
+.admin-content {
+    flex: 1;
+    padding: 30px 40px;
+    overflow-y: auto; /* Enable vertical scrolling for content */
+    background: var(--bg-primary);
 }
 
 .admin-header {
@@ -400,9 +408,9 @@ body {
 /* Dashboard Overview Styles */
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 20px;
-    margin-bottom: 30px;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 25px;
+    margin-bottom: 35px;
 }
 
 .stat-card {
@@ -465,8 +473,8 @@ body {
 .overview-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 25px;
-    margin-top: 10px;
+    gap: 30px;
+    margin-top: 15px;
 }
 
 @media (max-width: 1200px) {

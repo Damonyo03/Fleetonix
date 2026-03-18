@@ -2,6 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebas
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { getFirestore, collection, query, where, onSnapshot, getDocs, doc, getDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
+import { initLayout } from "./modules/ui.js";
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
@@ -29,9 +30,9 @@ onAuthStateChanged(auth, async (user) => {
     currentUser = user;
     currentClientData = userData || { full_name: user.email.split('@')[0], email: user.email };
     
-    const name = currentClientData.full_name;
-    document.getElementById('userName').innerText = name;
-    document.getElementById('userInitial').innerText = name.charAt(0).toUpperCase();
+    const name = currentClientData.full_name || user.email.split('@')[0];
+    // Use initLayout so the name is cached in localStorage for consistent display across all pages
+    initLayout('Dashboard', name);
 
     // Initialize Dashboard Data
     listenForDashboardData();

@@ -32,6 +32,9 @@ class LocationService : Service() {
     private lateinit var geofencingClient: GeofencingClient
     private lateinit var locationCallback: LocationCallback
 
+    private var totalDistanceMetres = 0f
+    private var lastLocation: android.location.Location? = null
+
     companion object {
         const val ACTION_LOCATION_UPDATE = "com.prototype.fleetonix.ACTION_LOCATION_UPDATE"
         const val EXTRA_LATITUDE = "extra_latitude"
@@ -44,8 +47,10 @@ class LocationService : Service() {
         
         const val ACTION_SET_GEOFENCE = "ACTION_SET_GEOFENCE"
         const val ACTION_CLEAR_GEOFENCES = "ACTION_CLEAR_GEOFENCES"
+        const val ACTION_START_TRIP = "ACTION_START_TRIP"
         const val EXTRA_GEOFENCE_ID = "extra_geofence_id"
         const val EXTRA_TARGET_PHASE = "extra_target_phase"
+        const val EXTRA_TOTAL_DISTANCE = "extra_total_distance"
     }
 
     override fun onCreate() {
@@ -56,15 +61,25 @@ class LocationService : Service() {
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
                 locationResult.lastLocation?.let { location ->
+                    // Calculate distance since last update
+                    lastLocation?.let { last ->
+                        val distance = last.distanceTo(location)
+                        if (location.accuracy < 50) { // Only count if accuracy is decent
+                            totalDistanceMetres += distance
+                        }
+                    }
+                    lastLocation = location
+
                     val intent = Intent(ACTION_LOCATION_UPDATE).apply {
                         putExtra(EXTRA_LATITUDE, location.latitude)
                         putExtra(EXTRA_LONGITUDE, location.longitude)
                         putExtra(EXTRA_SPEED, location.speed)
                         putExtra(EXTRA_ACCURACY, location.accuracy)
                         putExtra(EXTRA_BEARING, location.bearing)
+                        putExtra(EXTRA_TOTAL_DISTANCE, totalDistanceMetres)
                     }
                     sendBroadcast(intent)
-                    Log.d("LocationService", "Broadcasted location update")
+                    Log.d("LocationService", "Broadcasted location update. Total distance: ${totalDistanceMetres}m")
                 }
             }
         }
@@ -89,6 +104,11 @@ class LocationService : Service() {
             }
             ACTION_CLEAR_GEOFENCES -> {
                 clearGeofences()
+            }
+            ACTION_START_TRIP -> {
+                totalDistanceMetres = 0f
+                lastLocation = null
+                Log.d("LocationService", "Trip started, distance reset")
             }
         }
 

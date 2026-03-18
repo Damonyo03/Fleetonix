@@ -57,6 +57,76 @@ fun StatCard(title: String, value: String, accentColor: Color, modifier: Modifie
     }
 }
 
+@Composable
+fun TripTicketDialog(
+    driverName: String,
+    vehiclePlate: String,
+    vehicleType: String,
+    timeOfDeparture: String,
+    timeOfArrival: String,
+    totalKm: Double,
+    isSubmitting: Boolean,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = { }, // Force confirmation
+        tonalElevation = 8.dp,
+        containerColor = CardBlue,
+        title = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = AccentTeal, modifier = Modifier.size(48.dp))
+                Spacer(Modifier.height(8.dp))
+                Text("TRAVEL TRIP TICKET", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextPrimary)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Divider(color = Midnight)
+                
+                TicketRow("Driver", driverName)
+                TicketRow("Vehicle", "$vehicleType ($vehiclePlate)")
+                TicketRow("Departure", timeOfDeparture)
+                TicketRow("Arrival", timeOfArrival)
+                
+                Spacer(Modifier.height(8.dp))
+                
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Midnight, RoundedCornerShape(8.dp))
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("TOTAL DISTANCE", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Text("${"%.2f".format(totalKm)} KM", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = AccentTeal)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = !isSubmitting,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                if (isSubmitting) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                else Text("CONFIRM & CLOSE", fontWeight = FontWeight.Bold)
+            }
+        }
+    )
+}
+
+@Composable
+fun TicketRow(label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+        Text(value, color = TextPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun DriverDashboard(
@@ -188,6 +258,13 @@ fun DriverDashboard(
     var isMarkingDropoff by remember { mutableStateOf(false) }
     var isMarkingReturnPickup by remember { mutableStateOf(false) }
     var isCompletingTrip by remember { mutableStateOf(false) }
+
+    // Trip Ticket states
+    var totalDistanceMetres by remember { mutableStateOf(0f) }
+    var acceptedAt by remember { mutableStateOf<String?>(null) }
+    var pickedUpAt by remember { mutableStateOf<String?>(null) }
+    var completedAt by remember { mutableStateOf<String?>(null) }
+    var showTripTicket by remember { mutableStateOf(false) }
 
     // New Task Popup states
     var lastKnownScheduleId by remember { mutableStateOf<Int?>(nextSchedule?.scheduleId) }
@@ -486,8 +563,9 @@ fun DriverDashboard(
                     val speed = intent.getFloatExtra(LocationService.EXTRA_SPEED, 0f)
                     val accuracy = intent.getFloatExtra(LocationService.EXTRA_ACCURACY, 0f)
                     val bearing = intent.getFloatExtra(LocationService.EXTRA_BEARING, 0f)
+                    val totalDist = intent.getFloatExtra(LocationService.EXTRA_TOTAL_DISTANCE, 0f)
 
-                    Log.d("LocationTracking", "Received: $lat, $lng (Acc: $accuracy)")
+                    Log.d("LocationTracking", "Received: $lat, $lng (Acc: $accuracy, Dist: $totalDist)")
 
                     if (lat != 0.0 && lng != 0.0) {
                         currentLatitude = lat
@@ -495,6 +573,7 @@ fun DriverDashboard(
                         currentSpeed = speed
                         currentAccuracy = accuracy
                         currentHeading = bearing
+                        totalDistanceMetres = totalDist
 
                          // Sync to Firestore if docRef is ready
                         scope.launch {
@@ -1220,6 +1299,13 @@ fun DriverDashboard(
                                                 "trip_phase", "pickup",
                                                 "accepted_at", FieldValue.serverTimestamp()
                                             ).await()
+
+                                            acceptedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+                                            val startTripIntent = Intent(context, LocationService::class.java).apply {
+                                                action = LocationService.ACTION_START_TRIP
+                                            }
+                                            context.startService(startTripIntent)
+                                            totalDistanceMetres = 0f
                                             
                                             // Also update driver status
                                             val email = auth.currentUser?.email
@@ -1479,6 +1565,13 @@ fun DriverDashboard(
                                                         "trip_phase", "pickup",
                                                         "accepted_at", FieldValue.serverTimestamp()
                                                     ).await()
+
+                                                    acceptedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+                                                    val startTripIntent = Intent(context, LocationService::class.java).apply {
+                                                        action = LocationService.ACTION_START_TRIP
+                                                    }
+                                                    context.startService(startTripIntent)
+                                                    totalDistanceMetres = 0f
                                                     
                                                      // Update driver status
                                                     val email = auth.currentUser?.email
@@ -1489,7 +1582,8 @@ fun DriverDashboard(
                                                         driverSnap.documents.firstOrNull()?.reference?.update(
                                                             "current_status", "on_schedule",
                                                             "current_trip_id", docId,
-                                                            "current_trip_phase", "pickup"
+                                                            "current_trip_phase", "pickup",
+                                                            "accepted_at", acceptedAt
                                                         )
                                                     }
                                                 } catch (e: Exception) {
@@ -1520,9 +1614,14 @@ fun DriverDashboard(
                                                         "trip_phase", "dropoff",
                                                         "picked_up_at", FieldValue.serverTimestamp()
                                                     ).await()
+
+                                                    pickedUpAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
                                                     
                                                     // Sync to driver doc
-                                                    driverDocRef?.update("current_trip_phase", "dropoff")
+                                                    driverDocRef?.update(
+                                                        "current_trip_phase", "dropoff",
+                                                        "picked_up_at", pickedUpAt
+                                                    )
                                                 } catch (e: Exception) {
                                                     tripActionError = "Failed: ${e.message}"
                                                 } finally {
@@ -1605,29 +1704,8 @@ fun DriverDashboard(
                                 canCompleteTrip -> {
                                     Button(
                                         onClick = {
-                                            val docId = nextSchedule.docId ?: return@Button
-                                            scope.launch {
-                                                try {
-                                                    isCompletingTrip = true
-                                                    tripActionError = null
-                                                     db.collection("schedules").document(docId).update(
-                                                        "status", "completed",
-                                                        "trip_phase", "completed",
-                                                        "completed_at", FieldValue.serverTimestamp()
-                                                    ).await()
-                                                    
-                                                    // Update driver back to available
-                                                    driverDocRef?.update(
-                                                        "current_status", "available",
-                                                        "current_trip_id", "",
-                                                        "current_trip_phase", "completed"
-                                                    )
-                                                } catch (e: Exception) {
-                                                    tripActionError = "Failed: ${e.message}"
-                                                } finally {
-                                                    isCompletingTrip = false
-                                                }
-                                            }
+                                            completedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+                                            showTripTicket = true
                                         },
                                         modifier = Modifier.fillMaxWidth().height(64.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
@@ -1696,6 +1774,59 @@ fun DriverDashboard(
                     }
                 }
             }
+        }
+
+        if (showTripTicket) {
+            TripTicketDialog(
+                driverName = session.user?.name ?: "Driver",
+                vehiclePlate = session.driver?.plateNumber ?: "N/A",
+                vehicleType = session.driver?.vehicleAssigned ?: "Vehicle",
+                timeOfDeparture = pickedUpAt ?: "--:--",
+                timeOfArrival = completedAt ?: "--:--",
+                totalKm = totalDistanceMetres / 1000.0,
+                isSubmitting = isCompletingTrip,
+                onConfirm = {
+                    val docId = nextSchedule?.docId ?: return@TripTicketDialog
+                    scope.launch {
+                        try {
+                            isCompletingTrip = true
+                            tripActionError = null
+                            
+                            val tripData = hashMapOf(
+                                "status" to "completed",
+                                "trip_phase" to "completed",
+                                "completed_at" to FieldValue.serverTimestamp(),
+                                "accepted_at" to (acceptedAt ?: ""),
+                                "picked_up_at" to (pickedUpAt ?: ""),
+                                "time_of_departure" to (pickedUpAt ?: ""),
+                                "time_of_arrival" to (completedAt ?: ""),
+                                "total_km_travelled" to (totalDistanceMetres / 1000.0),
+                                "vehicle_type" to (session.driver?.vehicleAssigned ?: ""),
+                                "plate_number" to (session.driver?.plateNumber ?: "")
+                            )
+                            
+                            db.collection("schedules").document(docId).update(tripData as Map<String, Any>).await()
+                            
+                            // Update driver back to available and increment mileage
+                            val currentMileage = session.driver?.currentMileage ?: 0.0
+                            val newMileage = currentMileage + (totalDistanceMetres / 1000.0)
+                            
+                            driverDocRef?.update(
+                                "current_status", "available",
+                                "current_trip_id", "",
+                                "current_trip_phase", "completed",
+                                "current_mileage", newMileage
+                            )?.await()
+                            
+                            showTripTicket = false
+                        } catch (e: Exception) {
+                            tripActionError = "Failed: ${e.message}"
+                        } finally {
+                            isCompletingTrip = false
+                        }
+                    }
+                }
+            )
         }
 
         // Accident Report Dialog (outside ModalNavigationDrawer but inside Box)

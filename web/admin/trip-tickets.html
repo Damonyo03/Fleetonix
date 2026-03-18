@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fleetonix - Admin - Trip Tickets</title>
+    <link rel="icon" type="image/jpeg" href="../img/logo.jpg">
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="../assets/css/admin.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .ticket-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            transition: box-shadow 0.2s;
+        }
+        .ticket-card:hover {
+            box-shadow: 0 4px 18px rgba(0,0,0,0.12);
+        }
+        .ticket-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 14px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .ticket-id {
+            font-size: 0.78em;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+        .ticket-driver {
+            font-weight: 700;
+            font-size: 1.05em;
+            color: var(--text-primary);
+        }
+        .ticket-vehicle {
+            font-size: 0.85em;
+            color: var(--text-secondary);
+        }
+        .ticket-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+        .metric-box {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 10px 14px;
+            text-align: center;
+        }
+        .metric-label {
+            font-size: 0.72em;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+        .metric-value {
+            font-size: 1.1em;
+            font-weight: 700;
+            color: var(--accent-blue);
+        }
+        .ticket-route {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.88em;
+            color: var(--text-secondary);
+        }
+        .ticket-route .route-arrow {
+            color: var(--text-muted);
+        }
+        .ticket-client {
+            font-size: 0.85em;
+            color: var(--text-muted);
+            margin-top: 6px;
+        }
+        .filter-bar {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .filter-bar input[type="date"], 
+        .filter-bar select {
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: var(--card-bg);
+            color: var(--text-primary);
+            font-size: 0.9em;
+        }
+        .stats-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+        .summary-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 16px;
+            text-align: center;
+        }
+        .summary-card .value {
+            font-size: 1.7em;
+            font-weight: 800;
+            color: var(--accent-blue);
+        }
+        .summary-card .label {
+            font-size: 0.8em;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+        #ticketsList { min-height: 200px; }
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+        .empty-state i { font-size: 3em; margin-bottom: 12px; display: block; }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <aside class="admin-sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <img src="../img/logo.jpg" alt="Logo" class="sidebar-logo">
+                <span class="sidebar-title">Fleetonix</span>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-section-label">MONITORING</div>
+                <a href="dashboard.html" class="nav-item"><i class="fas fa-chart-line"></i> Dashboard Map</a>
+                <a href="drivers.html" class="nav-item"><i class="fas fa-id-card"></i> Drivers Information</a>
+
+                <div class="nav-section-label">OPERATIONS</div>
+                <a href="bookings.html" class="nav-item"><i class="fas fa-calendar-check"></i> Bookings</a>
+                <a href="schedules.html" class="nav-item"><i class="fas fa-list-alt"></i> List of Trips</a>
+                <a href="trip-tickets.html" class="nav-item active"><i class="fas fa-ticket-alt"></i> Trip Tickets</a>
+
+                <div class="nav-section-label">SYSTEM</div>
+                <a href="registered-users.html" class="nav-item"><i class="fas fa-users"></i> Registered Users</a>
+
+                <div class="nav-section-label">NOTIFICATIONS</div>
+                <a href="notifications.html" class="nav-item"><i class="fas fa-bell"></i> System Notifications <span class="notif-count">0</span></a>
+                <a href="#" id="logoutBtn" class="nav-item logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
+            </nav>
+        </aside>
+
+        <main class="admin-main" id="mainContent">
+            <header class="admin-header">
+                <div class="header-left">
+                    <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
+                    <h2>Trip Tickets</h2>
+                </div>
+                <div class="header-right">
+                    <a href="notifications.html" class="notification-icon">
+                        <i class="fas fa-bell"></i>
+                        <span class="notification-badge" style="display: none;">0</span>
+                    </a>
+                    <div class="user-menu">
+                        <div class="user-avatar">A</div>
+                        <span>Admin</span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="admin-content">
+                <div class="page-header" style="margin-bottom: 20px;">
+                    <h1 class="page-title">Completed Trip Tickets</h1>
+                    <button class="btn btn-secondary" onclick="window.print()" style="display:flex;align-items:center;gap:6px;">
+                        <i class="fas fa-print"></i> Print / Export
+                    </button>
+                </div>
+
+                <!-- Summary Stats -->
+                <div class="stats-summary">
+                    <div class="summary-card">
+                        <div class="value" id="totalTrips">0</div>
+                        <div class="label">Total Completed Trips</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="value" id="totalKm">0</div>
+                        <div class="label">Total KM Covered</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="value" id="totalDrivers">0</div>
+                        <div class="label">Drivers Active</div>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="filter-bar">
+                    <label style="font-size:0.9em; color:var(--text-muted);">Filter by:</label>
+                    <input type="date" id="filterDateFrom" title="From Date">
+                    <span style="color:var(--text-muted);">to</span>
+                    <input type="date" id="filterDateTo" title="To Date">
+                    <select id="filterDriver">
+                        <option value="">All Drivers</option>
+                    </select>
+                    <button class="btn btn-secondary" onclick="applyFilters()" style="padding: 8px 16px; font-size:0.9em;">
+                        <i class="fas fa-filter"></i> Apply
+                    </button>
+                    <button class="btn btn-secondary" onclick="clearFilters()" style="padding: 8px 16px; font-size:0.9em;">
+                        <i class="fas fa-times"></i> Clear
+                    </button>
+                </div>
+
+                <!-- Tickets List -->
+                <div id="ticketsList">
+                    <div class="empty-state">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        Loading trip tickets...
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal Placeholder -->
+    <div id="modalContainer"></div>
+
+    <script type="module" src="../assets/js/admin.js"></script>
+    <script type="module" src="../assets/js/admin-trip-tickets.js"></script>
+</body>
+</html>
+
+

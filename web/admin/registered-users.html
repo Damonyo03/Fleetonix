@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fleetonix - Admin - List of Trips</title>
+    <title>Fleetonix - Admin - Registered Users</title>
     <link rel="icon" type="image/jpeg" href="../img/logo.jpg">
     <link rel="stylesheet" href="../assets/css/style.css">
     <link rel="stylesheet" href="../assets/css/admin.css">
@@ -23,11 +23,11 @@
 
                 <div class="nav-section-label">OPERATIONS</div>
                 <a href="bookings.html" class="nav-item"><i class="fas fa-calendar-check"></i> Bookings</a>
-                <a href="schedules.html" class="nav-item active"><i class="fas fa-list-alt"></i> List of Trips</a>
+                <a href="schedules.html" class="nav-item"><i class="fas fa-list-alt"></i> List of Trips</a>
                 <a href="trip-tickets.html" class="nav-item"><i class="fas fa-ticket-alt"></i> Trip Tickets</a>
 
                 <div class="nav-section-label">SYSTEM</div>
-                <a href="registered-users.html" class="nav-item"><i class="fas fa-users"></i> Registered Users</a>
+                <a href="registered-users.html" class="nav-item active"><i class="fas fa-users"></i> Registered Users</a>
 
                 <div class="nav-section-label">NOTIFICATIONS</div>
                 <a href="notifications.html" class="nav-item"><i class="fas fa-bell"></i> System Notifications <span class="notif-count">0</span></a>
@@ -39,7 +39,7 @@
             <header class="admin-header">
                 <div class="header-left">
                     <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
-                    <h2>List of Trips</h2>
+                    <h2>Registered Users</h2>
                 </div>
                 <div class="header-right">
                     <a href="notifications.html" class="notification-icon">
@@ -55,23 +55,32 @@
 
             <div class="admin-content">
                 <div class="page-header">
-                    <h1 class="page-title">List of Trips</h1>
+                    <h1 class="page-title">All Registered Users</h1>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <select id="roleFilter" class="form-input" style="padding:8px 12px; border-radius:8px; font-size:0.9em;">
+                            <option value="all">All Roles</option>
+                            <option value="client">Clients</option>
+                            <option value="admin">Admins</option>
+                            <option value="driver">Drivers</option>
+                        </select>
+                        <input type="text" id="searchInput" class="form-input" placeholder="&#128269; Search by name or email..." style="padding:8px 14px; border-radius:8px; font-size:0.9em; min-width:240px;">
+                    </div>
                 </div>
 
                 <div class="data-table-wrapper">
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>Driver</th>
-                                <th>Client</th>
-                                <th>Pickup</th>
-                                <th>Scheduled</th>
-                                <th>Status</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Company</th>
+                                <th>Date Registered</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="scheduleTableBody">
-                            <tr><td colspan="6" style="text-align: center; padding: 40px;">Loading schedules...</td></tr>
+                        <tbody id="usersTableBody">
+                            <tr><td colspan="6" style="text-align:center; padding:40px;">Loading users...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -83,9 +92,8 @@
     <div id="modalContainer"></div>
 
     <script type="module" src="../assets/js/admin.js"></script>
-    <script type="module" src="../assets/js/admin-schedules.js"></script>
+    <script type="module" src="../assets/js/admin-registered-users.js"></script>
 </body>
 </html>
-
 
 

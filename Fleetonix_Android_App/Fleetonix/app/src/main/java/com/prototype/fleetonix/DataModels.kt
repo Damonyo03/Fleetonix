@@ -31,7 +31,9 @@ data class DriverProfile(
     val id: String? = null,
     @SerializedName("license_number") val licenseNumber: String? = null,
     @SerializedName("vehicle_assigned") val vehicleAssigned: String? = null,
+    @SerializedName("vehicle_type") val vehicleType: String? = null,
     @SerializedName("plate_number") val plateNumber: String? = null,
+    @SerializedName("current_mileage") val currentMileage: Double? = null,
     @SerializedName("current_status") val currentStatus: String? = null
 )
 
@@ -57,6 +59,9 @@ data class DriverSchedule(
     @SerializedName("scheduled_time") val scheduledTime: String? = null,
     @SerializedName("started_at") val startedAt: String? = null,
     @SerializedName("completed_at") val completedAt: String? = null,
+    @SerializedName("time_of_departure") val timeOfDeparture: String? = null,
+    @SerializedName("time_of_arrival") val timeOfArrival: String? = null,
+    @SerializedName("total_km_travelled") val totalKmTravelled: Double? = null,
     @SerializedName("estimated_arrival_time") val estimatedArrivalTime: String? = null,
     @SerializedName("actual_arrival_time") val actualArrivalTime: String? = null,
     val pickup: DriverScheduleLocation? = null,
