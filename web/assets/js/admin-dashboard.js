@@ -1,4 +1,4 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { getFirestore, collection, query, where, onSnapshot, getDocs, doc, getDoc, updateDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
@@ -6,7 +6,7 @@ import { initLayout } from "./modules/ui.js";
 import { sanitizeFirestoreData, generateNumericId } from "./modules/data.js";
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
 
@@ -517,6 +517,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         updated_at: serverTimestamp()
                     });
                 }
+
+                // Log Activity
+                await addDoc(collection(db, "activity"), {
+                    type: 'system',
+                    title: 'Quick Dispatch Assigned',
+                    message: `Driver ${driverName} assigned to Booking #${currentDispatchBookingId} via Dashboard`,
+                    timestamp: serverTimestamp()
+                });
 
                 window.closeDispatchModal();
             } catch (error) {

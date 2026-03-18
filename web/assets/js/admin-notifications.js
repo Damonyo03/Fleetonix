@@ -1,4 +1,4 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import {
     getFirestore, collection, query, orderBy, onSnapshot,
@@ -7,7 +7,7 @@ import {
 import { firebaseConfig } from "./firebase-config.js";
 import { initLayout } from "./modules/ui.js";
 
-const app = initializeApp(firebaseConfig);
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
 
@@ -18,118 +18,190 @@ onAuthStateChanged(auth, async (user) => {
     if (!user) { window.location.href = '../login.html'; return; }
     const userDoc = await getDoc(doc(db, "users", user.uid));
     const name = userDoc.exists() ? (userDoc.data().full_name || user.email.split('@')[0]) : user.email.split('@')[0];
-    initLayout('System Notifications', name);
+    initLayout('System Notification', name);
 
-    // Listen to ALL activity/system logs in real-time
-    listenToLogs();
-    // Also listen to booking events (new bookings)
-    listenToBookingEvents();
+    // Start Listeners
+    listenToSystemLogs();
+    listenToTrips();
+    listenToVehicleIssues();
+    listenToAccidents();
 });
 
-/** Listens to the activity collection for system events */
-function listenToLogs() {
-    onSnapshot(
-        query(collection(db, "activity"), orderBy("timestamp", "desc")),
-        (snapshot) => {
-            const activityNotifs = snapshot.docs.map(d => ({
-                id: d.id, source: 'activity', ...d.data(),
-                created_at: d.data().timestamp
+/** Listens to the activity collection for system events (CRUD) */
+function listenToSystemLogs() {
+    const q = query(collection(db, "activity"), orderBy("timestamp", "desc"));
+    onSnapshot(q, (snapshot) => {
+        const logs = snapshot.docs.map(d => ({
+            id: d.id, source: 'system', type: 'system', ...d.data(),
+            created_at: d.data().timestamp || d.data().created_at
+        }));
+        mergeAndRender('system', logs);
+    }, (err) => {
+        console.warn("System logs index error, falling back:", err);
+        onSnapshot(collection(db, "activity"), (snapshot) => {
+            const logs = snapshot.docs.map(d => ({
+                id: d.id, source: 'system', type: 'system', ...d.data(),
+                created_at: d.data().timestamp || d.data().created_at
             }));
-            mergeAndRender('activity', activityNotifs);
-        },
-        (err) => {
-            // Fallback: try without orderBy
-            onSnapshot(collection(db, "activity"), (snapshot) => {
-                const activityNotifs = snapshot.docs.map(d => ({
-                    id: d.id, source: 'activity', ...d.data(),
-                    created_at: d.data().timestamp || d.data().created_at
-                }));
-                mergeAndRender('activity', activityNotifs);
-            });
-        }
-    );
-
-    // Also listen to general notifications collection
-    onSnapshot(
-        query(collection(db, "notifications"), orderBy("created_at", "desc")),
-        (snapshot) => {
-            const notifs = snapshot.docs.map(d => ({ id: d.id, source: 'notifications', ...d.data() }));
-            mergeAndRender('notifications', notifs);
-        },
-        () => {
-            onSnapshot(collection(db, "notifications"), (snapshot) => {
-                const notifs = snapshot.docs.map(d => ({ id: d.id, source: 'notifications', ...d.data() }));
-                mergeAndRender('notifications', notifs);
-            });
-        }
-    );
+            mergeAndRender('system', logs);
+        });
+    });
 }
 
-/** Listens to bookings collection to generate new booking events */
-function listenToBookingEvents() {
-    onSnapshot(
-        query(collection(db, "bookings"), orderBy("created_at", "desc")),
-        (snapshot) => {
-            const bookingNotifs = snapshot.docs.map(d => {
-                const b = d.data();
+/** Listens to schedules for trip updates */
+function listenToTrips() {
+    const q = query(collection(db, "schedules"), orderBy("updated_at", "desc"));
+    onSnapshot(q, (snapshot) => {
+        const trips = snapshot.docs.map(d => {
+            const s = d.data();
+            return {
+                id: d.id, source: 'trips', type: 'trip',
+                title: `Trip Update: Schedule #${s.schedule_id}`,
+                message: `Status: ${s.trip_phase || s.status} | Driver: ${s.driver_name || 'N/A'}`,
+                driver: s.driver_name,
+                created_at: s.updated_at || s.created_at,
+                is_read: true
+            };
+        });
+        mergeAndRender('trips', trips);
+    }, (err) => {
+        onSnapshot(collection(db, "schedules"), (snapshot) => {
+            const trips = snapshot.docs.map(d => {
+                const s = d.data();
                 return {
-                    id: 'booking_' + d.id,
-                    source: 'bookings',
-                    type: 'booking',
-                    title: `New Booking — ${b.client_name || 'Client'}`,
-                    message: `From ${b.pickup_location || 'Unknown'} → ${b.dropoff_location || 'Unknown'} on ${b.pickup_date || ''}`,
-                    is_read: b.status !== 'pending',
-                    created_at: b.created_at
+                    id: d.id, source: 'trips', type: 'trip',
+                    title: `Trip Update: Schedule #${s.schedule_id}`,
+                    message: `Status: ${s.trip_phase || s.status} | Driver: ${s.driver_name || 'N/A'}`,
+                    driver: s.driver_name,
+                    created_at: s.updated_at || s.created_at,
+                    is_read: true
                 };
             });
-            mergeAndRender('bookings', bookingNotifs);
-        },
-        () => {} // silently ignore if no access
-    );
+            mergeAndRender('trips', trips);
+        });
+    });
 }
 
-// Keeps track of each source's items separately
+/** Listens to vehicle issues from mobile app */
+function listenToVehicleIssues() {
+    const q = query(collection(db, "vehicle_issues"), orderBy("reported_at", "desc"));
+    onSnapshot(q, (snapshot) => {
+        const issues = snapshot.docs.map(d => {
+            const data = d.data();
+            return {
+                id: d.id, source: 'vehicle_issues', type: 'vehicle_issue',
+                title: `Vehicle Issue: ${data.issue_type || 'Reported'}`,
+                message: data.description || 'No description provided',
+                driver: data.driver_email,
+                coords: data.latitude && data.longitude ? `${data.latitude}, ${data.longitude}` : null,
+                created_at: data.reported_at,
+                is_read: false
+            };
+        });
+        mergeAndRender('issues', issues);
+    }, (err) => {
+        onSnapshot(collection(db, "vehicle_issues"), (snapshot) => {
+            const issues = snapshot.docs.map(d => {
+                const data = d.data();
+                return {
+                    id: d.id, source: 'vehicle_issues', type: 'vehicle_issue',
+                    title: `Vehicle Issue: ${data.issue_type || 'Reported'}`,
+                    message: data.description || 'No description provided',
+                    driver: data.driver_email,
+                    coords: data.latitude && data.longitude ? `${data.latitude}, ${data.longitude}` : null,
+                    created_at: data.reported_at,
+                    is_read: false
+                };
+            });
+            mergeAndRender('issues', issues);
+        });
+    });
+}
+
+/** Listens to accident reports from mobile app */
+function listenToAccidents() {
+    const q = query(collection(db, "accidents"), orderBy("reported_at", "desc"));
+    onSnapshot(q, (snapshot) => {
+        const accidents = snapshot.docs.map(d => {
+            const data = d.data();
+            return {
+                id: d.id, source: 'accidents', type: 'accident',
+                title: `🚨 Accident Reported!`,
+                message: data.description || 'Driver reported an accident via mobile app.',
+                driver: data.driver_email,
+                coords: data.latitude && data.longitude ? `${data.latitude}, ${data.longitude}` : null,
+                created_at: data.reported_at,
+                is_read: false
+            };
+        });
+        mergeAndRender('accidents', accidents);
+    }, (err) => {
+        onSnapshot(collection(db, "accidents"), (snapshot) => {
+            const accidents = snapshot.docs.map(d => {
+                const data = d.data();
+                return {
+                    id: d.id, source: 'accidents', type: 'accident',
+                    title: `🚨 Accident Reported!`,
+                    message: data.description || 'Driver reported an accident via mobile app.',
+                    driver: data.driver_email,
+                    coords: data.latitude && data.longitude ? `${data.latitude}, ${data.longitude}` : null,
+                    created_at: data.reported_at,
+                    is_read: false
+                };
+            });
+            mergeAndRender('accidents', accidents);
+        });
+    });
+}
+
 const sourceBuckets = {};
 function mergeAndRender(source, items) {
     sourceBuckets[source] = items;
-    // Merge all sources
-    allNotifs = Object.values(sourceBuckets)
-        .flat()
-        .sort((a, b) => {
-            const aT = a.created_at?.toMillis?.() || a.created_at?.seconds * 1000 || 0;
-            const bT = b.created_at?.toMillis?.() || b.created_at?.seconds * 1000 || 0;
-            return bT - aT;
-        });
+    allNotifs = Object.values(sourceBuckets).flat().sort((a, b) => {
+        const aT = a.created_at?.toMillis?.() || a.created_at?.seconds * 1000 || 0;
+        const bT = b.created_at?.toMillis?.() || b.created_at?.seconds * 1000 || 0;
+        return bT - aT;
+    });
     updateStats();
     renderFiltered();
 }
 
 function updateStats() {
-    const total   = allNotifs.length;
-    const unread  = allNotifs.filter(n => !n.is_read).length;
-    const warnings = allNotifs.filter(n => ['warning', 'accident', 'vehicle_issue'].includes(n.type)).length;
-    const bookings = allNotifs.filter(n => n.type === 'booking').length;
+    const unreadNotifs = allNotifs.filter(n => n.status !== 'acknowledged' && !n.is_read);
+    const counts = {
+        trip: allNotifs.filter(n => n.type === 'trip').length,
+        issue: allNotifs.filter(n => n.type === 'vehicle_issue' && n.status !== 'acknowledged').length,
+        accident: allNotifs.filter(n => n.type === 'accident' && n.status !== 'acknowledged').length,
+        total: allNotifs.length,
+        unreadAlerts: allNotifs.filter(n => (n.type === 'accident' || n.type === 'vehicle_issue') && n.status !== 'acknowledged').length
+    };
 
-    document.getElementById('totalCount').textContent   = total;
-    document.getElementById('unreadCount').textContent  = unread;
-    document.getElementById('warningCount').textContent = warnings;
-    document.getElementById('bookingCount').textContent = bookings;
+    if (document.getElementById('totalCount')) document.getElementById('totalCount').textContent = counts.total;
+    if (document.getElementById('tripCount')) document.getElementById('tripCount').textContent = counts.trip;
+    if (document.getElementById('issueCount')) document.getElementById('issueCount').textContent = counts.issue;
+    if (document.getElementById('accidentCount')) document.getElementById('accidentCount').textContent = counts.accident;
+
+    // Synchronize sidebar badge from here if on notifications page
+    const sidebarCount = document.querySelector('.notif-count');
+    if (sidebarCount) {
+        const val = counts.unreadAlerts;
+        sidebarCount.innerText = val > 0 ? val : '';
+        sidebarCount.style.display = val > 0 ? 'inline-flex' : 'none';
+    }
 }
 
 function renderFiltered() {
     let list = allNotifs;
     if (currentFilter !== 'all') {
         list = allNotifs.filter(n => {
-            const t = (n.type || '').toLowerCase();
-            if (currentFilter === 'booking')  return t === 'booking';
-            if (currentFilter === 'trip')     return ['trip', 'completed', 'started'].includes(t);
-            if (currentFilter === 'warning')  return t === 'warning';
-            if (currentFilter === 'accident') return ['accident', 'vehicle_issue'].includes(t);
-            if (currentFilter === 'system')   return ['system', 'info'].includes(t);
+            if (currentFilter === 'trip') return n.type === 'trip';
+            if (currentFilter === 'vehicle_issue') return n.type === 'vehicle_issue';
+            if (currentFilter === 'accident') return n.type === 'accident';
+            if (currentFilter === 'system') return n.type === 'system';
             return true;
         });
     }
-    renderNotifications(list.slice(0, 100)); // cap at 100 for performance
+    renderNotifications(list.slice(0, 50)); 
 }
 
 function renderNotifications(items) {
@@ -137,57 +209,92 @@ function renderNotifications(items) {
     if (!container) return;
 
     if (items.length === 0) {
-        container.innerHTML = `
-            <div style="text-align:center; padding:60px; color:var(--text-muted);">
-                <i class="fas fa-bell-slash" style="font-size:2.5em; margin-bottom:12px; display:block;"></i>
-                <p>No notifications in this category.</p>
-            </div>`;
+        container.innerHTML = `<div style="text-align:center; padding:60px; color:var(--text-muted);"><p>No notifications found.</p></div>`;
         return;
     }
 
     container.innerHTML = items.map(n => {
-        const type = (n.type || 'info').toLowerCase();
+        const type = n.type.toLowerCase();
         const iconMap = {
-            'booking': { icon: 'fa-calendar-check', cls: 'booking' },
             'trip': { icon: 'fa-car', cls: 'info' },
-            'completed': { icon: 'fa-flag-checkered', cls: 'success' },
             'accident': { icon: 'fa-car-crash', cls: 'danger' },
             'vehicle_issue': { icon: 'fa-tools', cls: 'warning' },
-            'warning': { icon: 'fa-exclamation-triangle', cls: 'warning' },
-            'system': { icon: 'fa-cog', cls: 'info' },
-            'info': { icon: 'fa-info-circle', cls: 'info' },
+            'system': { icon: 'fa-cog', cls: 'success' },
         };
         const { icon, cls } = iconMap[type] || { icon: 'fa-bell', cls: 'info' };
-        const cardCls = n.is_read ? cls : `unread ${cls}`;
+        
+        // Use a persistent 'read' state from Firestore if available, else default to false for alerts
+        const isRead = n.status === 'acknowledged' || n.is_read; 
+        const cardCls = isRead ? `notif-card ${cls}` : `notif-card unread ${cls}`;
         const timeStr = formatTime(n.created_at);
 
         return `
-            <div class="notif-card ${cardCls}">
+            <div class="notif-card ${cardCls}" id="notif-${n.id}">
                 <div class="notif-icon ${cls}"><i class="fas ${icon}"></i></div>
                 <div class="notif-body">
-                    <div class="notif-title">${n.title || 'System Event'}</div>
-                    <div class="notif-message">${n.message || n.details || n.description || ''}</div>
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                        <div class="notif-title">${n.title}</div>
+                        ${!isRead && (type === 'accident' || type === 'vehicle_issue') ? 
+                            `<button class="btn-ack" onclick="acknowledgeNotif('${n.id}', '${n.source}')">Acknowledge</button>` : ''}
+                    </div>
+                    <div class="notif-message">${n.message}</div>
                     <div class="notif-meta">
                         <span><i class="fas fa-clock"></i> ${timeStr}</span>
-                        ${n.driver ? `<span><i class="fas fa-user"></i> ${n.driver}</span>` : ''}
-                        ${n.source ? `<span style="text-transform:capitalize;"><i class="fas fa-tag"></i> ${n.source}</span>` : ''}
+                        ${n.driver ? `<span><i class="fas fa-user-circle"></i> ${n.driver}</span>` : ''}
+                        ${n.coords ? `<span><i class="fas fa-map-marker-alt"></i> ${n.coords}</span>` : ''}
+                        ${isRead ? `<span style="color:var(--accent-green);"><i class="fas fa-check-circle"></i> Acknowledged</span>` : ''}
                     </div>
                 </div>
-                ${!n.is_read ? `<span style="width:8px; height:8px; background:var(--accent-blue); border-radius:50%; flex-shrink:0; margin-top:4px;"></span>` : ''}
             </div>
         `;
     }).join('');
 }
 
+window.acknowledgeNotif = async function(id, source) {
+    console.log("Acknowledging:", id, "from source:", source);
+    if (!id || !source) return;
+    
+    try {
+        const btn = document.querySelector(`#notif-${id} .btn-ack`);
+        if (btn) {
+            btn.disabled = true;
+            btn.innerText = 'Acknowledging...';
+        }
+
+        await updateDoc(doc(db, source, id), {
+            status: 'acknowledged',
+            acknowledged_at: serverTimestamp(),
+            acknowledged_by: auth.currentUser?.email || 'admin'
+        });
+        
+        console.log("Successfully acknowledged in Firestore");
+
+        // Log to activity
+        await addDoc(collection(db, "activity"), {
+            type: 'system',
+            title: 'Alert Acknowledged',
+            message: `Admin acknowledged ${source} alert (ID: ${id})`,
+            timestamp: serverTimestamp()
+        });
+    } catch (e) {
+        console.error("Ack error:", e);
+        alert("Failed to acknowledge: " + e.message);
+        const btn = document.querySelector(`#notif-${id} .btn-ack`);
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = 'Acknowledge';
+        }
+    }
+};
+
 function formatTime(ts) {
-    if (!ts) return '—';
+    if (!ts) return 'Just now';
     try {
         const d = ts.toDate ? ts.toDate() : new Date(ts.seconds ? ts.seconds * 1000 : ts);
-        return d.toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        return d.toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     } catch { return '—'; }
 }
 
-// Exposed to HTML
 window.filterBy = function(type, el) {
     currentFilter = type;
     document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
@@ -196,14 +303,40 @@ window.filterBy = function(type, el) {
 };
 
 window.markAllRead = async function() {
-    // Mark notifications in the notifications collection as read
+    const unreadAlerts = allNotifs.filter(n => (n.type === 'accident' || n.type === 'vehicle_issue') && n.status !== 'acknowledged');
+    if (unreadAlerts.length === 0) return;
+
     try {
-        const snap = await getDocs(query(collection(db, "notifications"), where("is_read", "==", false)));
-        const batch = writeBatch(db);
-        snap.docs.forEach(d => batch.update(d.ref, { is_read: true }));
-        await batch.commit();
-        alert("All notifications marked as read.");
+        const btn = document.querySelector('.btn-mark-all');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerText = 'Acknowledging...';
+        }
+
+        const promises = unreadAlerts.map(n => 
+            updateDoc(doc(db, n.source, n.id), {
+                status: 'acknowledged',
+                acknowledged_at: serverTimestamp(),
+                acknowledged_by: auth.currentUser?.email || 'admin'
+            })
+        );
+
+        await Promise.all(promises);
+
+        // Log the bulk action
+        await addDoc(collection(db, "activity"), {
+            type: 'system',
+            title: 'Bulk Acknowledgment',
+            message: `Admin acknowledged ${unreadAlerts.length} alerts at once.`,
+            timestamp: serverTimestamp()
+        });
+
+        if (btn) {
+            btn.innerText = 'Marked All as Read';
+            setTimeout(() => { btn.disabled = false; btn.innerText = 'Mark All as Read'; }, 2000);
+        }
     } catch (e) {
-        console.warn("Could not mark all read:", e.message);
+        console.error("Bulk Ack error:", e);
+        alert("Failed to acknowledge some alerts: " + e.message);
     }
 };

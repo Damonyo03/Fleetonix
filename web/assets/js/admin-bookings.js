@@ -1,4 +1,4 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, updateDoc, deleteDoc, orderBy, getDocs, setDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
@@ -6,7 +6,7 @@ import { initLayout, showModal, hideModal } from "./modules/ui.js";
 import { sanitizeFirestoreData, generateNumericId } from "./modules/data.js";
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
 
@@ -202,6 +202,15 @@ async function showAdminBookingModal() {
 
         const bookingId = generateNumericId().toString();
         await setDoc(doc(db, "bookings", bookingId), data);
+        
+        // Log Activity
+        await addDoc(collection(db, "activity"), {
+            type: 'system',
+            title: 'New Booking Created',
+            message: `Admin created a booking for ${data.client_name} (ID: ${bookingId})`,
+            timestamp: serverTimestamp()
+        });
+
         alert("Booking created successfully! " + (autoDispatch ? "It has been sent to dispatch." : "It is now pending approval."));
     });
 
@@ -409,6 +418,14 @@ window.assignDriver = async (id) => {
             updated_at: serverTimestamp()
         });
 
+        // Log Activity
+        await addDoc(collection(db, "activity"), {
+            type: 'system',
+            title: 'Booking Assigned',
+            message: `Driver ${driverName} assigned to Booking #${id}`,
+            timestamp: serverTimestamp()
+        });
+
         alert("Driver assigned and schedule created!");
     });
 };
@@ -416,5 +433,13 @@ window.assignDriver = async (id) => {
 window.deleteBooking = async (id) => {
     if (confirm("Are you sure you want to delete this booking request?")) {
         await deleteDoc(doc(db, "bookings", id));
+        
+        // Log Activity
+        await addDoc(collection(db, "activity"), {
+            type: 'system',
+            title: 'Booking Deleted',
+            message: `Admin deleted Booking #${id}`,
+            timestamp: serverTimestamp()
+        });
     }
 };

@@ -1167,3 +1167,39 @@
 .quick-driver-badge:active {
     transform: translateY(0);
 }
+
+/* Notification Enhancements */
+.notif-card.unread {
+    border-left: 4px solid var(--accent-blue) !important;
+    background: rgba(0, 212, 255, 0.05) !important;
+}
+
+.btn-ack {
+    background: var(--accent-blue);
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+    margin-left: 15px;
+}
+
+.btn-ack:hover {
+    background: #0097a7;
+    transform: translateY(-1px);
+}
+
+.btn-ack:disabled {
+    background: var(--bg-input);
+    color: var(--text-muted);
+    cursor: not-allowed;
+    transform: none;
+}
+
+.notif-card.danger.unread { border-left-color: #ff6b6b !important; }
+.notif-card.warning.unread { border-left-color: #ffc107 !important; }
+.notif-card.success.unread { border-left-color: var(--accent-green) !important; }

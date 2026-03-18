@@ -92,11 +92,49 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 // Global Sidebar Counters
-onSnapshot(query(collection(db, "activity"), where("type", "in", ["accident", "vehicle_issue"])), (snapshot) => {
+const updateSidebarBadge = (count) => {
     const counters = document.querySelectorAll('.notif-count');
     counters.forEach(counter => {
-        counter.innerText = snapshot.size;
+        const val = parseInt(count) || 0;
+        if (val > 0) {
+            counter.innerText = val;
+            counter.style.display = 'inline-flex';
+            // Ensure there's a space if it's right after text
+            if (counter.previousSibling && counter.previousSibling.nodeType === 3) {
+                 if (!counter.previousSibling.textContent.endsWith(' ')) {
+                     counter.previousSibling.textContent += ' ';
+                 }
+            }
+        } else {
+            counter.innerText = '';
+            counter.style.display = 'none';
+        }
+        
+        // Add badge styling if missing
+        if (!counter.classList.contains('badge')) {
+            counter.classList.add('badge', 'danger');
+            counter.style.background = '#ef4444';
+            counter.style.color = 'white';
+            counter.style.marginLeft = '8px';
+            counter.style.padding = '2px 6px';
+            counter.style.borderRadius = '4px';
+            counter.style.fontSize = '0.7em';
+        }
     });
+};
+
+// Listen to both accidents and vehicle_issues for the sidebar badge
+let accidentCount = 0;
+let issueCount = 0;
+
+onSnapshot(collection(db, "accidents"), (snap) => {
+    accidentCount = snap.size;
+    updateSidebarBadge(accidentCount + issueCount);
+});
+
+onSnapshot(collection(db, "vehicle_issues"), (snap) => {
+    issueCount = snap.size;
+    updateSidebarBadge(accidentCount + issueCount);
 });
 
 // Global Logout Handler

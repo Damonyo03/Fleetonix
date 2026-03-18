@@ -1,16 +1,16 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, updateDoc, deleteDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { initLayout, showModal, hideModal } from "./modules/ui.js";
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
 
 // Secondary app for creating users without logging out
-const secondaryApp = initializeApp(firebaseConfig, "Secondary");
+const secondaryApp = getApps().find(a => a.name === "Secondary") || initializeApp(firebaseConfig, "Secondary");
 const secondaryAuth = getAuth(secondaryApp);
 
 const driverGrid = document.getElementById('driverGrid');
@@ -157,6 +157,15 @@ if (addDriverBtn) {
 
                 // Clear secondary auth state
                 await signOut(secondaryAuth);
+
+                // Log Activity
+                await addDoc(collection(db, "activity"), {
+                    type: 'system',
+                    title: 'New Driver Created',
+                    message: `Admin created driver: ${name} (${email})`,
+                    timestamp: serverTimestamp()
+                });
+
                 alert("Driver created successfully!");
             } catch (error) {
                 console.error("Error creating driver account:", error);
@@ -214,12 +223,28 @@ window.editDriver = async (id) => {
                 email: email
             });
         } catch (e) { console.log("User doc might not exist yet for this driver ID"); }
+
+        // Log Activity
+        await addDoc(collection(db, "activity"), {
+            type: 'system',
+            title: 'Driver Updated',
+            message: `Admin updated info for driver: ${document.getElementById('modal_driver_name').value}`,
+            timestamp: serverTimestamp()
+        });
     });
 };
 
 window.deleteDriver = async (id) => {
     if (confirm("Are you sure you want to delete this driver?")) {
         await deleteDoc(doc(db, "drivers", id));
+        
+        // Log Activity
+        await addDoc(collection(db, "activity"), {
+            type: 'system',
+            title: 'Driver Deleted',
+            message: `Admin deleted driver (ID: ${id})`,
+            timestamp: serverTimestamp()
+        });
     }
 };
 

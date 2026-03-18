@@ -1,12 +1,12 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import {
-    getFirestore, collection, query, onSnapshot, doc, getDoc, orderBy
+    getFirestore, collection, query, onSnapshot, doc, getDoc, orderBy, addDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { initLayout, showModal } from "./modules/ui.js";
 
-const app = initializeApp(firebaseConfig);
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
 
@@ -111,6 +111,16 @@ window.viewUser = async (id) => {
             <div><strong>Address:</strong> ${u.address || '—'}</div>
         </div>
     `, async () => { /* read-only */ });
+
+    // Log the view action as a system event
+    try {
+        await addDoc(collection(db, "activity"), {
+            type: 'system',
+            title: 'User Profile Viewed',
+            message: `Admin viewed profile of: ${u.full_name || u.email}`,
+            timestamp: serverTimestamp()
+        });
+    } catch (e) { console.error("Error logging activity:", e); }
 
     // Switch save to a close button
     setTimeout(() => {

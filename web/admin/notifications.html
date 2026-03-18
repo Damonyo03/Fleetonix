@@ -88,7 +88,7 @@
                 <a href="registered-users.html" class="nav-item"><i class="fas fa-users"></i> Registered Users</a>
 
                 <div class="nav-section-label">NOTIFICATIONS</div>
-                <a href="notifications.html" class="nav-item active"><i class="fas fa-bell"></i> System Notifications <span class="notif-count">0</span></a>
+                <a href="notifications.html" class="nav-item active"><i class="fas fa-bell"></i> System Notification <span class="notif-count" style="display:none;"></span></a>
                 <a href="#" id="logoutBtn" class="nav-item logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
             </nav>
         </aside>
@@ -97,7 +97,7 @@
             <header class="admin-header">
                 <div class="header-left">
                     <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
-                    <h2>System Notifications</h2>
+                    <h2>System Notification</h2>
                 </div>
                 <div class="header-right">
                     <a href="notifications.html" class="notification-icon">
@@ -113,7 +113,7 @@
 
             <div class="admin-content">
                 <div class="page-header">
-                    <h1 class="page-title">System Notifications & Logs</h1>
+                    <h1 class="page-title">System Notification & Logs</h1>
                     <button onclick="markAllRead()" class="btn btn-secondary" style="display:flex; align-items:center; gap:6px; font-size:0.9em;">
                         <i class="fas fa-check-double"></i> Mark All as Read
                     </button>
@@ -121,18 +121,17 @@
 
                 <!-- Summary -->
                 <div class="summary-row">
-                    <div class="summary-box"><div class="val" id="totalCount">0</div><div class="lbl">Total</div></div>
-                    <div class="summary-box"><div class="val" id="unreadCount" style="color:var(--accent-blue);">0</div><div class="lbl">Unread</div></div>
-                    <div class="summary-box"><div class="val" id="warningCount" style="color:var(--accent-orange);">0</div><div class="lbl">Warnings</div></div>
-                    <div class="summary-box"><div class="val" id="bookingCount" style="color:#8b5cf6;">0</div><div class="lbl">Bookings</div></div>
+                    <div class="summary-box"><div class="val" id="totalCount">0</div><div class="lbl">Total Events</div></div>
+                    <div class="summary-box"><div class="val" id="tripCount" style="color:var(--accent-blue);">0</div><div class="lbl">Trips</div></div>
+                    <div class="summary-box"><div class="val" id="issueCount" style="color:var(--accent-orange);">0</div><div class="lbl">Vehicle Issues</div></div>
+                    <div class="summary-box"><div class="val" id="accidentCount" style="color:#ef4444;">0</div><div class="lbl">Accidents</div></div>
                 </div>
 
                 <!-- Filter Tabs -->
                 <div class="filter-tabs">
                     <button class="filter-tab active" onclick="filterBy('all', this)">All</button>
-                    <button class="filter-tab" onclick="filterBy('booking', this)">📋 Bookings</button>
                     <button class="filter-tab" onclick="filterBy('trip', this)">🚗 Trips</button>
-                    <button class="filter-tab" onclick="filterBy('warning', this)">⚠️ Warnings</button>
+                    <button class="filter-tab" onclick="filterBy('vehicle_issue', this)">🛠️ Vehicle Issues</button>
                     <button class="filter-tab" onclick="filterBy('accident', this)">🚨 Accidents</button>
                     <button class="filter-tab" onclick="filterBy('system', this)">⚙️ System</button>
                 </div>
