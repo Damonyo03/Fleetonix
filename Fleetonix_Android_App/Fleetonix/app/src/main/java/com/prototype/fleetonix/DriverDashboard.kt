@@ -230,22 +230,22 @@ fun DriverDashboard(
     }
 
     val nextSchedule = feed?.schedules?.firstOrNull()
-    val tripPhase = nextSchedule?.tripPhase ?: "pending"
-    val returnRequired = nextSchedule?.returnToPickup == true
+    val tripPhase = nextSchedule?.trip_phase ?: "pending"
+    val returnRequired = nextSchedule?.return_to_pickup == true
 
     // Determine which time to show in "Next Pickup" stat
     val nextPickupTime = when {
         returnRequired && (tripPhase == "return_pickup" || tripPhase == "ready_to_complete") -> {
-            nextSchedule?.returnPickupTime?.let { formatScheduleTime(it) } ?: "--"
+            nextSchedule?.return_pickup_time?.let { formatScheduleTime(it) } ?: "--"
         }
 
         else -> {
-            nextSchedule?.scheduledTime?.let { formatScheduleTime(it) } ?: "--"
+            nextSchedule?.scheduled_time?.let { formatScheduleTime(it) } ?: "--"
         }
     }
     val stopsCount = feed?.schedules?.size ?: 0
-    val scheduledDateTime = remember(nextSchedule?.scheduledDate, nextSchedule?.scheduledTime) {
-        parseScheduleDateTime(nextSchedule?.scheduledDate, nextSchedule?.scheduledTime)
+    val scheduledDateTime = remember(nextSchedule?.scheduled_date, nextSchedule?.scheduled_time) {
+        parseScheduleDateTime(nextSchedule?.scheduled_date, nextSchedule?.scheduled_time)
     }
     val isStartWindowOpen = scheduledDateTime?.let { target ->
         val diffMinutes = Duration.between(LocalDateTime.now(), target).toMinutes()
@@ -282,7 +282,7 @@ fun DriverDashboard(
     var tripActionError by remember { mutableStateOf<String?>(null) }
     var tripActionSuccess by remember { mutableStateOf<String?>(null) }
 
-    val returnToPickup = nextSchedule?.returnToPickup == true
+    val returnToPickup = nextSchedule?.return_to_pickup == true
 
     // Button visibility logic
     val isTripCompleted = tripPhase == "completed"
@@ -358,8 +358,8 @@ fun DriverDashboard(
 
         val origin = "$currentLatitude,$currentLongitude"
         val destination = when (tripPhase) {
-            "pending", "assigned", "pickup", "return_pickup" -> if (schedule.pickup?.latitude != null) "${schedule.pickup.latitude},${schedule.pickup.longitude}" else null
-            "dropoff" -> if (schedule.dropoff?.latitude != null) "${schedule.dropoff.latitude},${schedule.dropoff.longitude}" else null
+            "pending", "assigned", "pickup", "return_pickup" -> if (schedule.pickup_location?.latitude != null) "${schedule.pickup_location.latitude},${schedule.pickup_location.longitude}" else null
+            "dropoff" -> if (schedule.dropoff_location?.latitude != null) "${schedule.dropoff_location.latitude},${schedule.dropoff_location.longitude}" else null
             else -> null
         }
 
@@ -392,12 +392,12 @@ fun DriverDashboard(
     }
 
     // Update currentScheduleId when feed changes
-    LaunchedEffect(feed?.schedules?.firstOrNull()?.scheduleId, feed?.schedules?.firstOrNull()?.tripPhase) {
+    LaunchedEffect(feed?.schedules?.firstOrNull()?.scheduleId, feed?.schedules?.firstOrNull()?.trip_phase) {
         val activeSchedule = feed?.schedules?.firstOrNull()
         if (activeSchedule != null) {
             // Keep schedule_id active for all trip phases (pending, pickup, dropoff, return_pickup, ready_to_complete)
             // Only mark as completed when trip_phase is "completed"
-            if (activeSchedule.tripPhase != "completed") {
+            if (activeSchedule.trip_phase != "completed") {
                 currentScheduleId = activeSchedule.scheduleId
                 Log.d("LocationTracking", "Schedule ID updated: $currentScheduleId (phase: ${activeSchedule.tripPhase})")
             } else {
@@ -538,13 +538,11 @@ fun DriverDashboard(
     
     LaunchedEffect(auth.currentUser?.email) {
         try {
-            val driverSnap = db.collection("drivers")
-                .whereEqualTo("driver_email", auth.currentUser?.email)
-                .get()
-                .await()
-            driverDocRef = driverSnap.documents.firstOrNull()?.reference
+            // We use the driver_locations collection for frequent GPS updates
+            driverDocRef = db.collection("driver_locations")
+                .document(auth.currentUser?.email ?: "unknown_driver")
         } catch (e: Exception) {
-            Log.e("LocationTracking", "Error finding driver doc", e)
+            Log.e("LocationTracking", "Error setting driver_locations ref", e)
         }
     }
 

@@ -1,3 +1,0 @@
-@echo off
-echo Starting Fleetonix Web Server (Localhost)...
-firebase serve --only hosting

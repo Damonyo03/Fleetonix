@@ -102,28 +102,42 @@ function initMap() {
     
     driversMap = new google.maps.Map(mapElement, mapOptions);
 
-    // Listen to drivers collection for real-time location
+    // Listen to drivers for names and status
     onSnapshot(collection(db, "drivers"), (snapshot) => {
-        snapshot.docChanges().forEach((change) => {
-            const driver = change.doc.data();
-            const driverId = change.doc.id;
-            driver.id = driverId; // Include ID for focus function
+        snapshot.docs.forEach(docSnap => {
+            const data = docSnap.data();
+            const id = docSnap.id;
+            if (!allDriversData[id]) allDriversData[id] = {};
+            // Merge metadata
+            Object.assign(allDriversData[id], {
+                id: id,
+                driver_name: data.driver_name,
+                current_status: data.current_status,
+                vehicle_assigned: data.vehicle_assigned
+            });
+        });
+        updateOnlineDriversList();
+    });
 
+    // Listen to driver_locations for real-time position
+    onSnapshot(collection(db, "driver_locations"), (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+            const driverLoc = change.doc.data();
+            const driverId = change.doc.id;
+            
             if (change.type === "removed") {
                 if (driverMarkers[driverId]) {
                     driverMarkers[driverId].setMap(null);
                     delete driverMarkers[driverId];
                 }
-                if (driverPolylines[driverId]) {
-                    driverPolylines[driverId].setMap(null);
-                    delete driverPolylines[driverId];
-                }
-                delete allDriversData[driverId]; // Remove from allDriversData
                 return;
             }
 
-            allDriversData[driverId] = driver; // Update allDriversData
+            // Sync location to allDriversData
+            if (!allDriversData[driverId]) allDriversData[driverId] = { id: driverId };
+            Object.assign(allDriversData[driverId], driverLoc);
 
+            const driver = allDriversData[driverId];
             if (driver.current_latitude && driver.current_longitude) {
                 const position = { lat: driver.current_latitude, lng: driver.current_longitude };
                 const markerIcon = getMarkerIcon(driver.current_status || 'available');

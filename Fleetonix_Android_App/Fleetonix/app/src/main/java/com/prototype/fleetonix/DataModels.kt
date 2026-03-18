@@ -52,39 +52,35 @@ data class DriverFeedData(
 data class DriverSchedule(
     val docId: String? = null,
     @SerializedName("schedule_id") val scheduleId: Int? = null,
-    @SerializedName("booking_id") val bookingId: Int? = null,
-    @SerializedName("schedule_status") val scheduleStatus: String? = null,
-    @SerializedName("trip_phase") val tripPhase: String? = null,
-    @SerializedName("scheduled_date") val scheduledDate: String? = null,
-    @SerializedName("scheduled_time") val scheduledTime: String? = null,
-    @SerializedName("started_at") val startedAt: String? = null,
-    @SerializedName("completed_at") val completedAt: String? = null,
-    @SerializedName("time_of_departure") val timeOfDeparture: String? = null,
-    @SerializedName("time_of_arrival") val timeOfArrival: String? = null,
-    @SerializedName("total_km_travelled") val totalKmTravelled: Double? = null,
-    @SerializedName("estimated_arrival_time") val estimatedArrivalTime: String? = null,
-    @SerializedName("actual_arrival_time") val actualArrivalTime: String? = null,
-    val pickup: DriverScheduleLocation? = null,
-    val dropoff: DriverScheduleLocation? = null,
-    @SerializedName("return_to_pickup") val returnToPickup: Boolean? = null,
-    @SerializedName("return_pickup_time") val returnPickupTime: String? = null,
-    val passengers: Int? = null,
-    @SerializedName("special_instructions") val specialInstructions: String? = null,
-    @SerializedName("booking_status") val bookingStatus: String? = null,
+    @SerializedName("trip_id") val tripId: String? = null,
+    @SerializedName("scheduled_date") val scheduled_date: String? = null,
+    @SerializedName("scheduled_time") val scheduled_time: String? = null,
+    @SerializedName("trip_phase") val trip_phase: String? = null, // "pending", "pickup", "dropoff", "return_pickup", "ready_to_complete", "completed"
+    val status: String? = null, // "pending", "started", "in_progress", "completed", "cancelled"
+    @SerializedName("pickup_location") val pickup_location: DriverScheduleLocation? = null,
+    @SerializedName("dropoff_location") val dropoff_location: DriverScheduleLocation? = null,
+    @SerializedName("return_to_pickup") val return_to_pickup: Boolean? = null,
+    @SerializedName("return_pickup_time") val return_pickup_time: String? = null,
+    @SerializedName("total_km_travelled") val total_km_travelled: Double? = null,
+    @SerializedName("completed_at") val completed_at: Any? = null,
+    @SerializedName("client_phone") val client_phone: String? = null,
+    @SerializedName("client_name") val client_name: String? = null,
+    @SerializedName("client_email") val client_email: String? = null,
     val client: DriverClientInfo? = null
 )
 
 data class DriverScheduleLocation(
-    val address: String? = null,
     val latitude: Double? = null,
-    val longitude: Double? = null
+    val longitude: Double? = null,
+    val text: String? = null,
+    val address: String? = null
 )
 
 data class DriverClientInfo(
-    val company: String? = null,
     val name: String? = null,
     val phone: String? = null,
-    val email: String? = null
+    val email: String? = null,
+    val company: String? = null
 )
 
 // Location Models

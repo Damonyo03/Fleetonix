@@ -179,7 +179,7 @@ class LocationService : Service() {
      */
     private fun updateLocationInFirestore(driverDocId: String, location: android.location.Location) {
         val firestore = FirebaseFirestore.getInstance()
-        val driverRef = firestore.collection("drivers").document(driverDocId)
+        val driverRef = firestore.collection("driver_locations").document(driverDocId)
 
         val locationData = hashMapOf(
             "current_latitude" to location.latitude,

@@ -37,63 +37,79 @@ function loadTripStatus() {
 
         const data = docSnap.data();
         updateUI(data);
-        updateMap(data);
         updateTimeline(data);
+        
+        // Ensure static markers are set (pickup/dropoff)
+        updateMap(data);
+
+        // Live Driver Tracking from driver_locations
+        if (data.driver_email) {
+            onSnapshot(doc(db, "driver_locations", data.driver_email), (locSnap) => {
+                if (locSnap.exists()) {
+                    const locData = locSnap.data();
+                    if (locData.current_latitude && locData.current_longitude) {
+                        const driverPos = { lat: locData.current_latitude, lng: locData.current_longitude };
+                        updateDriverMarker(driverPos);
+                    }
+                }
+            });
+        }
     });
 }
 
 // ... (updateUI omitted)
 
 function updateMap(data) {
-    const pickup = { lat: data.pickup_latitude, lng: data.pickup_longitude };
-    const dropoff = { lat: data.dropoff_latitude, lng: data.dropoff_longitude };
+    // Note: Schema uses pickup_location and dropoff_location as objects
+    const pickup = data.pickup_location || {};
+    const dropoff = data.dropoff_location || {};
     
     // Pickup Marker
-    if (!pickupMarker && data.pickup_latitude) {
+    if (!pickupMarker && pickup.latitude) {
         pickupMarker = new google.maps.Marker({
-            position: pickup,
+            position: { lat: pickup.latitude, lng: pickup.longitude },
             map: map,
             title: 'Pickup Location',
             icon: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png'
         });
-        const info = new google.maps.InfoWindow({ content: 'Pickup: ' + data.pickup_location });
+        const info = new google.maps.InfoWindow({ content: 'Pickup: ' + (pickup.text || 'Location A') });
         pickupMarker.addListener('click', () => info.open(map, pickupMarker));
     }
 
     // Dropoff Marker
-    if (!dropoffMarker && data.dropoff_latitude) {
+    if (!dropoffMarker && dropoff.latitude) {
         dropoffMarker = new google.maps.Marker({
-            position: dropoff,
+            position: { lat: dropoff.latitude, lng: dropoff.longitude },
             map: map,
             title: 'Destination',
             icon: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png'
         });
-        const info = new google.maps.InfoWindow({ content: 'Destination: ' + data.dropoff_location });
+        const info = new google.maps.InfoWindow({ content: 'Destination: ' + (dropoff.text || 'Location B') });
         dropoffMarker.addListener('click', () => info.open(map, dropoffMarker));
     }
 
-    // Driver Marker
-    if (data.driver_lat && data.driver_lng) {
-        const driverPos = { lat: data.driver_lat, lng: data.driver_lng };
-        if (!driverMarker) {
-            driverMarker = new google.maps.Marker({
-                position: driverPos,
-                map: map,
-                title: 'Driver',
-                icon: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
-                zIndex: 1000
-            });
-            const info = new google.maps.InfoWindow({ content: 'Driver is here' });
-            driverMarker.addListener('click', () => info.open(map, driverMarker));
-        } else {
-            driverMarker.setPosition(driverPos);
-        }
+    if (isFirstLoad && pickupMarker && dropoffMarker) {
+        fitMapToMarkers();
+        isFirstLoad = false;
+    }
+}
 
-        if (isFirstLoad) {
-            fitMapToMarkers();
-            isFirstLoad = false;
-        }
-    } else if (isFirstLoad && pickupMarker && dropoffMarker) {
+function updateDriverMarker(driverPos) {
+    if (!driverMarker) {
+        driverMarker = new google.maps.Marker({
+            position: driverPos,
+            map: map,
+            title: 'Driver',
+            icon: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+            zIndex: 1000
+        });
+        const info = new google.maps.InfoWindow({ content: 'Driver is here' });
+        driverMarker.addListener('click', () => info.open(map, driverMarker));
+    } else {
+        driverMarker.setPosition(driverPos);
+    }
+
+    if (isFirstLoad) {
         fitMapToMarkers();
         isFirstLoad = false;
     }

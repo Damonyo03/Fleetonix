@@ -27,6 +27,16 @@ admin.initializeApp();
 setGlobalOptions({ maxInstances: 10 });
 
 const axios = require("axios");
+const nodemailer = require("nodemailer");
+
+// SMTP Configuration (User to update with real credentials)
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: "fleetonix.system@gmail.com",
+    pass: "YOUR_APP_PASSWORD",
+  },
+});
 
 // LocationIQ API Token (from legacy PHP script)
 const LOCATIONIQ_TOKEN = "pk.0b57c3a80ea3c7893de95270b2a3ad50";
@@ -137,19 +147,39 @@ exports.sendPasswordResetOTP = onRequest(async (req, res) => {
     const userRecord = await admin.auth().getUserByEmail(email);
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     
-    await admin.firestore().collection("otp_codes").document(userRecord.uid).set({
+    // Store OTP with expiration
+    await admin.firestore().collection("otps").doc(userRecord.uid).set({
       email: email,
       otp: otp,
-      type: "password_reset",
       created_at: admin.firestore.FieldValue.serverTimestamp(),
       expires_at: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 5 * 60 * 1000))
     });
 
-    logger.info(`Generated password reset OTP for ${email}: ${otp}`);
+    // Send Email
+    const mailOptions = {
+      from: "Fleetonix System <fleetonix.system@gmail.com>",
+      to: email,
+      subject: "Fleetonix Password Reset OTP",
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+          <h2>Password Reset Request</h2>
+          <p>You requested to reset your Fleetonix password. Use the 6-digit code below to proceed:</p>
+          <div style="background: #f4f4f4; padding: 15px; font-size: 24px; font-weight: bold; text-align: center; border-radius: 8px; letter-spacing: 5px;">
+            ${otp}
+          </div>
+          <p>This code will expire in 5 minutes.</p>
+          <p>If you didn't request this, please ignore this email.</p>
+        </div>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    logger.info(`Generated password reset OTP for ${email}`);
     res.json({ success: true, message: "OTP sent successfully", data: { userId: userRecord.uid, email: email } });
   } catch (error) {
     logger.error("Error sending reset OTP", error);
-    // Security: don't reveal if user exists
+    // Security: don't reveal if user exists unless explicitly needed
     res.json({ success: true, message: "If an account exists, an OTP has been sent." });
   }
 });
@@ -173,34 +203,54 @@ exports.resetPasswordWithOTP = onRequest(async (req, res) => {
   }
 
   try {
-    const otpDoc = await admin.firestore().collection("otp_codes").document(userId).get();
+    const otpDoc = await admin.firestore().collection("otps").doc(userId).get();
     if (!otpDoc.exists) {
-      res.status(404).json({ success: false, message: "OTP not found" });
+      res.status(404).json({ success: false, message: "OTP not found or already used." });
       return;
     }
 
     const data = otpDoc.data();
-    if (data.otp !== otp || data.type !== "password_reset") {
-      res.status(401).json({ success: false, message: "Invalid OTP" });
+    if (data.otp !== otp) {
+      res.status(401).json({ success: false, message: "Invalid OTP code." });
       return;
     }
 
     if (data.expires_at.toDate() < new Date()) {
-      res.status(401).json({ success: false, message: "OTP expired" });
+      res.status(401).json({ success: false, message: "OTP has expired." });
       return;
     }
 
-    // Update password
+    // Update password via Auth
     await admin.auth().updateUser(userId, {
       password: newPassword
     });
 
-    // Delete OTP
-    await admin.firestore().collection("otp_codes").document(userId).delete();
+    // Delete OTP document (safety)
+    await admin.firestore().collection("otps").doc(userId).delete();
 
-    res.json({ success: true, message: "Password updated successfully" });
+    res.json({ success: true, message: "Password updated successfully! Please login with your new password." });
   } catch (error) {
     logger.error("Error resetting password", error);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: "Failed to reset password: " + error.message });
   }
+});
+
+/**
+ * Verify Verification Code (General use)
+ */
+exports.verifyOTP = onRequest(async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  const { userId, otpCode } = req.body;
+  if (!userId || !otpCode) {
+    res.json({ success: false, message: "Missing fields" });
+    return;
+  }
+  try {
+    const doc = await admin.firestore().collection("otps").doc(userId).get();
+    if (doc.exists && doc.data().otp === otpCode) {
+      res.json({ success: true, message: "OTP verified" });
+    } else {
+      res.json({ success: false, message: "Invalid OTP" });
+    }
+  } catch (e) { res.json({ success: false, message: e.message }); }
 });
