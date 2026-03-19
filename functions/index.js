@@ -274,3 +274,73 @@ exports.verifyOTP = onRequest(async (req, res) => {
     }
   } catch (e) { res.json({ success: false, message: e.message }); }
 });
+
+/**
+ * Admin Create User
+ * Safely creates a new Auth user and Firestore document without logging out the admin.
+ */
+exports.adminCreateUser = onRequest(async (req, res) => {
+  // CORS configuration
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+
+  const { email, password, fullName, role, companyName } = req.body;
+
+  if (!email || !password || !fullName || !role) {
+    res.status(400).json({ success: false, message: "Missing required fields: email, password, fullName, and role are required." });
+    return;
+  }
+
+  try {
+    // Check if user already exists
+    try {
+      await admin.auth().getUserByEmail(email);
+      res.status(400).json({ success: false, message: "User with this email already exists." });
+      return;
+    } catch (authError) {
+      // User doesn't exist, proceed
+    }
+
+    // 1. Create Auth User
+    const userRecord = await admin.auth().createUser({
+      email: email,
+      password: password,
+      displayName: fullName,
+    });
+
+    // 2. Create Firestore Document in 'users' collection
+    const userData = {
+      full_name: fullName,
+      email: email.toLowerCase().trim(),
+      role: role,
+      company_name: companyName || "",
+      created_at: admin.firestore.FieldValue.serverTimestamp(),
+      user_type: role, // Compatibility for dual-schema
+    };
+
+    await admin.firestore().collection("users").doc(userRecord.uid).set(userData);
+
+    // 3. Special handling for drivers/clients collections
+    if (role === 'driver') {
+      await admin.firestore().collection("drivers").doc(email.toLowerCase().trim()).set({
+        driver_name: fullName,
+        driver_email: email.toLowerCase().trim(),
+        current_status: "offline",
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+
+    logger.info(`Admin created new ${role}: ${email}`);
+    res.json({ success: true, message: `New ${role} created successfully.`, uid: userRecord.uid });
+  } catch (error) {
+    logger.error("Error creating user", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});

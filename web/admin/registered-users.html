@@ -54,16 +54,25 @@
             </header>
 
             <div class="admin-content">
-                <div class="page-header">
-                    <h1 class="page-title">All Registered Users</h1>
-                    <div style="display:flex; gap:10px; align-items:center;">
-                        <select id="roleFilter" class="form-input" style="padding:8px 12px; border-radius:8px; font-size:0.9em;">
+                <div class="page-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:20px;">
+                    <div>
+                        <h1 class="page-title">All Registered Users</h1>
+                        <p class="page-subtitle">Manage clients, drivers, and administrators.</p>
+                    </div>
+                    <button class="btn btn-primary" id="createUserBtn" style="display:flex; align-items:center; gap:8px;">
+                        <i class="fas fa-plus"></i> Create New User
+                    </button>
+                </div>
+
+                <div class="table-header" style="background:var(--bg-card); padding:15px; border-radius:12px; margin-bottom:20px; border:1px solid var(--border-color); display:flex; gap:15px; align-items:center; flex-wrap:wrap;">
+                    <div style="display:flex; gap:10px; align-items:center; flex:1; min-width:300px;">
+                        <select id="roleFilter" class="form-input" style="max-width:150px;">
                             <option value="all">All Roles</option>
                             <option value="client">Clients</option>
                             <option value="admin">Admins</option>
                             <option value="driver">Drivers</option>
                         </select>
-                        <input type="text" id="searchInput" class="form-input" placeholder="&#128269; Search by name or email..." style="padding:8px 14px; border-radius:8px; font-size:0.9em; min-width:240px;">
+                        <input type="text" id="searchInput" class="form-input" placeholder="&#128269; Search by name or email...">
                     </div>
                 </div>
 

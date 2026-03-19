@@ -27,6 +27,9 @@ onAuthStateChanged(auth, async (user) => {
     // Filter + Search listeners
     document.getElementById('roleFilter')?.addEventListener('change', applyFilters);
     document.getElementById('searchInput')?.addEventListener('input', applyFilters);
+
+    // Create User Button
+    document.getElementById('createUserBtn')?.addEventListener('click', showCreateUserModal);
 });
 
 function applyFilters() {
@@ -128,3 +131,93 @@ window.viewUser = async (id) => {
         if (btn) { btn.textContent = 'Close'; btn.classList.replace('btn-primary', 'btn-secondary'); }
     }, 50);
 };
+
+// --- Create New User Modal ---
+async function showCreateUserModal() {
+    const roleOptions = `
+        <option value="client">Client</option>
+        <option value="driver">Driver</option>
+        <option value="admin">Administrator</option>
+    `;
+
+    const content = `
+        <div class="form-group">
+            <label>Full Name</label>
+            <input type="text" id="modal_full_name" class="form-input" placeholder="e.g. Juan De La Cruz" required>
+        </div>
+        <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" id="modal_email" class="form-input" placeholder="email@example.com" required>
+        </div>
+        <div class="form-group">
+            <label>Password (Temporary)</label>
+            <input type="password" id="modal_password" class="form-input" placeholder="Min. 8 characters" required>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>User Role</label>
+                <select id="modal_role" class="form-input" required>
+                    ${roleOptions}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Company/Organization</label>
+                <input type="text" id="modal_company" class="form-input" placeholder="Optional">
+            </div>
+        </div>
+        <div style="background: rgba(59, 130, 246, 0.05); padding: 12px; border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.1); margin-top: 10px;">
+            <p style="margin:0; font-size:0.85em; color:var(--text-secondary); line-height:1.4;">
+                <i class="fas fa-info-circle" style="color:var(--accent-blue);"></i> 
+                This will create a new account in Firebase Auth and a corresponding profile in Firestore.
+            </p>
+        </div>
+    `;
+
+    showModal('create-user-modal', 'Create New User', content, async () => {
+        const fullName = document.getElementById('modal_full_name').value.trim();
+        const email = document.getElementById('modal_email').value.trim();
+        const password = document.getElementById('modal_password').value;
+        const role = document.getElementById('modal_role').value;
+        const companyName = document.getElementById('modal_company').value.trim();
+
+        if (!fullName || !email || !password || !role) {
+            throw new Error("Please fill in all required fields.");
+        }
+
+        if (password.length < 8) {
+            throw new Error("Password must be at least 8 characters long.");
+        }
+
+        // Determine Function URL (Emulator vs Production)
+        const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+        const functionUrl = isLocal 
+            ? "http://localhost:5001/appfleetonix/us-central1/adminCreateUser"
+            : "https://us-central1-appfleetonix.cloudfunctions.net/adminCreateUser";
+
+        try {
+            const response = await fetch(functionUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, password, fullName, role, companyName })
+            });
+
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.message || "Failed to create user");
+            }
+
+            // Log activity
+            await addDoc(collection(db, "activity"), {
+                type: 'system',
+                title: 'New User Registered',
+                message: `Admin registered a new ${role}: ${fullName} (${email})`,
+                timestamp: serverTimestamp()
+            });
+
+            alert(`User account for ${fullName} created successfully!`);
+        } catch (err) {
+            console.error("User creation error:", err);
+            throw new Error("Network error or server error: " + err.message);
+        }
+    });
+}
