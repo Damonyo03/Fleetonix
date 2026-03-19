@@ -127,15 +127,26 @@ const updateSidebarBadge = (count) => {
 let accidentCount = 0;
 let issueCount = 0;
 
-onSnapshot(collection(db, "accidents"), (snap) => {
+onSnapshot(query(collection(db, "accidents"), where("status", "!=", "acknowledged")), (snap) => {
     accidentCount = snap.size;
     updateSidebarBadge(accidentCount + issueCount);
+    updateHeaderBadge(accidentCount + issueCount);
 });
 
-onSnapshot(collection(db, "vehicle_issues"), (snap) => {
+onSnapshot(query(collection(db, "vehicle_issues"), where("status", "!=", "acknowledged")), (snap) => {
     issueCount = snap.size;
     updateSidebarBadge(accidentCount + issueCount);
+    updateHeaderBadge(accidentCount + issueCount);
 });
+
+// Update the header bell icon badge as well
+const updateHeaderBadge = (count) => {
+    const headerBadge = document.querySelector('.notification-badge');
+    if (headerBadge) {
+        headerBadge.innerText = count > 0 ? count : '0';
+        headerBadge.style.display = count > 0 ? 'flex' : 'none';
+    }
+};
 
 // Global Logout Handler
 document.addEventListener('click', (e) => {

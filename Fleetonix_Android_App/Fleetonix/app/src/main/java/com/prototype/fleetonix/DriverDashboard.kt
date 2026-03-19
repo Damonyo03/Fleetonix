@@ -533,6 +533,52 @@ fun DriverDashboard(
         }
     }
 
+    // Acknowledgment Listener
+    var latestAckMessage by remember { mutableStateOf<String?>(null) }
+    DisposableEffect(auth.currentUser?.email) {
+        val email = auth.currentUser?.email
+        if (email == null) return@DisposableEffect onDispose {}
+        
+        // Listen to accidents
+        val accidentSub = db.collection("accidents")
+            .whereEqualTo("driver_email", email)
+            .whereEqualTo("status", "acknowledged")
+            .orderBy("acknowledged_at", Query.Direction.DESCENDING)
+            .limit(1)
+            .addSnapshotListener { snapshot, _ ->
+                val doc = snapshot?.documents?.firstOrNull()
+                if (doc != null) {
+                    val msg = "Admin acknowledged your accident report."
+                    if (latestAckMessage != msg) {
+                        latestAckMessage = msg
+                        tripActionSuccess = msg
+                    }
+                }
+            }
+            
+        // Listen to vehicle issues
+        val issueSub = db.collection("vehicle_issues")
+            .whereEqualTo("driver_email", email)
+            .whereEqualTo("status", "acknowledged")
+            .orderBy("acknowledged_at", Query.Direction.DESCENDING)
+            .limit(1)
+            .addSnapshotListener { snapshot, _ ->
+                val doc = snapshot?.documents?.firstOrNull()
+                if (doc != null) {
+                    val msg = "Admin acknowledged your vehicle issue report."
+                    if (latestAckMessage != msg) {
+                        latestAckMessage = msg
+                        tripActionSuccess = msg
+                    }
+                }
+            }
+
+        onDispose {
+            accidentSub.remove()
+            issueSub.remove()
+        }
+    }
+
     // Start location tracking
     var driverDocRef by remember { mutableStateOf<com.google.firebase.firestore.DocumentReference?>(null) }
     

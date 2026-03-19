@@ -13,6 +13,8 @@ const db = getFirestore(app);
 
 let allNotifs = [];
 let currentFilter = 'all';
+const seenNotifs = new Set();
+let isInitialLoad = true;
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) { window.location.href = '../login.html'; return; }
@@ -162,6 +164,21 @@ function mergeAndRender(source, items) {
         const bT = b.created_at?.toMillis?.() || b.created_at?.seconds * 1000 || 0;
         return bT - aT;
     });
+
+    // Mark which ones are "newly" arrived unread alerts
+    allNotifs.forEach(n => {
+        const isAlert = n.type === 'accident' || n.type === 'vehicle_issue';
+        const isUnread = n.status !== 'acknowledged' && !n.is_read;
+        
+        if (isAlert && isUnread && !seenNotifs.has(n.id)) {
+            if (!isInitialLoad) {
+                n.isNew = true; // Flag for animation
+            }
+            seenNotifs.add(n.id);
+        }
+    });
+
+    isInitialLoad = false;
     updateStats();
     renderFiltered();
 }
@@ -225,11 +242,12 @@ function renderNotifications(items) {
         
         // Use a persistent 'read' state from Firestore if available, else default to false for alerts
         const isRead = n.status === 'acknowledged' || n.is_read; 
-        const cardCls = isRead ? `notif-card ${cls}` : `notif-card unread ${cls}`;
+        const isNew = n.isNew ? 'new-alert' : '';
+        const cardCls = `notif-card ${cls} ${isRead ? '' : 'unread'} ${isNew}`;
         const timeStr = formatTime(n.created_at);
 
         return `
-            <div class="notif-card ${cardCls}" id="notif-${n.id}">
+            <div class="${cardCls}" id="notif-${n.id}">
                 <div class="notif-icon ${cls}"><i class="fas ${icon}"></i></div>
                 <div class="notif-body">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start;">

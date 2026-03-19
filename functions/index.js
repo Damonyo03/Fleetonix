@@ -11,32 +11,59 @@ const {setGlobalOptions} = require("firebase-functions");
 const {onRequest} = require("firebase-functions/https");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
+const { Resend } = require("resend");
 
 admin.initializeApp();
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
+// Initialize Resend
+const resend = new Resend("re_MQPM73xJ_6TuEnNX5Sow8Wudfr1zpRpN6");
+
+/**
+ * Premium HTML Template for OTP
+ */
+function getOTPHtmlTemplate(otp, email) {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; background-color: #0a0e27; color: #ffffff; }
+        .container { max-width: 600px; margin: 0 auto; padding: 40px 20px; background-color: #1a1f3a; border-radius: 12px; border: 1px solid #2d3447; }
+        .logo { display: block; width: 120px; margin: 0 auto 30px; border-radius: 12px; }
+        .header { text-align: center; color: #ffffff; font-size: 24px; font-weight: 700; margin-bottom: 20px; letter-spacing: 0.5px; }
+        .content { text-align: center; color: #b0b8c8; font-size: 16px; line-height: 1.6; margin-bottom: 30px; }
+        .otp-container { background: #252b42; padding: 25px; border-radius: 12px; font-size: 32px; font-weight: 800; color: #00c9a7; letter-spacing: 12px; text-align: center; border: 1px solid #1e2338; box-shadow: 0 4px 15px rgba(0, 201, 167, 0.2); }
+        .footer { text-align: center; margin-top: 40px; color: #6b7280; font-size: 13px; }
+        .accent { color: #00d4ff; font-weight: 600; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <img src="https://appfleetonix.web.app/img/logo.jpg" alt="Fleetonix" class="logo">
+        <div class="header">Password Reset Request</div>
+        <div class="content">
+          Hello <span class="accent">${email}</span>,<br><br>
+          We received a request to reset your password. Use the verification code below to proceed. 
+          <span style="color: #ff6b6b;">This code will expire in 5 minutes.</span>
+        </div>
+        <div class="otp-container">${otp}</div>
+        <div class="content" style="margin-top: 30px;">
+          If you didn't request this, you can safely ignore this email.
+        </div>
+        <div class="footer">
+          &copy; ${new Date().getFullYear()} Fleetonix Fleet Management. All rights reserved.<br>
+          This is an automated system message, please do not reply.
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
 setGlobalOptions({ maxInstances: 10 });
 
 const axios = require("axios");
-const nodemailer = require("nodemailer");
-
-// SMTP Configuration (User to update with real credentials)
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: "fleetonix.system@gmail.com",
-    pass: "YOUR_APP_PASSWORD",
-  },
-});
 
 // LocationIQ API Token (from legacy PHP script)
 const LOCATIONIQ_TOKEN = "pk.0b57c3a80ea3c7893de95270b2a3ad50";
@@ -155,25 +182,18 @@ exports.sendPasswordResetOTP = onRequest(async (req, res) => {
       expires_at: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 5 * 60 * 1000))
     });
 
-    // Send Email
-    const mailOptions = {
-      from: "Fleetonix System <fleetonix.system@gmail.com>",
-      to: email,
-      subject: "Fleetonix Password Reset OTP",
-      html: `
-        <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-          <h2>Password Reset Request</h2>
-          <p>You requested to reset your Fleetonix password. Use the 6-digit code below to proceed:</p>
-          <div style="background: #f4f4f4; padding: 15px; font-size: 24px; font-weight: bold; text-align: center; border-radius: 8px; letter-spacing: 5px;">
-            ${otp}
-          </div>
-          <p>This code will expire in 5 minutes.</p>
-          <p>If you didn't request this, please ignore this email.</p>
-        </div>
-      `,
-    };
+    // Send Email via Resend
+    const { data, error } = await resend.emails.send({
+      from: "Fleetonix System <noreply@fleetonixapp.com>", 
+      to: [email],
+      subject: "Verification Code: " + otp,
+      html: getOTPHtmlTemplate(otp, email),
+    });
 
-    await transporter.sendMail(mailOptions);
+    if (error) {
+      logger.error("Resend Error:", error);
+      throw new Error(error.message);
+    }
 
     logger.info(`Generated password reset OTP for ${email}`);
     res.json({ success: true, message: "OTP sent successfully", data: { userId: userRecord.uid, email: email } });

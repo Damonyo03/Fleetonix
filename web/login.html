@@ -3,6 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- SEO & Metadata -->
+    <meta name="description" content="Log in to Fleetonix Fleet Management System.">
+    <meta property="og:title" content="Fleetonix - Login">
+    <meta property="og:image" content="https://appfleetonix.web.app/img/logo.jpg">
+    <meta name="theme-color" content="#0a0e27">
+
     <title>Fleetonix - Login</title>
     <link rel="icon" type="image/jpeg" href="img/logo.jpg">
     <link rel="stylesheet" href="assets/css/style.css">
@@ -50,8 +56,8 @@
     <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, signInWithEmailAndPassword, connectAuthEmulator } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, collection, query, where, getDocs, connectFirestoreEmulator } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBWal4kXhImWNvJL2jV4LG0FvftdN2J9DQ",
@@ -65,9 +71,15 @@
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
-        
-        // Ensure we talk to the correct DB if user has multiple (default)
         const db = getFirestore(app);
+
+        // Connect to Emulators if requested via URL (?emulators=true)
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('emulators')) {
+            console.log("Connecting to Firebase Emulators...");
+            connectAuthEmulator(auth, "http://localhost:9099");
+            connectFirestoreEmulator(db, "localhost", 8080);
+        }
 
         const loginForm = document.getElementById('loginForm');
         const loginBtn = document.getElementById('loginBtn');
