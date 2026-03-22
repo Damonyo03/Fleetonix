@@ -260,6 +260,32 @@ body {
     color: var(--text-muted);
 }
 
+/* Password Toggle Styles */
+.password-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.password-toggle {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: color 0.3s ease;
+    z-index: 10;
+    padding: 10px; /* Increase clickable area */
+}
+
+.password-toggle:hover {
+    color: var(--accent-blue);
+}
+
+.password-wrapper .form-input {
+    padding-right: 45px;
+}
+
 /* Select Dropdown - Fixed arrow position */
 select.form-input {
     cursor: pointer;

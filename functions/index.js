@@ -23,7 +23,12 @@ const resend = new Resend("re_MQPM73xJ_6TuEnNX5Sow8Wudfr1zpRpN6");
 /**
  * Premium HTML Template for OTP
  */
-function getOTPHtmlTemplate(otp, email) {
+function getOTPHtmlTemplate(otp, email, isRegistration = false) {
+  const title = isRegistration ? "Create Your Fleetonix Account" : "Password Reset Request";
+  const subtitle = isRegistration ? 
+    "Welcome to Fleetonix! Use the verification code below to complete your registration." :
+    "We received a request to reset your password. Use the verification code below to proceed.";
+  
   return `
     <!DOCTYPE html>
     <html>
@@ -43,11 +48,11 @@ function getOTPHtmlTemplate(otp, email) {
     <body>
       <div class="container">
         <img src="https://appfleetonix.web.app/img/logo.jpg" alt="Fleetonix" class="logo">
-        <div class="header">Password Reset Request</div>
+        <div class="header">${title}</div>
         <div class="content">
           Hello <span class="accent">${email}</span>,<br><br>
-          We received a request to reset your password. Use the verification code below to proceed. 
-          <span style="color: #ff6b6b;">This code will expire in 5 minutes.</span>
+          ${subtitle}
+          <span style="color: #ff6b6b;">This code will expire in 10 minutes.</span>
         </div>
         <div class="otp-container">${otp}</div>
         <div class="content" style="margin-top: 30px;">
