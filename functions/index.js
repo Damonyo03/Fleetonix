@@ -12,7 +12,7 @@ const {onRequest} = require("firebase-functions/v2/https");
 const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
-const { Resend } = require("resend");
+const {Resend} = require("resend");
 
 admin.initializeApp();
 
@@ -62,7 +62,7 @@ function getOTPHtmlTemplate(otp, email) {
   `;
 }
 
-setGlobalOptions({ maxInstances: 10 });
+setGlobalOptions({maxInstances: 10});
 
 const axios = require("axios");
 
@@ -93,7 +93,7 @@ exports.addressSearch = onRequest(async (req, res) => {
 
   try {
     const url = `https://us1.locationiq.com/v1/autocomplete.php?key=${LOCATIONIQ_TOKEN}&q=${encodeURIComponent(query)}&limit=${limit}&dedupe=1&normalizecity=1&countrycodes=ph`;
-    
+
     const response = await axios.get(url, {
       headers: {
         "Accept-Encoding": "gzip",
@@ -116,19 +116,19 @@ exports.addressSearch = onRequest(async (req, res) => {
       let regionCategory = "Philippines";
       const displayName = entry.display_name || "";
       const ncrKeywords = ["Metro Manila", "NCR", "Manila", "Makati", "Quezon City", "Pasig", "Taguig", "Mandaluyong", "Pasay", "Parañaque", "Las Piñas", "Muntinlupa", "Marikina", "Caloocan", "Malabon", "Navotas", "Valenzuela", "San Juan"];
-      
-      if (ncrKeywords.some(kw => displayName.includes(kw))) {
+
+      if (ncrKeywords.some((kw) => displayName.includes(kw))) {
         regionCategory = "NCR";
       } else if (displayName.includes("Pampanga") || displayName.includes("Angeles") || displayName.includes("San Fernando")) {
         regionCategory = "Pampanga";
-      } else if (["Cavite", "Laguna", "Batangas", "Quezon", "Tagaytay"].some(kw => displayName.includes(kw))) {
+      } else if (["Cavite", "Laguna", "Batangas", "Quezon", "Tagaytay"].some((kw) => displayName.includes(kw))) {
         regionCategory = "South Luzon";
       }
 
       let fullAddress = displayName;
       if (houseNumber && street) {
         const components = [address.suburb, address.city, address.town, address.state, address.postcode, address.country]
-          .filter(c => c);
+            .filter((c) => c);
         fullAddress = `${houseNumber} ${street}, ${components.join(", ")}`;
       }
 
@@ -165,27 +165,27 @@ exports.sendPasswordResetOTP = onRequest(async (req, res) => {
     return;
   }
 
-  const { email } = req.body;
+  const {email} = req.body;
   if (!email) {
-    res.status(400).json({ success: false, message: "Email is required" });
+    res.status(400).json({success: false, message: "Email is required"});
     return;
   }
 
   try {
     const userRecord = await admin.auth().getUserByEmail(email);
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    
+
     // Store OTP with expiration
     await admin.firestore().collection("otps").doc(userRecord.uid).set({
       email: email,
       otp: otp,
       created_at: admin.firestore.FieldValue.serverTimestamp(),
-      expires_at: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 5 * 60 * 1000))
+      expires_at: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 5 * 60 * 1000)),
     });
 
     // Send Email via Resend
-    const { data, error } = await resend.emails.send({
-      from: "Fleetonix System <noreply@fleetonixapp.com>", 
+    const {data, error} = await resend.emails.send({
+      from: "Fleetonix System <noreply@fleetonixapp.com>",
       to: [email],
       subject: "Verification Code: " + otp,
       html: getOTPHtmlTemplate(otp, email),
@@ -197,11 +197,11 @@ exports.sendPasswordResetOTP = onRequest(async (req, res) => {
     }
 
     logger.info(`Generated password reset OTP for ${email}`);
-    res.json({ success: true, message: "OTP sent successfully", data: { userId: userRecord.uid, email: email } });
+    res.json({success: true, message: "OTP sent successfully", data: {userId: userRecord.uid, email: email}});
   } catch (error) {
     logger.error("Error sending reset OTP", error);
     // Security: don't reveal if user exists unless explicitly needed
-    res.json({ success: true, message: "If an account exists, an OTP has been sent." });
+    res.json({success: true, message: "If an account exists, an OTP has been sent."});
   }
 });
 
@@ -217,42 +217,42 @@ exports.resetPasswordWithOTP = onRequest(async (req, res) => {
     return;
   }
 
-  const { userId, otp, newPassword } = req.body;
+  const {userId, otp, newPassword} = req.body;
   if (!userId || !otp || !newPassword) {
-    res.status(400).json({ success: false, message: "Missing required fields" });
+    res.status(400).json({success: false, message: "Missing required fields"});
     return;
   }
 
   try {
     const otpDoc = await admin.firestore().collection("otps").doc(userId).get();
     if (!otpDoc.exists) {
-      res.status(404).json({ success: false, message: "OTP not found or already used." });
+      res.status(404).json({success: false, message: "OTP not found or already used."});
       return;
     }
 
     const data = otpDoc.data();
     if (data.otp !== otp) {
-      res.status(401).json({ success: false, message: "Invalid OTP code." });
+      res.status(401).json({success: false, message: "Invalid OTP code."});
       return;
     }
 
     if (data.expires_at.toDate() < new Date()) {
-      res.status(401).json({ success: false, message: "OTP has expired." });
+      res.status(401).json({success: false, message: "OTP has expired."});
       return;
     }
 
     // Update password via Auth
     await admin.auth().updateUser(userId, {
-      password: newPassword
+      password: newPassword,
     });
 
     // Delete OTP document (safety)
     await admin.firestore().collection("otps").doc(userId).delete();
 
-    res.json({ success: true, message: "Password updated successfully! Please login with your new password." });
+    res.json({success: true, message: "Password updated successfully! Please login with your new password."});
   } catch (error) {
     logger.error("Error resetting password", error);
-    res.status(500).json({ success: false, message: "Failed to reset password: " + error.message });
+    res.status(500).json({success: false, message: "Failed to reset password: " + error.message});
   }
 });
 
@@ -261,19 +261,21 @@ exports.resetPasswordWithOTP = onRequest(async (req, res) => {
  */
 exports.verifyOTP = onRequest(async (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
-  const { userId, otpCode } = req.body;
+  const {userId, otpCode} = req.body;
   if (!userId || !otpCode) {
-    res.json({ success: false, message: "Missing fields" });
+    res.json({success: false, message: "Missing fields"});
     return;
   }
   try {
     const doc = await admin.firestore().collection("otps").doc(userId).get();
     if (doc.exists && doc.data().otp === otpCode) {
-      res.json({ success: true, message: "OTP verified" });
+      res.json({success: true, message: "OTP verified"});
     } else {
-      res.json({ success: false, message: "Invalid OTP" });
+      res.json({success: false, message: "Invalid OTP"});
     }
-  } catch (e) { res.json({ success: false, message: e.message }); }
+  } catch (e) {
+    res.json({success: false, message: e.message});
+  }
 });
 
 /**
@@ -291,10 +293,10 @@ exports.adminCreateUser = onRequest(async (req, res) => {
     return;
   }
 
-  const { email, password, fullName, role, companyName } = req.body;
+  const {email, password, fullName, role, companyName} = req.body;
 
   if (!email || !password || !fullName || !role) {
-    res.status(400).json({ success: false, message: "Missing required fields: email, password, fullName, and role are required." });
+    res.status(400).json({success: false, message: "Missing required fields: email, password, fullName, and role are required."});
     return;
   }
 
@@ -302,7 +304,7 @@ exports.adminCreateUser = onRequest(async (req, res) => {
     // Check if user already exists
     try {
       await admin.auth().getUserByEmail(email);
-      res.status(400).json({ success: false, message: "User with this email already exists." });
+      res.status(400).json({success: false, message: "User with this email already exists."});
       return;
     } catch (authError) {
       // User doesn't exist, proceed
@@ -328,7 +330,7 @@ exports.adminCreateUser = onRequest(async (req, res) => {
     await admin.firestore().collection("users").doc(userRecord.uid).set(userData);
 
     // 3. Special handling for drivers/clients collections
-    if (role === 'driver') {
+    if (role === "driver") {
       await admin.firestore().collection("drivers").doc(email.toLowerCase().trim()).set({
         driver_name: fullName,
         driver_email: email.toLowerCase().trim(),
@@ -339,10 +341,10 @@ exports.adminCreateUser = onRequest(async (req, res) => {
     }
 
     logger.info(`Admin created new ${role}: ${email}`);
-    res.json({ success: true, message: `New ${role} created successfully.`, uid: userRecord.uid });
+    res.json({success: true, message: `New ${role} created successfully.`, uid: userRecord.uid});
   } catch (error) {
     logger.error("Error creating user", error);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({success: false, message: error.message});
   }
 });
 
