@@ -227,29 +227,53 @@ async function showAdminBookingModal() {
             const pInput = document.getElementById('modal_pickup');
             const dInput = document.getElementById('modal_dropoff');
 
+            const options = {
+                componentRestrictions: { country: "ph" },
+                fields: ["address_components", "geometry", "formatted_address"],
+                types: ["geocode", "establishment"]
+            };
+
             if (pInput) {
-                const pAuto = new google.maps.places.Autocomplete(pInput, { componentRestrictions: { country: "ph" } });
+                const pAuto = new google.maps.places.Autocomplete(pInput, options);
+                
+                // Prevent Enter key from submitting form/closing modal when selecting suggestion
+                pInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && document.querySelector('.pac-container:not([style*="display: none"])')) {
+                        e.preventDefault();
+                    }
+                });
+
                 pAuto.addListener("place_changed", () => {
                     const place = pAuto.getPlace();
-                    if (place.geometry) {
+                    if (place.geometry && place.geometry.location) {
                         document.getElementById('modal_pickup_lat').value = place.geometry.location.lat();
                         document.getElementById('modal_pickup_lng').value = place.geometry.location.lng();
+                        console.log("Admin Booking: Pickup selected", place.formatted_address);
                     }
                 });
             }
 
             if (dInput) {
-                const dAuto = new google.maps.places.Autocomplete(dInput, { componentRestrictions: { country: "ph" } });
+                const dAuto = new google.maps.places.Autocomplete(dInput, options);
+
+                // Prevent Enter key from submitting form/closing modal when selecting suggestion
+                dInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && document.querySelector('.pac-container:not([style*="display: none"])')) {
+                        e.preventDefault();
+                    }
+                });
+
                 dAuto.addListener("place_changed", () => {
                     const place = dAuto.getPlace();
-                    if (place.geometry) {
+                    if (place.geometry && place.geometry.location) {
                         document.getElementById('modal_dropoff_lat').value = place.geometry.location.lat();
                         document.getElementById('modal_dropoff_lng').value = place.geometry.location.lng();
+                        console.log("Admin Booking: Dropoff selected", place.formatted_address);
                     }
                 });
             }
         }
-    }, 150);
+    }, 250); // Small delay to ensure modal is fully in DOM
 }
 
 // --- Booking List ---
