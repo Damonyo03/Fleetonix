@@ -446,3 +446,117 @@ exports.adminClearData = onRequest(async (req, res) => {
     res.status(500).json({success: false, message: error.message});
   }
 });
+
+/**
+ * Send Registration OTP (CORS enabled)
+ */
+exports.sendRegistrationOTP = onRequest(async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+
+  const { email, phone } = req.body;
+  if (!email && !phone) {
+    res.status(400).json({ success: false, message: "Email or Phone is required" });
+    return;
+  }
+
+  const target = (email || phone).toLowerCase().trim();
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+  try {
+    if (email) {
+      try {
+        await admin.auth().getUserByEmail(email);
+        res.status(400).json({ success: false, message: "This email is already registered." });
+        return;
+      } catch (e) { }
+    }
+
+    await admin.firestore().collection("registration_otps").doc(target).set({
+      otp: otp,
+      created_at: admin.firestore.FieldValue.serverTimestamp(),
+      expires_at: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 10 * 60 * 1000)),
+    });
+
+    if (email) {
+      const { error } = await resend.emails.send({
+        from: "Fleetonix Verification <noreply@fleetonixapp.com>",
+        to: [email],
+        subject: "Verification Code: " + otp,
+        html: getOTPHtmlTemplate(otp, email, true),
+      });
+      if (error) throw new Error(error.message);
+    } else {
+      logger.info(`[SMS OTP] To: ${phone}, Code: ${otp}`);
+    }
+
+    res.json({ success: true, message: `Verification code sent to ${email ? 'email' : 'phone'}.` });
+  } catch (error) {
+    logger.error("Error in sendRegistrationOTP", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * Complete Registration after OTP verification
+ */
+exports.completeRegistration = onRequest(async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+
+  const { email, phone, otp, userData } = req.body;
+  if ((!email && !phone) || !otp || !userData) {
+    res.status(400).json({ success: false, message: "Missing required fields" });
+    return;
+  }
+
+  const target = (email || phone).toLowerCase().trim();
+
+  try {
+    const otpDoc = await admin.firestore().collection("registration_otps").doc(target).get();
+    if (!otpDoc.exists) {
+      res.status(400).json({ success: false, message: "OTP not found or expired." });
+      return;
+    }
+
+    const storedData = otpDoc.data();
+    if (storedData.otp !== otp) {
+      res.status(400).json({ success: false, message: "Invalid verification code." });
+      return;
+    }
+
+    const userRecord = await admin.auth().createUser({
+      email: email,
+      password: userData.password,
+      displayName: userData.full_name,
+    });
+
+    await admin.firestore().collection("users").doc(userRecord.uid).set({
+      full_name: userData.full_name,
+      email: email,
+      phone: phone || userData.phone,
+      company_name: userData.company_name,
+      user_type: "client",
+      status: "active",
+      created_at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await admin.firestore().collection("registration_otps").doc(target).delete();
+    res.json({ success: true, message: "Account created successfully!", uid: userRecord.uid });
+  } catch (error) {
+    logger.error("Error in completeRegistration", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
