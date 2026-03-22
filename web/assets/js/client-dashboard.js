@@ -1,160 +1,259 @@
 import { auth, db } from "./firebase-init.js";
-import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { collection, query, where, onSnapshot, getDocs, doc, getDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { collection, query, where, onSnapshot, getDocs, limit, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { initLayout } from "./modules/ui.js";
 
-let currentUser = null;
-let currentClientData = null;
-let activeTripMap = null;
-let driverLocationMarker = null;
-let pickupData = null;
-let dropoffData = null;
+let clientMap;
+let markers = {};
+let polylines = {};
+let activeDriverEmails = new Set();
 
-// Authentication Listener
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
         window.location.href = '../login.html';
         return;
     }
 
-    // Verify Client Role
-    const userDoc = await getDoc(doc(db, "users", user.uid));
-    const userData = userDoc.exists() ? userDoc.data() : null;
-    
-    currentUser = user;
-    currentClientData = userData || { full_name: user.email.split('@')[0], email: user.email };
-    
-    const name = currentClientData.full_name || user.email.split('@')[0];
-    // Use initLayout so the name is cached in localStorage for consistent display across all pages
-    initLayout('Dashboard', name);
-
-    // Initialize Dashboard Data
-    listenForDashboardData();
-    initDashboardUI();
+    // Dashboard UI Init
+    initLayout('Dashboard', null); 
+    initMap();
+    initStats();
+    initRecentBookings();
+    initActiveSchedules();
 });
 
-function initDashboardUI() {
+function initMap() {
+    const mapEl = document.getElementById('driversMap');
+    if (!mapEl) return;
+
+    clientMap = new google.maps.Map(mapEl, {
+        center: { lat: 14.5995, lng: 120.9842 }, // Manila default
+        zoom: 12,
+        styles: [
+            { "featureType": "all", "elementType": "labels.text.fill", "stylers": [{ "color": "#ffffff" }] },
+            { "featureType": "all", "elementType": "labels.text.stroke", "stylers": [{ "color": "#000000" }, { "lightness": 13 }] },
+            { "featureType": "administrative", "elementType": "geometry.fill", "stylers": [{ "color": "#000000" }] },
+            { "featureType": "landscape", "elementType": "geometry", "stylers": [{ "color": "#2c2c2c" }] },
+            { "featureType": "poi", "elementType": "geometry", "stylers": [{ "color": "#2c2c2c" }] },
+            { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#3c3c3c" }] },
+            { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#1c1c1c" }] }
+        ],
+        disableDefaultUI: false,
+        zoomControl: true,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: true
+    });
+
+    // Listen to driver locations for active trips
+    syncDriverTracking();
+}
+
+/**
+ * Monitors the client's active schedules and tracks the assigned drivers in real-time.
+ */
+function syncDriverTracking() {
+    const userEmail = auth.currentUser.email;
+
+    // 1. Listen to active schedules to get driver emails
+    const schedulesQuery = query(
+        collection(db, "schedules"),
+        where("client_email", "==", userEmail),
+        where("trip_phase", "in", ["pickup", "dropoff", "ready_to_complete"])
+    );
+
+    onSnapshot(schedulesQuery, (snapshot) => {
+        const newActiveDrivers = new Set();
+        snapshot.docs.forEach(doc => {
+            const data = doc.data();
+            if (data.driver_email) {
+                newActiveDrivers.add(data.driver_email.toLowerCase().trim());
+            }
+        });
+
+        // Detect drivers who are no longer active and remove their markers
+        activeDriverEmails.forEach(email => {
+            if (!newActiveDrivers.has(email)) {
+                if (markers[email]) {
+                    markers[email].setMap(null);
+                    delete markers[email];
+                }
+                if (polylines[email]) {
+                    polylines[email].setMap(null);
+                    delete polylines[email];
+                }
+            }
+        });
+
+        activeDriverEmails = newActiveDrivers;
+        
+        // If we have active drivers, start listening to their locations
+        if (activeDriverEmails.size > 0) {
+            setupLocationListener();
+        } else {
+            document.getElementById('mapStatus').innerText = "No active trips to track";
+        }
+    });
+}
+
+let locationUnsubscribe = null;
+function setupLocationListener() {
+    if (locationUnsubscribe) return; // Only one listener needed
+
+    // We listen to the whole collection but filter locally for security/simplicity 
+    // (Ideally we'd use where("id", "in", [...emailList]) but that's limited to 10)
+    locationUnsubscribe = onSnapshot(collection(db, "driver_locations"), (snapshot) => {
+        let trackedCount = 0;
+        
+        snapshot.docChanges().forEach(change => {
+            const email = change.doc.id.toLowerCase().trim();
+            if (!activeDriverEmails.has(email)) return;
+
+            const data = change.doc.data();
+            if (change.type === "removed") {
+                if (markers[email]) { markers[email].setMap(null); delete markers[email]; }
+                return;
+            }
+
+            if (data.current_latitude && data.current_longitude) {
+                trackedCount++;
+                const pos = { lat: data.current_latitude, lng: data.current_longitude };
+                
+                // Polyline
+                if (data.current_route_polyline) {
+                    const path = google.maps.geometry.encoding.decodePath(data.current_route_polyline);
+                    if (polylines[email]) {
+                        polylines[email].setPath(path);
+                    } else {
+                        polylines[email] = new google.maps.Polyline({
+                            path, map: clientMap, strokeColor: '#3b82f6', strokeWeight: 4
+                        });
+                    }
+                }
+
+                // Marker
+                if (markers[email]) {
+                    markers[email].setPosition(pos);
+                } else {
+                    markers[email] = new google.maps.Marker({
+                        position: pos,
+                        map: clientMap,
+                        icon: {
+                            path: google.maps.SymbolPath.CIRCLE,
+                            scale: 8,
+                            fillColor: "#3b82f6",
+                            fillOpacity: 1,
+                            strokeWeight: 2,
+                            strokeColor: "#ffffff"
+                        },
+                        title: "Your Driver"
+                    });
+                }
+            }
+        });
+
+        const statusEl = document.getElementById('mapStatus');
+        if (statusEl) {
+            statusEl.innerText = trackedCount > 0 
+                ? `Tracking ${trackedCount} active driver(s)` 
+                : "Waiting for driver GPS...";
+        }
+    });
+}
+
+function initStats() {
+    const userEmail = auth.currentUser.email;
+    
+    // Pending Bookings
+    onSnapshot(query(collection(db, "bookings"), where("client_email", "==", userEmail), where("status", "==", "pending")), (snap) => {
+        document.getElementById('pendingBookings').innerText = snap.size;
+    });
+
+    // Active Schedules
+    onSnapshot(query(collection(db, "schedules"), where("client_email", "==", userEmail), where("trip_phase", "!=", "completed")), (snap) => {
+        document.getElementById('activeSchedules').innerText = snap.size;
+    });
+
+    // Total Bookings
+    onSnapshot(query(collection(db, "bookings"), where("client_email", "==", userEmail)), (snap) => {
+        document.getElementById('totalBookings').innerText = snap.size;
+    });
+    
+    // Completed Trips
+    onSnapshot(query(collection(db, "bookings"), where("client_email", "==", userEmail), where("status", "==", "completed")), (snap) => {
+        document.getElementById('completedBookings').innerText = snap.size;
+    });
+
+    // Toggle Stats
     const toggleBtn = document.getElementById('toggleStatsBtn');
     const secondaryStats = document.getElementById('secondaryStats');
-    
     if (toggleBtn && secondaryStats) {
-        toggleBtn.addEventListener('click', () => {
+        toggleBtn.onclick = () => {
             const isShowing = secondaryStats.classList.toggle('show');
-            toggleBtn.innerHTML = isShowing ? 
-                '<i class="fas fa-chevron-up"></i> Less Insights' : 
-                '<i class="fas fa-chevron-down"></i> More Insights';
-        });
+            toggleBtn.innerHTML = isShowing 
+                ? '<i class="fas fa-chevron-up"></i> Less Insights' 
+                : '<i class="fas fa-chevron-down"></i> More Insights';
+        };
     }
 }
 
-// Implementation of Status-First Dashboard Logic
-function listenForDashboardData() {
-    if (!currentUser) return;
+function initRecentBookings() {
+    const userEmail = auth.currentUser.email;
+    const q = query(collection(db, "bookings"), where("client_email", "==", userEmail), orderBy("created_at", "desc"), limit(5));
 
-    // 1. Aggregates & Recent Bookings
-    const bookingQuery = query(
-        collection(db, "bookings"),
-        where("client_id", "==", currentUser.uid)
-    );
+    onSnapshot(q, (snapshot) => {
+        const table = document.getElementById('recentBookingsTable');
+        if (!table) return;
 
-    onSnapshot(bookingQuery, (snapshot) => {
-        let total = 0;
-        let pending = 0;
-        let completed = 0;
-        const bookings = [];
-
-        snapshot.forEach((doc) => {
-            const data = doc.data();
-            total++;
-            if (data.status === 'pending') pending++;
-            if (data.status === 'completed') completed++;
-            bookings.push({ id: doc.id, ...data });
-        });
-
-        // Update Stats
-        document.getElementById('totalBookings').innerText = total;
-        document.getElementById('pendingBookings').innerText = pending;
-        document.getElementById('completedBookings').innerText = completed;
-
-        // Render Recent Bookings (Last 5)
-        const sorted = bookings.sort((a, b) => (b.created_at?.seconds || 0) - (a.created_at?.seconds || 0));
-        renderRecentBookings(sorted.slice(0, 5));
-    });
-
-    // 2. Active Schedules
-    const activePhases = ['pending', 'started', 'pickup', 'dropoff', 'arrived'];
-    const scheduleQuery = query(
-        collection(db, "schedules"),
-        where("client_id", "==", currentUser.uid),
-        where("trip_phase", "in", activePhases)
-    );
-
-    onSnapshot(scheduleQuery, async (snapshot) => {
-        document.getElementById('activeSchedules').innerText = snapshot.size;
-        
-        const scheduleList = [];
-        for (const d of snapshot.docs) {
-            const data = d.data();
-            let driverName = "Assigning...";
-            
-            if (data.driver_id) {
-                const driverDoc = await getDoc(doc(db, "users", data.driver_id));
-                if (driverDoc.exists()) driverName = driverDoc.data().full_name;
-            }
-            
-            scheduleList.push({ id: d.id, driverName, ...data });
+        if (snapshot.empty) {
+            table.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 20px;">No bookings found.</td></tr>';
+            return;
         }
-        renderActiveSchedules(scheduleList);
+
+        table.innerHTML = snapshot.docs.map(doc => {
+            const b = doc.data();
+            const statusClass = b.status === 'pending' ? 'status-pending' : (b.status === 'confirmed' ? 'status-confirmed' : 'status-completed');
+            return `
+                <tr>
+                    <td>${b.pickup_address || 'N/A'}</td>
+                    <td>${b.scheduled_date || 'N/A'}</td>
+                    <td><span class="status-badge ${statusClass}">${b.status}</span></td>
+                </tr>
+            `;
+        }).join('');
+    }, (error) => {
+        console.error("Recent bookings error:", error);
+        const table = document.getElementById('recentBookingsTable');
+        if (table) table.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 20px; color: var(--accent-red);">Error loading bookings.</td></tr>';
     });
 }
 
-function renderRecentBookings(bookings) {
-    const tbody = document.getElementById('recentBookingsTable');
-    if (bookings.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 40px;">No bookings found.</td></tr>';
-        return;
-    }
+function initActiveSchedules() {
+    const userEmail = auth.currentUser.email;
+    const q = query(collection(db, "schedules"), where("client_email", "==", userEmail), where("trip_phase", "!=", "completed"), limit(5));
 
-    tbody.innerHTML = bookings.map(b => `
-        <tr>
-            <td style="max-width: 200px;">
-                <div style="font-weight: 500; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${b.pickup_location?.text || 'Point A'}</div>
-                <div style="font-size: 0.8em; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${b.dropoff_location?.text || 'Point B'}</div>
-            </td>
-            <td>${b.pickup_date || 'N/A'}</td>
-            <td><span class="status-badge ${b.status}">${b.status.toUpperCase()}</span></td>
-        </tr>
-    `).join('');
+    onSnapshot(q, (snapshot) => {
+        const table = document.getElementById('activeSchedulesTable');
+        if (!table) return;
+
+        if (snapshot.empty) {
+            table.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 20px;">No active trips.</td></tr>';
+            return;
+        }
+
+        table.innerHTML = snapshot.docs.map(doc => {
+            const s = doc.data();
+            return `
+                <tr>
+                    <td>${s.driver_name || 'Assigned'}</td>
+                    <td><span class="status-badge status-confirmed">${(s.trip_phase || 'Scheduled').replace('_', ' ')}</span></td>
+                    <td><a href="schedule_view.html?id=${doc.id}" class="btn-icon"><i class="fas fa-external-link-alt"></i></a></td>
+                </tr>
+            `;
+        }).join('');
+    }, (error) => {
+        console.error("Active schedules error:", error);
+        const table = document.getElementById('activeSchedulesTable');
+        if (table) table.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 20px; color: var(--accent-red);">Error loading schedules.</td></tr>';
+    });
 }
-
-function renderActiveSchedules(schedules) {
-    const tbody = document.getElementById('activeSchedulesTable');
-    if (schedules.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 40px;">No active schedules.</td></tr>';
-        return;
-    }
-
-    tbody.innerHTML = schedules.map(s => `
-        <tr>
-            <td style="max-width: 200px;">
-                <div style="display: flex; align-items: center; gap: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                    <div style="width: 32px; height: 32px; flex-shrink: 0; background: var(--bg-input); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.9em; border: 1px solid var(--accent-blue);">
-                        ${s.driverName.charAt(0)}
-                    </div>
-                    <span style="overflow: hidden; text-overflow: ellipsis;">${s.driverName}</span>
-                </div>
-            </td>
-            <td>
-                <span style="color: var(--accent-green); font-weight: 600; font-size: 0.9em;">
-                    ${s.trip_phase.toUpperCase()}
-                </span>
-            </td>
-            <td>
-                <a href="schedule_view.html?id=${s.id}" class="btn-icon" title="View Trip" style="color: var(--accent-blue);"><i class="fas fa-external-link-alt"></i></a>
-            </td>
-        </tr>
-    `).join('');
-}
-
-
-

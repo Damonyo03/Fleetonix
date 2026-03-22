@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fleetonix - Client - Settings</title>
+    <link rel="icon" type="image/jpeg" href="../img/logo.jpg">
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="../assets/css/client.css?v=1.1">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 30px; }
+        .settings-card { background: var(--bg-secondary); border-radius: 16px; border: 1px solid var(--border-color); padding: 25px; }
+        .card-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 20px; color: var(--text-primary); display: flex; align-items: center; gap: 10px; }
+        .card-title i { color: var(--accent-blue); }
+        .form-group { margin-bottom: 15px; }
+        .form-label { display: block; margin-bottom: 8px; font-size: 0.9em; color: var(--text-secondary); }
+        .form-input { width: 100%; padding: 12px; border-radius: 8px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-primary); }
+    </style>
+</head>
+<body>
+    <div class="admin-container">
+        <!-- Sidebar Navigation -->
+        <aside class="admin-sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <img src="../img/logo.jpg" alt="Logo" class="sidebar-logo">
+                <span class="sidebar-title">Fleetonix</span>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-section-label">SERVICES</div>
+                <a href="dashboard.html" class="nav-item"><i class="fas fa-home"></i> Dashboard Map</a>
+                <a href="booking_new.html" class="nav-item"><i class="fas fa-plus-circle"></i> New Request</a>
+                
+                <div class="nav-section-label">RECORDS</div>
+                <a href="bookings.html" class="nav-item"><i class="fas fa-calendar-alt"></i> Booking History</a>
+                <a href="schedules.html" class="nav-item"><i class="fas fa-clock"></i> Scheduled Trips</a>
+
+                <div class="nav-section-label">ACCOUNT</div>
+                <a href="settings.html" class="nav-item active"><i class="fas fa-user-cog"></i> Profile Settings</a>
+
+                <div class="nav-section-label">ALERTS</div>
+                <a href="notifications.html" class="nav-item"><i class="fas fa-bell"></i> Notifications <span class="notif-count">0</span></a>
+                <a href="#" id="logoutBtn" class="nav-item logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="admin-main" id="mainContent">
+            <header class="admin-header">
+                <div class="header-left">
+                    <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
+                    <h2>Settings</h2>
+                </div>
+                <div class="header-right">
+                    <div class="user-menu">
+                        <div class="user-avatar" id="userInitial">C</div>
+                        <span id="userName">Client</span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="admin-content">
+                <div class="page-header">
+                    <h1 class="page-title">Profile & Security</h1>
+                    <p class="page-subtitle">Update your company information and manage your account security.</p>
+                </div>
+
+                <div class="settings-grid">
+                    <!-- Profile Card -->
+                    <div class="settings-card">
+                        <h3 class="card-title"><i class="fas fa-building"></i> Company Profile</h3>
+                        <form id="profileForm">
+                            <div class="form-group">
+                                <label class="form-label">Company Name</label>
+                                <input type="text" id="companyName" class="form-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Full Name</label>
+                                <input type="text" id="fullName" class="form-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Contact Phone</label>
+                                <input type="text" id="phone" class="form-input" required>
+                            </div>
+                            <button type="submit" class="btn-primary" style="width: 100%; margin-top: 10px;">Save Profile Updates</button>
+                        </form>
+                    </div>
+
+                    <!-- Security Card -->
+                    <div class="settings-card">
+                        <h3 class="card-title"><i class="fas fa-key"></i> Change Password</h3>
+                        <form id="passwordForm">
+                            <div class="form-group">
+                                <label class="form-label">Current Password</label>
+                                <input type="password" id="currentPassword" class="form-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">New Password</label>
+                                <input type="password" id="newPassword" class="form-input" required minlength="6">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Confirm New Password</label>
+                                <input type="password" id="confirmPassword" class="form-input" required minlength="6">
+                            </div>
+                            <button type="submit" class="btn-primary" style="width: 100%; margin-top: 10px;">Update Password</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="../assets/js/client-settings.js"></script>
+</body>
+</html>

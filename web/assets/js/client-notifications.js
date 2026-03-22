@@ -70,6 +70,17 @@ function loadNotifications() {
                 return renderSingleNotification(item.notification);
             }
         }).join('');
+    }, (error) => {
+        console.error("Notifications fetch error:", error);
+        const listContainer = document.getElementById('notificationsList');
+        if (listContainer) {
+            listContainer.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #ff6b6b;">
+                    <i class="fas fa-exclamation-triangle fa-2x"></i>
+                    <p style="margin-top: 15px;">Failed to load notifications. Please refresh the page.</p>
+                </div>
+            `;
+        }
     });
 }
 

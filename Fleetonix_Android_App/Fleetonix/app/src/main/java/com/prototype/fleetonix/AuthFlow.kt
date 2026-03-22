@@ -145,22 +145,19 @@ fun AuthFlow() {
                         DriverSchedule(
                             docId = doc.id,
                             scheduleId = sId,
-                            bookingId = (data["numeric_booking_id"] as? Number)?.toInt(),
-                            scheduleStatus = data["status"] as? String,
-                            tripPhase = data["trip_phase"] as? String ?: "pending",
-                            scheduledDate = data["schedule_date"] as? String,
-                            scheduledTime = data["schedule_time"] as? String,
-                            startedAt = data["started_at"]?.toString(),
-                            completedAt = data["completed_at"]?.toString(),
-                            pickup = DriverScheduleLocation(
+                            trip_phase = data["trip_phase"] as? String ?: "pending",
+                            status = data["status"] as? String,
+                            scheduled_date = data["schedule_date"] as? String,
+                            scheduled_time = data["schedule_time"] as? String,
+                            pickup_location = DriverScheduleLocation(
                                 address = data["pickup_location"] as? String,
-                                latitude = data["pickup_latitude"] as? Double,
-                                longitude = data["pickup_longitude"] as? Double
+                                latitude = (data["pickup_latitude"] as? Number)?.toDouble(),
+                                longitude = (data["pickup_longitude"] as? Number)?.toDouble()
                             ),
-                            dropoff = DriverScheduleLocation(
+                            dropoff_location = DriverScheduleLocation(
                                 address = data["dropoff_location"] as? String,
-                                latitude = data["dropoff_latitude"] as? Double,
-                                longitude = data["dropoff_longitude"] as? Double
+                                latitude = (data["dropoff_latitude"] as? Number)?.toDouble(),
+                                longitude = (data["dropoff_longitude"] as? Number)?.toDouble()
                             ),
                             client = DriverClientInfo(
                                 company = data["company_name"] as? String,
@@ -168,8 +165,10 @@ fun AuthFlow() {
                                 phone = data["client_phone"] as? String,
                                 email = data["client_email"] as? String
                             ),
-                            returnToPickup = data["return_to_pickup"] as? Boolean ?: false,
-                            specialInstructions = data["special_instructions"] as? String
+                            return_to_pickup = data["return_to_pickup"] as? Boolean ?: false,
+                            client_phone = data["client_phone"] as? String,
+                            client_name = data["client_name"] as? String,
+                            client_email = data["client_email"] as? String
                         )
                     }.sortedByDescending { it.docId }
 

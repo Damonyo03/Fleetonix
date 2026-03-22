@@ -112,8 +112,8 @@ export function initLayout(pageTitle, userName, unreadCount = 0) {
 
     const sidebarCount = document.querySelector('.notif-count');
     if (sidebarCount) {
-        sidebarCount.innerText = unreadCount > 0 ? unreadCount : '';
-        sidebarCount.style.display = unreadCount > 0 ? 'inline-flex' : 'none';
+        sidebarCount.innerText = unreadCount >= 0 ? unreadCount : '0';
+        sidebarCount.style.display = 'inline-flex'; // Always keep visible or handle in caller
     }
 }
 

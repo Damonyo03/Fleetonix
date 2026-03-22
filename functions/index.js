@@ -8,7 +8,8 @@
  */
 
 const {setGlobalOptions} = require("firebase-functions");
-const {onRequest} = require("firebase-functions/https");
+const {onRequest} = require("firebase-functions/v2/https");
+const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 const { Resend } = require("resend");
@@ -342,5 +343,98 @@ exports.adminCreateUser = onRequest(async (req, res) => {
   } catch (error) {
     logger.error("Error creating user", error);
     res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * Automated Activity Logger for Trip Phase changes
+ */
+exports.onScheduleUpdate = onDocumentUpdated("schedules/{docId}", async (event) => {
+  const before = event.data.before.data();
+  const after = event.data.after.data();
+
+  // Only trigger if trip_phase changed
+  if (before.trip_phase !== after.trip_phase) {
+    const phase = after.trip_phase;
+    const driver = after.driver_name || "Driver";
+    const scheduleId = after.schedule_id || event.params.docId;
+
+    let title = "";
+    let message = "";
+
+    if (phase === "pickup") {
+      title = "Trip Accepted";
+      message = `${driver} has accepted the booking and is on the way to pickup. (Schedule #${scheduleId})`;
+    } else if (phase === "dropoff") {
+      title = "Passenger Picked Up";
+      message = `${driver} has picked up the passenger. (Schedule #${scheduleId})`;
+    } else if (phase === "ready_to_complete") {
+      title = "Passenger Dropped Off";
+      message = `${driver} has dropped off the passenger at the destination. (Schedule #${scheduleId})`;
+    } else if (phase === "completed") {
+      title = "Trip Completed";
+      message = `${driver} has successfully completed the trip. (Schedule #${scheduleId})`;
+    }
+
+    if (title) {
+      await admin.firestore().collection("activity").add({
+        type: "system",
+        title: title,
+        message: message,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        source: "schedules",
+        doc_id: event.params.docId,
+      });
+      logger.info(`Activity log created for phase: ${phase}`);
+    }
+  }
+});
+
+/**
+ * Admin Data Clearing Function
+ * Securely deletes transaction data and returns a backup
+ */
+exports.adminClearData = onRequest(async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  if (req.method === "OPTIONS") {
+    res.set("Access-Control-Allow-Methods", "POST");
+    res.set("Access-Control-Allow-Headers", "Content-Type");
+    res.status(204).send("");
+    return;
+  }
+
+  if (req.method !== "POST") {
+    res.status(405).send("Method Not Allowed");
+    return;
+  }
+
+  try {
+    const db = admin.firestore();
+    const collections = ["schedules", "bookings", "activity", "accidents", "vehicle_issues"];
+    const backup = {};
+
+    // 1. Fetch data for backup
+    for (const col of collections) {
+      const snap = await db.collection(col).get();
+      backup[col] = snap.docs.map((d) => ({id: d.id, ...d.data()}));
+    }
+
+    // 2. Perform deletion in batches
+    for (const col of collections) {
+      const snap = await db.collection(col).get();
+      const batch = db.batch();
+      snap.docs.forEach((doc) => batch.delete(doc.ref));
+      await batch.commit();
+    }
+
+    logger.info("Admin cleared all transactional data");
+    res.json({
+      success: true,
+      message: "Data cleared successfully. Backup attached.",
+      backup: backup,
+    });
+  } catch (error) {
+    logger.error("Clear data error", error);
+    res.status(500).json({success: false, message: error.message});
   }
 });

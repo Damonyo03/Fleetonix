@@ -1,7 +1,7 @@
-import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { initializeApp, getApps, getApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import {
-    getFirestore, collection, query, onSnapshot, doc, getDoc, orderBy, addDoc, serverTimestamp
+    getFirestore, collection, query, onSnapshot, doc, getDoc, orderBy, addDoc, setDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { initLayout, showModal } from "./modules/ui.js";
@@ -188,25 +188,30 @@ async function showCreateUserModal() {
             throw new Error("Password must be at least 8 characters long.");
         }
 
-        // Determine Function URL (Emulator vs Production)
-        const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-        const functionUrl = isLocal 
-            ? "http://localhost:5001/appfleetonix/us-central1/adminCreateUser"
-            : "https://us-central1-appfleetonix.cloudfunctions.net/adminCreateUser";
-
         try {
-            const response = await fetch(functionUrl, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, password, fullName, role, companyName })
+            // Create a temporary secondary Firebase App instance so we don't sign out the admin
+            const secondaryApp = initializeApp(firebaseConfig, `create_user_${Date.now()}`);
+            const secondaryAuth = getAuth(secondaryApp);
+
+            // Step 1: Create Firebase Auth account (uses secondary app — admin stays signed in)
+            const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+            const newUid = userCredential.user.uid;
+
+            // Clean up secondary app immediately
+            await deleteApp(secondaryApp);
+
+            // Step 2: Write user profile to Firestore using UID as document ID
+            await setDoc(doc(db, "users", newUid), {
+                uid: newUid,
+                full_name: fullName,
+                email: email.toLowerCase().trim(),
+                user_type: role,
+                company_name: companyName || "",
+                created_at: serverTimestamp(),
+                status: "active"
             });
 
-            const result = await response.json();
-            if (!result.success) {
-                throw new Error(result.message || "Failed to create user");
-            }
-
-            // Log activity
+            // Step 3: Log activity
             await addDoc(collection(db, "activity"), {
                 type: 'system',
                 title: 'New User Registered',
@@ -217,7 +222,7 @@ async function showCreateUserModal() {
             alert(`User account for ${fullName} created successfully!`);
         } catch (err) {
             console.error("User creation error:", err);
-            throw new Error("Network error or server error: " + err.message);
+            throw new Error("Failed to create user: " + (err.code || err.message));
         }
     });
 }

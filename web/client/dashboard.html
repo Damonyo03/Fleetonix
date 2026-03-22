@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="../assets/css/style.css">
     <link rel="stylesheet" href="../assets/css/client.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBWal4kXhImWNvJL2jV4LG0FvftdN2J9DQ&libraries=places,geometry"></script>
     <style>
         .secondary-stats { display: none; margin-top: 20px; transition: all 0.3s ease; }
         .secondary-stats.show { display: grid; }
@@ -32,6 +33,9 @@
                 <a href="bookings.html" class="nav-item"><i class="fas fa-calendar-alt"></i> Booking History</a>
                 <a href="schedules.html" class="nav-item"><i class="fas fa-clock"></i> Scheduled Trips</a>
 
+                <div class="nav-section-label">ACCOUNT</div>
+                <a href="settings.html" class="nav-item"><i class="fas fa-user-cog"></i> Profile Settings</a>
+
                 <div class="nav-section-label">ALERTS</div>
                 <a href="notifications.html" class="nav-item"><i class="fas fa-bell"></i> Notifications <span class="notif-count">0</span></a>
                 <a href="#" id="logoutBtn" class="nav-item logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
@@ -55,8 +59,16 @@
 
             <div class="admin-content">
                 <div class="page-header" style="margin-bottom: 35px;">
-                    <h1 class="page-title">Dashboard Overview</h1>
-                    <p class="page-subtitle" id="welcomeMessage" style="margin-top: 8px; opacity: 0.8;">Welcome back! Manage your fleet bookings here.</p>
+                    <div>
+                        <h1 class="page-title">Dashboard Overview</h1>
+                        <p class="page-subtitle" id="welcomeMessage" style="margin-top: 8px; opacity: 0.8;">Welcome back! Manage your fleet bookings here.</p>
+                    </div>
+                    <div class="map-status-pill" id="mapStatus">Live Trip Tracking</div>
+                </div>
+
+                <!-- Real-time Map Integration -->
+                <div class="map-container-wrapper" style="margin-bottom: 30px;">
+                    <div id="driversMap" style="height: 400px; border-radius: 16px; border: 1px solid var(--border-color); box-shadow: 0 4px 20px rgba(0,0,0,0.15);"></div>
                 </div>
 
                 <!-- Stats Grid -->

@@ -41,7 +41,10 @@ onAuthStateChanged(auth, (user) => {
             const counters = document.querySelectorAll('.notif-count');
             counters.forEach(counter => {
                 counter.innerText = snapshot.size;
+                counter.style.display = 'inline-flex';
             });
+        }, (error) => {
+            console.error("Sidebar notification fetch error:", error);
         });
     }
 });

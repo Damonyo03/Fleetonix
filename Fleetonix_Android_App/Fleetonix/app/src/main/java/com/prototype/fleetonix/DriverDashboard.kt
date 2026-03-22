@@ -399,7 +399,7 @@ fun DriverDashboard(
             // Only mark as completed when trip_phase is "completed"
             if (activeSchedule.trip_phase != "completed") {
                 currentScheduleId = activeSchedule.scheduleId
-                Log.d("LocationTracking", "Schedule ID updated: $currentScheduleId (phase: ${activeSchedule.tripPhase})")
+                Log.d("LocationTracking", "Schedule ID updated: $currentScheduleId (phase: ${activeSchedule.trip_phase})")
             } else {
                 // Trip completed - store for GPS tracking continuation (5 minutes)
                 if (currentScheduleId != activeSchedule.scheduleId) {
@@ -584,9 +584,21 @@ fun DriverDashboard(
     
     LaunchedEffect(auth.currentUser?.email) {
         try {
+            val email = auth.currentUser?.email?.lowercase()?.trim() ?: return@LaunchedEffect
             // We use the driver_locations collection for frequent GPS updates
-            driverDocRef = db.collection("driver_locations")
-                .document(auth.currentUser?.email ?: "unknown_driver")
+            val ref = db.collection("driver_locations").document(email)
+            driverDocRef = ref
+            // Immediately create/update the presence doc so admin can see the driver is online
+            // even before GPS coordinates arrive. Coordinates will fill in via the BroadcastReceiver.
+            ref.set(
+                mapOf(
+                    "driver_email" to email,
+                    "online" to true,
+                    "last_seen" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                ),
+                com.google.firebase.firestore.SetOptions.merge()
+            )
+            Log.d("LocationTracking", "Presence doc created for $email")
         } catch (e: Exception) {
             Log.e("LocationTracking", "Error setting driver_locations ref", e)
         }
@@ -632,9 +644,11 @@ fun DriverDashboard(
                                 "trip_distance" to tripDistance,
                                 "current_trip_id" to (nextSchedule?.docId ?: ""),
                                 "current_trip_phase" to tripPhase,
+                                "driver_email" to (auth.currentUser?.email?.lowercase()?.trim() ?: ""),
                                 "last_updated" to FieldValue.serverTimestamp()
                             )
-                            driverDocRef?.update(locData as Map<String, Any>)
+                            // Use set(merge) so the document is created if it doesn't exist yet
+                            driverDocRef?.set(locData, com.google.firebase.firestore.SetOptions.merge())
                         }
                     }
                 }
@@ -673,6 +687,31 @@ fun DriverDashboard(
             } else {
                 context.startService(startIntent)
             }
+            // Also push the last known location immediately so admin map updates right away
+            try {
+                val loc = LocationServices.getFusedLocationProviderClient(context).lastLocation.await()
+                if (loc != null && loc.latitude != 0.0 && loc.longitude != 0.0) {
+                    val email = auth.currentUser?.email?.lowercase()?.trim() ?: ""
+                    if (email.isNotEmpty()) {
+                        db.collection("driver_locations").document(email).set(
+                            mapOf(
+                                "driver_email" to email,
+                                "current_latitude" to loc.latitude,
+                                "current_longitude" to loc.longitude,
+                                "current_speed" to loc.speed,
+                                "current_heading" to loc.bearing,
+                                "current_accuracy" to loc.accuracy,
+                                "online" to true,
+                                "last_updated" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                            ),
+                            com.google.firebase.firestore.SetOptions.merge()
+                        )
+                        Log.d("LocationTracking", "Wrote initial last-known location: ${loc.latitude}, ${loc.longitude}")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w("LocationTracking", "Could not fetch last location: ${e.message}")
+            }
         }
     }
 
@@ -685,8 +724,8 @@ fun DriverDashboard(
 
             when (tripPhase) {
                 "pickup", "return_pickup" -> {
-                    val lat = schedule.pickup?.latitude
-                    val lng = schedule.pickup?.longitude
+                    val lat = schedule.pickup_location?.latitude
+                    val lng = schedule.pickup_location?.longitude
                     if (lat != null && lng != null && lat != 0.0 && lng != 0.0) {
                         intent.action = LocationService.ACTION_SET_GEOFENCE
                         intent.putExtra(LocationService.EXTRA_GEOFENCE_ID, docId)
@@ -697,15 +736,15 @@ fun DriverDashboard(
                     }
                 }
                 "dropoff" -> {
-                    val lat = schedule.dropoff?.latitude
-                    val lng = schedule.dropoff?.longitude
+                    val lat = schedule.dropoff_location?.latitude
+                    val lng = schedule.dropoff_location?.longitude
                     if (lat != null && lng != null && lat != 0.0 && lng != 0.0) {
                         intent.action = LocationService.ACTION_SET_GEOFENCE
                         intent.putExtra(LocationService.EXTRA_GEOFENCE_ID, docId)
                         intent.putExtra(LocationService.EXTRA_LATITUDE, lat)
                         intent.putExtra(LocationService.EXTRA_LONGITUDE, lng)
                         
-                        val returnReq = schedule.returnToPickup ?: false
+                        val returnReq = schedule.return_to_pickup ?: false
                         val nextPhase = if (returnReq) "return_pickup" else "ready_to_complete"
                         
                         intent.putExtra(LocationService.EXTRA_TARGET_PHASE, nextPhase)
@@ -1167,9 +1206,9 @@ fun DriverDashboard(
                                         onClick = {
                                             val dest = polylinePoints.last()
                                             val address = if (tripPhase == "pickup" || tripPhase == "pending") 
-                                                nextSchedule?.pickup?.address ?: "" 
+                                                nextSchedule?.pickup_location?.address ?: "" 
                                             else 
-                                                nextSchedule?.dropoff?.address ?: ""
+                                                nextSchedule?.dropoff_location?.address ?: ""
                                             openExternalMaps(context, dest.latitude, dest.longitude, address)
                                         },
                                         modifier = Modifier
@@ -1802,8 +1841,8 @@ fun DriverDashboard(
                             ) {
                                 Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Text("Client: ${nextSchedule?.client?.name ?: "Fleet Assign"}", color = Color.White, fontWeight = FontWeight.Bold)
-                                    Text("Pickup: ${nextSchedule?.pickup?.address}", color = TextSecondary)
-                                    Text("Dropoff: ${nextSchedule?.dropoff?.address}", color = TextSecondary)
+                                    Text("Pickup: ${nextSchedule?.pickup_location?.address}", color = TextSecondary)
+                                    Text("Dropoff: ${nextSchedule?.dropoff_location?.address}", color = TextSecondary)
                                 }
                             }
                             Button(

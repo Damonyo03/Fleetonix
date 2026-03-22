@@ -100,41 +100,64 @@ function initMap() {
     onSnapshot(collection(db, "drivers"), (snapshot) => {
         snapshot.docs.forEach(docSnap => {
             const data = docSnap.data();
-            const id = docSnap.id;
-            if (!allDriversData[id]) allDriversData[id] = {};
+            const email = (data.driver_email || "").toLowerCase().trim();
+            const id = docSnap.id; // This might be UID or Email depending on how it was created
+            
+            // Use email as the primary key if available to match driver_locations
+            const key = email || id;
+            
+            if (!allDriversData[key]) allDriversData[key] = { id: key };
+            
             // Merge metadata
-            Object.assign(allDriversData[id], {
-                id: id,
+            Object.assign(allDriversData[key], {
                 driver_name: data.driver_name,
                 current_status: data.current_status,
-                vehicle_assigned: data.vehicle_assigned
+                vehicle_assigned: data.vehicle_assigned,
+                driver_email: email
             });
+
+            // If a marker already exists for this driver, update its icon/info
+            if (driverMarkers[key]) {
+                const markerIcon = getMarkerIcon(data.current_status || 'available');
+                driverMarkers[key].setIcon(markerIcon);
+            }
         });
         updateOnlineDriversList();
+        window.allDriversData = allDriversData; // Expose for debugging
+        window.driverMarkers = driverMarkers;   // Expose for debugging
     });
 
     // Listen to driver_locations for real-time position
     onSnapshot(collection(db, "driver_locations"), (snapshot) => {
         snapshot.docChanges().forEach((change) => {
             const driverLoc = change.doc.data();
-            const driverId = change.doc.id;
+            const driverId = change.doc.id.toLowerCase().trim();
             
             if (change.type === "removed") {
-                if (driverMarkers[driverId]) {
-                    driverMarkers[driverId].setMap(null);
-                    delete driverMarkers[driverId];
+                // Instead of removing the marker, we mark it as offline in our local state
+                if (allDriversData[driverId]) {
+                    allDriversData[driverId].current_status = 'offline';
+                    if (driverMarkers[driverId]) {
+                        driverMarkers[driverId].setIcon(getMarkerIcon('offline'));
+                        driverMarkers[driverId].setOpacity(0.6); // Fade offline markers
+                    }
                 }
                 return;
             }
 
             // Sync location to allDriversData
-            if (!allDriversData[driverId]) allDriversData[driverId] = { id: driverId };
+            if (!allDriversData[driverId]) {
+                allDriversData[driverId] = { id: driverId };
+            }
             Object.assign(allDriversData[driverId], driverLoc);
 
             const driver = allDriversData[driverId];
             if (driver.current_latitude && driver.current_longitude) {
                 const position = { lat: driver.current_latitude, lng: driver.current_longitude };
-                const markerIcon = getMarkerIcon(driver.current_status || 'available');
+                
+                // If the driver is actually online but we just got an update, ensure opacity is full
+                const status = driver.current_status || 'available';
+                const markerIcon = getMarkerIcon(status);
                 
                 // Update Route Polyline
                 if (driver.current_route_polyline) {
@@ -160,6 +183,7 @@ function initMap() {
                     // Update existing marker
                     driverMarkers[driverId].setPosition(position);
                     driverMarkers[driverId].setIcon(markerIcon);
+                    driverMarkers[driverId].setOpacity(status === 'offline' ? 0.6 : 1.0);
                 } else {
                     // Create new marker
                     const marker = new google.maps.Marker({
@@ -167,21 +191,26 @@ function initMap() {
                         map: driversMap,
                         title: driver.driver_name || 'Driver',
                         icon: markerIcon,
+                        opacity: status === 'offline' ? 0.6 : 1.0,
                         animation: google.maps.Animation.DROP
                     });
 
+                    const infoWindowContent = () => `
+                        <div style="color: #333; padding: 5px; min-width: 150px;">
+                            <strong style="display: block; margin-bottom: 5px; font-size: 14px;">${driver.driver_name || 'Driver'}</strong>
+                            <span style="font-size: 12px; color: #666;">Status: <span style="color: ${getStatusColor(driver.current_status)}; font-weight: bold;">${(driver.current_status || 'available').replace('_', ' ')}</span></span><br>
+                            <span style="font-size: 11px; color: #888;">Vehicle: ${driver.vehicle_assigned || 'N/A'}</span><br>
+                            ${driver.last_updated ? `<span style="font-size: 10px; color: #999;">Last update: ${new Date(driver.last_updated.seconds * 1000).toLocaleTimeString()}</span><br>` : ''}
+                            ${driver.trip_eta ? `<span style="font-size: 11px; color: #3b82f6; font-weight: 500;">ETA: ${driver.trip_eta} (${driver.trip_distance})</span>` : ''}
+                        </div>
+                    `;
+
                     const infoWindow = new google.maps.InfoWindow({
-                        content: `
-                            <div style="color: #333; padding: 5px; min-width: 150px;">
-                                <strong style="display: block; margin-bottom: 5px; font-size: 14px;">${driver.driver_name || 'Driver'}</strong>
-                                <span style="font-size: 12px; color: #666;">Status: <span style="color: ${getStatusColor(driver.current_status)}; font-weight: bold;">${driver.current_status || 'N/A'}</span></span><br>
-                                <span style="font-size: 11px; color: #888;">Vehicle: ${driver.vehicle_assigned || 'N/A'}</span><br>
-                                ${driver.trip_eta ? `<span style="font-size: 11px; color: #3b82f6; font-weight: 500;">ETA: ${driver.trip_eta} (${driver.trip_distance})</span>` : ''}
-                            </div>
-                        `
+                        content: infoWindowContent()
                     });
 
                     marker.addListener('click', () => {
+                        infoWindow.setContent(infoWindowContent());
                         infoWindow.open(driversMap, marker);
                     });
 
@@ -192,12 +221,34 @@ function initMap() {
         
         updateOnlineDriversList(); 
         
-        updateOnlineDriversList(); 
+        const activeCount = Object.values(allDriversData).filter(d => d.current_latitude && d.current_status !== 'offline').length;
+        const statusEl = document.getElementById('mapStatus');
+        if (statusEl) statusEl.innerText = `Live: ${activeCount} drivers online`;
         
-        const activeCount = Object.values(allDriversData).length;
-        document.getElementById('mapStatus').innerText = `Live: ${activeCount} drivers connected`;
-        document.getElementById('activeDrivers').innerText = Object.values(allDriversData).filter(d => d.current_status !== 'offline').length;
+        const activeDriversEl = document.getElementById('activeDrivers');
+        if (activeDriversEl) activeDriversEl.innerText = activeCount;
     });
+
+    // Cleanup "ghost" markers periodically (every 5 mins)
+    setInterval(() => {
+        const now = Date.now();
+        const thirtyMins = 30 * 60 * 1000;
+        
+        Object.keys(driverMarkers).forEach(id => {
+            const data = allDriversData[id];
+            if (data && data.last_updated) {
+                const diff = now - (data.last_updated.seconds * 1000);
+                if (diff > thirtyMins) {
+                    console.log(`Hiding ghost marker for ${id} (no update for 30m)`);
+                    driverMarkers[id].setMap(null);
+                    // We don't delete from driverMarkers so we can restore if they come back
+                } else if (driverMarkers[id].getMap() === null && data.current_latitude) {
+                    // Restore if they are recent again
+                    driverMarkers[id].setMap(driversMap);
+                }
+            }
+        });
+    }, 60000); // Check every minute
 }
 
 function updateOnlineDriversList() {
@@ -205,10 +256,14 @@ function updateOnlineDriversList() {
     const onlineCount = document.getElementById('onlineCount');
     if (!listContainer) return;
 
-    // Filter and sort: Available first, then others
+    // Filter and sort: Available first, then others, exclude those with no location for the 'Live' widget if needed
+    // But for the list, we show those who are in our allDriversData
     const sortedDrivers = Object.values(allDriversData).sort((a, b) => {
-        if (a.current_status === 'available' && b.current_status !== 'available') return -1;
-        if (a.current_status !== 'available' && b.current_status === 'available') return 1;
+        const statusA = a.current_status || 'offline';
+        const statusB = b.current_status || 'offline';
+        
+        if (statusA === 'available' && statusB !== 'available') return -1;
+        if (statusA !== 'available' && statusB === 'available') return 1;
         return (a.driver_name || '').localeCompare(b.driver_name || '');
     });
 
@@ -223,7 +278,9 @@ function updateOnlineDriversList() {
         </div>
     `).join('') : '<div style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 0.85em;">No drivers online.</div>';
     
-    onlineCount.innerText = sortedDrivers.length;
+    // The badge should only count 'available' and 'on_trip' (not offline)
+    const onlineOnlyCount = Object.values(allDriversData).filter(d => d.current_status && d.current_status !== 'offline').length;
+    if (onlineCount) onlineCount.innerText = onlineOnlyCount;
 }
 
 window.focusDriver = function(driverId) {

@@ -2,7 +2,7 @@ import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebase
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import {
     getFirestore, collection, query, orderBy, onSnapshot,
-    doc, getDoc, updateDoc, writeBatch, where, getDocs, serverTimestamp
+    doc, getDoc, updateDoc, writeBatch, where, getDocs, addDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { initLayout } from "./modules/ui.js";
@@ -272,6 +272,12 @@ window.acknowledgeNotif = async function(id, source) {
     console.log("Acknowledging:", id, "from source:", source);
     if (!id || !source) return;
     
+    // Ensure we have access to the Firestore functions in this scope
+    const _addDoc = addDoc; 
+    const _updateDoc = updateDoc;
+    const _doc = doc;
+    const _collection = collection;
+
     try {
         const btn = document.querySelector(`#notif-${id} .btn-ack`);
         if (btn) {
@@ -279,7 +285,7 @@ window.acknowledgeNotif = async function(id, source) {
             btn.innerText = 'Acknowledging...';
         }
 
-        await updateDoc(doc(db, source, id), {
+        await _updateDoc(_doc(db, source, id), {
             status: 'acknowledged',
             acknowledged_at: serverTimestamp(),
             acknowledged_by: auth.currentUser?.email || 'admin'
@@ -288,7 +294,7 @@ window.acknowledgeNotif = async function(id, source) {
         console.log("Successfully acknowledged in Firestore");
 
         // Log to activity
-        await addDoc(collection(db, "activity"), {
+        await _addDoc(_collection(db, "activity"), {
             type: 'system',
             title: 'Alert Acknowledged',
             message: `Admin acknowledged ${source} alert (ID: ${id})`,
@@ -324,6 +330,12 @@ window.markAllRead = async function() {
     const unreadAlerts = allNotifs.filter(n => (n.type === 'accident' || n.type === 'vehicle_issue') && n.status !== 'acknowledged');
     if (unreadAlerts.length === 0) return;
 
+    // Ensure we have access to the Firestore functions in this scope
+    const _addDoc = addDoc; 
+    const _updateDoc = updateDoc;
+    const _doc = doc;
+    const _collection = collection;
+
     try {
         const btn = document.querySelector('.btn-mark-all');
         if (btn) {
@@ -332,7 +344,7 @@ window.markAllRead = async function() {
         }
 
         const promises = unreadAlerts.map(n => 
-            updateDoc(doc(db, n.source, n.id), {
+            _updateDoc(_doc(db, n.source, n.id), {
                 status: 'acknowledged',
                 acknowledged_at: serverTimestamp(),
                 acknowledged_by: auth.currentUser?.email || 'admin'
@@ -342,7 +354,7 @@ window.markAllRead = async function() {
         await Promise.all(promises);
 
         // Log the bulk action
-        await addDoc(collection(db, "activity"), {
+        await _addDoc(_collection(db, "activity"), {
             type: 'system',
             title: 'Bulk Acknowledgment',
             message: `Admin acknowledged ${unreadAlerts.length} alerts at once.`,
