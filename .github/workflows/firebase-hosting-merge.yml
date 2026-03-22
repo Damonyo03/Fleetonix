@@ -17,9 +17,17 @@ jobs:
         run: |
           cd functions
           npm install
+      - name: Check Secret
+        run: |
+          if [ -z "${{ secrets.FIREBASE_SERVICE_ACCOUNT_APPFLEETONIX }}" ]; then
+            echo "::error::FIREBASE_SERVICE_ACCOUNT_APPFLEETONIX secret is missing or empty!"
+            exit 1
+          fi
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_APPFLEETONIX }}
       - name: Deploy to Firebase
-        run: npx firebase-tools deploy --only hosting,functions --project appfleetonix --non-interactive
+        run: |
+          # Use npx to ensure we use the local or latest firebase-tools
+          npx firebase-tools deploy --only hosting,functions --project appfleetonix --non-interactive
