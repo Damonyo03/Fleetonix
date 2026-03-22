@@ -120,6 +120,40 @@ function initMap() {
             if (driverMarkers[key]) {
                 const markerIcon = getMarkerIcon(data.current_status || 'available');
                 driverMarkers[key].setIcon(markerIcon);
+                // Also update position if the drivers collection has it (for persistent offline markers)
+                if (data.current_latitude && data.current_longitude) {
+                    driverMarkers[key].setPosition({ lat: data.current_latitude, lng: data.current_longitude });
+                }
+            } else if (data.current_latitude && data.current_longitude) {
+                // If NO marker exists but we have location, create a persistent/offline marker
+                console.log(`Creating persistent marker for ${data.driver_name} from drivers collection`);
+                const status = data.current_status || 'offline';
+                const marker = new google.maps.Marker({
+                    position: { lat: data.current_latitude, lng: data.current_longitude },
+                    map: driversMap,
+                    title: data.driver_name || 'Driver',
+                    icon: getMarkerIcon(status),
+                    opacity: status === 'offline' ? 0.6 : 1.0
+                });
+                
+                // Add info window logic (simplified or reuse a function)
+                // For brevity, I'll just store it; a real implementation would add the listener too
+                driverMarkers[key] = marker;
+                
+                // Add click listener
+                const infoWindowContent = () => `
+                    <div style="color: #333; padding: 5px; min-width: 150px;">
+                        <strong style="display: block; margin-bottom: 5px; font-size: 14px;">${data.driver_name || 'Driver'}</strong>
+                        <span style="font-size: 12px; color: #666;">Status: <span style="color: ${getStatusColor(status)}; font-weight: bold;">${status.replace('_', ' ')}</span></span><br>
+                        <span style="font-size: 11px; color: #888;">Vehicle: ${data.vehicle_assigned || 'N/A'}</span><br>
+                        <span style="font-size: 10px; color: #999;">Offline / Last Known Location</span>
+                    </div>
+                `;
+                const infoWindow = new google.maps.InfoWindow({ content: infoWindowContent() });
+                marker.addListener('click', () => {
+                    infoWindow.setContent(infoWindowContent());
+                    infoWindow.open(driversMap, marker);
+                });
             }
         });
         updateOnlineDriversList();
@@ -134,12 +168,12 @@ function initMap() {
             const driverId = change.doc.id.toLowerCase().trim();
             
             if (change.type === "removed") {
-                // Instead of removing the marker, we mark it as offline in our local state
+                // Instead of hiding the marker, we mark it as offline and keep it visible but faded
                 if (allDriversData[driverId]) {
                     allDriversData[driverId].current_status = 'offline';
                     if (driverMarkers[driverId]) {
                         driverMarkers[driverId].setIcon(getMarkerIcon('offline'));
-                        driverMarkers[driverId].setOpacity(0.6); // Fade offline markers
+                        driverMarkers[driverId].setOpacity(0.4); // Very faded for removed docs
                     }
                 }
                 return;
@@ -183,7 +217,11 @@ function initMap() {
                     // Update existing marker
                     driverMarkers[driverId].setPosition(position);
                     driverMarkers[driverId].setIcon(markerIcon);
-                    driverMarkers[driverId].setOpacity(status === 'offline' ? 0.6 : 1.0);
+                    
+                    // Fading logic: offline is most faded, others are full opacity
+                    let opacity = 1.0;
+                    if (status === 'offline') opacity = 0.6;
+                    driverMarkers[driverId].setOpacity(opacity);
                 } else {
                     // Create new marker
                     const marker = new google.maps.Marker({
@@ -232,18 +270,26 @@ function initMap() {
     // Cleanup "ghost" markers periodically (every 5 mins)
     setInterval(() => {
         const now = Date.now();
-        const thirtyMins = 30 * 60 * 1000;
+        const tenMins = 10 * 60 * 1000; // Shorter threshold for active markers
+        const oneHour = 60 * 60 * 1000; // Threshold for offline markers
         
         Object.keys(driverMarkers).forEach(id => {
             const data = allDriversData[id];
             if (data && data.last_updated) {
                 const diff = now - (data.last_updated.seconds * 1000);
-                if (diff > thirtyMins) {
-                    console.log(`Hiding ghost marker for ${id} (no update for 30m)`);
+                const status = data.current_status || 'offline';
+                
+                // If status is online but no update for 10 mins, it's a ghost
+                if (status !== 'offline' && diff > tenMins) {
+                    console.log(`Fading ghost marker for ${id} (no update for 10m)`);
+                    driverMarkers[id].setOpacity(0.3);
+                } 
+                // If it's more than an hour old, hide it regardless
+                if (diff > oneHour) {
+                    console.log(`Hiding very stale marker for ${id}`);
                     driverMarkers[id].setMap(null);
-                    // We don't delete from driverMarkers so we can restore if they come back
-                } else if (driverMarkers[id].getMap() === null && data.current_latitude) {
-                    // Restore if they are recent again
+                } else if (driverMarkers[id].getMap() === null) {
+                    // Restore if it's within the hour again
                     driverMarkers[id].setMap(driversMap);
                 }
             }
