@@ -27,7 +27,7 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_APPFLEETONIX }}
-      - name: Deploy to Firebase
-        run: |
-          # Use npx to ensure we use the local or latest firebase-tools
-          npx firebase-tools deploy --only hosting,functions --project appfleetonix --non-interactive
+      - name: Deploy to Firebase Hosting
+        run: npx firebase-tools deploy --only hosting --project appfleetonix --non-interactive
+      - name: Deploy to Firebase Functions
+        run: npx firebase-tools deploy --only functions --project appfleetonix --non-interactive --debug
