@@ -228,21 +228,25 @@ async function showAdminBookingModal() {
             document.getElementById('new_client_section').style.display = e.target.value === 'new' ? 'block' : 'none';
         }));
 
-        // Enhanced Address Autocomplete (Cloud Proxy)
-        const pickupSearch = new CloudAddressSearch(
-            document.getElementById('modal_pickup'),
-            document.getElementById('modal_pickup_lat'),
-            document.getElementById('modal_pickup_lng')
-        );
-        const dropoffSearch = new CloudAddressSearch(
-            document.getElementById('modal_dropoff'),
-            document.getElementById('modal_dropoff_lat'),
-            document.getElementById('modal_dropoff_lng')
-        );
+        // Google Places Autocomplete
+        if (window.AddressAutocomplete) {
+            const pickupSearch = new AddressAutocomplete(
+                document.getElementById('modal_pickup'),
+                document.getElementById('modal_pickup_lat'),
+                document.getElementById('modal_pickup_lng')
+            );
+            const dropoffSearch = new AddressAutocomplete(
+                document.getElementById('modal_dropoff'),
+                document.getElementById('modal_dropoff_lat'),
+                document.getElementById('modal_dropoff_lng')
+            );
 
-        // Location Action Buttons
-        document.getElementById('locatePickup').onclick = () => pickupSearch.getCurrentLocation();
-        document.getElementById('locateDropoff').onclick = () => dropoffSearch.getCurrentLocation();
+            // Location Action Buttons (Target Icons)
+            document.getElementById('locatePickup').onclick = () => pickupSearch.getCurrentLocation();
+            document.getElementById('locateDropoff').onclick = () => dropoffSearch.getCurrentLocation();
+        } else {
+            console.error("AddressAutocomplete class not found. Ensure address-autocomplete.js is loaded.");
+        }
     }, 250); // Small delay to ensure modal is fully in DOM
 }
 

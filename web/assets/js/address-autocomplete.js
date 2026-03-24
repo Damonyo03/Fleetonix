@@ -69,6 +69,44 @@ class AddressAutocomplete {
             console.log(`Selected: ${place.formatted_address} (${this.latInput.value}, ${this.lngInput.value})`);
         });
     }
+
+    async getCurrentLocation() {
+        if (!navigator.geolocation) {
+            alert("Geolocation is not supported by your browser.");
+            return;
+        }
+
+        const originalPlaceholder = this.input.placeholder;
+        this.input.placeholder = "Detecting location...";
+        
+        navigator.geolocation.getCurrentPosition(async (position) => {
+            const { latitude, longitude } = position.coords;
+            this.latInput.value = latitude;
+            this.lngInput.value = longitude;
+
+            try {
+                // Reverse geocode using Google Geocoder since we are using Google anyway
+                const geocoder = new google.maps.Geocoder();
+                const response = await geocoder.geocode({ location: { lat: latitude, lng: longitude } });
+                
+                if (response.results && response.results[0]) {
+                    this.input.value = response.results[0].formatted_address;
+                } else {
+                    this.input.value = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+                }
+                this.input.placeholder = originalPlaceholder;
+                this.input.dispatchEvent(new Event('change', { bubbles: true }));
+            } catch (error) {
+                console.error("Reverse geocoding error:", error);
+                this.input.value = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+                this.input.placeholder = originalPlaceholder;
+            }
+        }, (error) => {
+            console.error("Geolocation error:", error);
+            alert("Unable to retrieve your location. Please type it manually.");
+            this.input.placeholder = originalPlaceholder;
+        });
+    }
 }
 
 // Initialize when DOM is ready
