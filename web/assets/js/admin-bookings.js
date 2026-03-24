@@ -31,9 +31,12 @@ onAuthStateChanged(auth, async (user) => {
 
     const userDoc = await getDoc(doc(db, "users", user.uid));
     const name = userDoc.exists() ? (userDoc.data().full_name || user.email.split('@')[0]) : user.email.split('@')[0];
-    initLayout('Bookings', name);
-
-    initBookingList();
+    
+    // Only set layout title to 'Bookings' if we are on the bookings page
+    if (window.location.pathname.includes('bookings.html')) {
+        initLayout('Bookings', name);
+        initBookingList();
+    }
 });
 
 // --- Admin Booking Modal ---

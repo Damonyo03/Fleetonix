@@ -91,8 +91,11 @@
 
             <div class="admin-content">
                 <div class="page-header">
-                    <h1 class="page-title">Dashboard Overview</h1>
-                    <p class="page-subtitle" id="welcomeMessage">Welcome back! Here's what's happening with your fleet.</p>
+                    <div>
+                        <h1 class="page-title">Dashboard Overview</h1>
+                        <p class="page-subtitle" id="welcomeMessage">Welcome back! Here's what's happening with your fleet.</p>
+                    </div>
+                    <button class="btn btn-primary" id="newAdminBookingBtn"><i class="fas fa-plus"></i> New Client Booking</button>
                 </div>
 
                 <div class="stats-grid" id="statsGrid">
@@ -182,7 +185,12 @@
         </div>
     </div>
 
+    <!-- Modal Placeholder -->
+    <div id="modalContainer"></div>
+
+    <script src="../assets/js/address-autocomplete.js"></script>
     <script type="module" src="../assets/js/admin.js"></script>
     <script type="module" src="../assets/js/admin-dashboard.js"></script>
+    <script type="module" src="../assets/js/admin-bookings.js"></script>
 </body>
 </html>
