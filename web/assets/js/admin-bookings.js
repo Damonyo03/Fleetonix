@@ -276,6 +276,17 @@ async function showCreateBookingModal(clients) {
                     updated_at: serverTimestamp()
                 });
             }
+            // 3. Create Notification for Client
+            await addDoc(collection(db, "notifications"), {
+                user_id: clientId,
+                user_email: clientEmail,
+                title: 'Driver Assigned',
+                message: `Professional Driver ${driverName} (${vehicleAssigned}) has been assigned to your booking #${bookingId}.`,
+                type: 'assignment',
+                is_read: false,
+                booking_id: bookingId,
+                timestamp: serverTimestamp()
+            });
         }
         
         // Log Activity
@@ -492,6 +503,18 @@ window.assignDriver = async (id) => {
             status: "scheduled",
             driver_id: driverId,
             updated_at: serverTimestamp()
+        });
+
+        // 4. Create Notification for Client
+        await addDoc(collection(db, "notifications"), {
+            user_id: booking.client_id || 'guest',
+            user_email: booking.client_email,
+            title: 'Driver Assigned',
+            message: `Professional Driver ${driverName} (${vehicleAssigned}) has been assigned to your booking #${id}.`,
+            type: 'assignment',
+            is_read: false,
+            booking_id: id,
+            timestamp: serverTimestamp()
         });
 
         // Log Activity

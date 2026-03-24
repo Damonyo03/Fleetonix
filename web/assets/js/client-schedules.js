@@ -86,7 +86,15 @@ function loadSchedules(status) {
                         <div>${data.scheduled_date || 'N/A'}</div>
                         <small style="color: var(--text-muted);">${data.scheduled_time || ''}</small>
                     </td>
-                    <td><span class="status-badge ${currentStatus}">${currentStatus}</span><br><small>${phase}</small></td>
+                    <td>
+                        <span class="status-badge ${currentStatus}">
+                            ${currentStatus.replace('_', ' ')}
+                        </span>
+                        <br>
+                        <span class="status-badge ${data.trip_phase || 'pending'}" style="margin-top: 4px; font-size: 0.65em; opacity: 0.9;">
+                            ${(data.trip_phase || 'Preparing').replace('_', ' ')}
+                        </span>
+                    </td>
                     <td>
                         <div class="action-buttons">
                             <a href="schedule_view.html?id=${scheduleId}" class="btn-icon view" title="Track Live"><i class="fas fa-location-arrow"></i></a>

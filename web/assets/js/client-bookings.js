@@ -81,9 +81,12 @@ function loadBookings(status) {
                     <td><span class="status-badge ${status}">${status}</span></td>
                     <td>
                         <div class="action-buttons" style="display: flex; gap: 8px;">
-                            <a href="booking_view.html?id=${bookingId}" class="btn-icon view" title="View"><i class="fas fa-eye"></i></a>
+                            <a href="booking_view.html?id=${bookingId}" class="btn-icon view" title="View Details"><i class="fas fa-eye"></i></a>
+                            ${(status === 'scheduled' || status === 'assigned' || status === 'confirmed') ? `
+                                <a href="dashboard.html" class="btn-icon track" title="Track on Map" style="color: var(--accent-blue);"><i class="fas fa-location-arrow"></i></a>
+                            ` : ''}
                             ${status === 'pending' ? `
-                                <button onclick="cancelBooking('${bookingId}')" class="btn-icon delete" title="Cancel"><i class="fas fa-times"></i></button>
+                                <button onclick="cancelBooking('${bookingId}')" class="btn-icon delete" title="Cancel Request"><i class="fas fa-times"></i></button>
                             ` : ''}
                         </div>
                     </td>

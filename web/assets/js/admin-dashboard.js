@@ -144,7 +144,7 @@ function initMap() {
                 const infoWindowContent = () => `
                     <div style="color: #333; padding: 5px; min-width: 150px;">
                         <strong style="display: block; margin-bottom: 5px; font-size: 14px;">${data.driver_name || 'Driver'}</strong>
-                        <span style="font-size: 12px; color: #666;">Status: <span style="color: ${getStatusColor(status)}; font-weight: bold;">${status.replace('_', ' ')}</span></span><br>
+                        <span style="font-size: 12px; color: #666;">Status: <span style="color: ${getStatusColor(data.current_trip_phase || status)}; font-weight: bold;">${(data.current_trip_phase || status).replace('_', ' ')}</span></span><br>
                         <span style="font-size: 11px; color: #888;">Vehicle: ${data.vehicle_assigned || 'N/A'}</span><br>
                         <span style="font-size: 10px; color: #999;">Offline / Last Known Location</span>
                     </div>
@@ -191,7 +191,7 @@ function initMap() {
                 
                 // If the driver is actually online but we just got an update, ensure opacity is full
                 const status = driver.current_status || 'available';
-                const markerIcon = getMarkerIcon(status);
+                const markerIcon = getMarkerIcon(driver.current_trip_phase || status);
                 
                 // Update Route Polyline
                 if (driver.current_route_polyline) {
@@ -236,7 +236,7 @@ function initMap() {
                     const infoWindowContent = () => `
                         <div style="color: #333; padding: 5px; min-width: 150px;">
                             <strong style="display: block; margin-bottom: 5px; font-size: 14px;">${driver.driver_name || 'Driver'}</strong>
-                            <span style="font-size: 12px; color: #666;">Status: <span style="color: ${getStatusColor(driver.current_status)}; font-weight: bold;">${(driver.current_status || 'available').replace('_', ' ')}</span></span><br>
+                            <span style="font-size: 12px; color: #666;">Status: <span style="color: ${getStatusColor(driver.current_trip_phase || driver.current_status)}; font-weight: bold;">${(driver.current_trip_phase || driver.current_status || 'available').replace('_', ' ')}</span></span><br>
                             <span style="font-size: 11px; color: #888;">Vehicle: ${driver.vehicle_assigned || 'N/A'}</span><br>
                             ${driver.last_updated ? `<span style="font-size: 10px; color: #999;">Last update: ${new Date(driver.last_updated.seconds * 1000).toLocaleTimeString()}</span><br>` : ''}
                             ${driver.trip_eta ? `<span style="font-size: 11px; color: #3b82f6; font-weight: 500;">ETA: ${driver.trip_eta} (${driver.trip_distance})</span>` : ''}
