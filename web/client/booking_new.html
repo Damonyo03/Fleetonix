@@ -92,7 +92,7 @@
                             <input type="hidden" id="dropoff_longitude" value="0">
                         </div>
 
-                        <div class="form-row">
+                        <div class="modal-form-row">
                             <div class="form-group">
                                 <label for="pickup_date">Pickup Date</label>
                                 <input type="date" id="pickup_date" class="form-input" required>
@@ -103,16 +103,14 @@
                             </div>
                         </div>
 
-                        <div class="form-row">
+                        <div class="modal-form-row">
                             <div class="form-group">
                                 <label for="passengers">Number of Passengers</label>
                                 <input type="number" id="passengers" class="form-input" min="1" value="1" required>
                             </div>
                             <div class="form-group" style="display: flex; align-items: center; padding-top: 25px;">
-                                <label class="checkbox-label">
-                                    <input type="checkbox" id="return_to_pickup">
-                                    <span class="checkbox-custom"></span>
-                                    <span class="checkbox-text">Return to pickup after dropoff</span>
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9em;">
+                                    <input type="checkbox" id="return_to_pickup" style="width: auto;"> Return to pickup after dropoff
                                 </label>
                             </div>
                         </div>
@@ -122,9 +120,9 @@
                             <textarea id="special_instructions" class="form-input" rows="3" placeholder="Any specific requirements..."></textarea>
                         </div>
 
-                        <div class="form-actions" style="margin-top: 20px;">
-                            <button type="submit" id="submitBtn" class="btn btn-primary">Create Booking</button>
-                            <button type="button" class="btn btn-secondary" onclick="window.history.back()">Cancel</button>
+                        <div class="form-actions" style="margin-top: 20px; display: flex; gap: 15px;">
+                            <button type="submit" id="submitBtn" class="btn btn-primary" style="flex: 1;">Create Booking</button>
+                            <button type="button" class="btn btn-secondary" onclick="window.history.back()" style="flex: 1;">Cancel</button>
                         </div>
                     </form>
                 </div>

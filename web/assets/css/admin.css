@@ -831,8 +831,10 @@
     background: rgba(0, 0, 0, 0.7);
     backdrop-filter: blur(4px);
     display: none;
-    align-items: center;
+    align-items: flex-start; /* Change to flex-start for scrolling */
     justify-content: center;
+    padding: 40px 10px; /* Add padding for breathing room */
+    overflow-y: auto; /* Allow backdrop to scroll */
     z-index: 2000;
 }
 
@@ -840,13 +842,13 @@
     background: var(--bg-secondary);
     width: 100%;
     max-width: 600px;
-    max-height: 90vh;
+    /* Remove max-height: 90vh to let it grow naturally */
     display: flex;
     flex-direction: column;
     border-radius: 12px;
     border: 1px solid var(--border-color);
     box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-    overflow: hidden;
+    overflow: visible; /* CRITICAL: Ensure dropdowns aren't clipped */
     animation: modalSlideUp 0.3s ease;
 }
 

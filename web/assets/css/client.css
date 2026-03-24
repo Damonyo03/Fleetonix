@@ -596,3 +596,55 @@ body {
         padding: 20px;
     }
 }
+/* Premium Form Layouts (Ported from Admin) */
+.booking-form-card {
+    background: var(--bg-card);
+    padding: 35px;
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.modal-form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+@media (max-width: 600px) {
+    .modal-form-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+.input-with-action {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.btn-input-action {
+    position: absolute;
+    right: 5px;
+    background: none;
+    border: none;
+    color: var(--accent-blue);
+    padding: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 1.1rem;
+    z-index: 5;
+}
+
+.btn-input-action:hover {
+    color: var(--accent-green);
+    transform: scale(1.1);
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
