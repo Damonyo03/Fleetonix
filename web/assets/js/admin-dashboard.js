@@ -313,16 +313,22 @@ function updateOnlineDriversList() {
         return (a.driver_name || '').localeCompare(b.driver_name || '');
     });
 
-    listContainer.innerHTML = sortedDrivers.length > 0 ? sortedDrivers.map(driver => `
-        <div class="driver-item" onclick="focusDriver('${driver.id}')">
-            <div class="status-dot ${driver.current_status || 'offline'}"></div>
-            <div class="driver-info">
-                <div class="driver-name">${driver.driver_name || 'Unnamed Driver'}</div>
-                <div class="driver-status-text">${(driver.current_status || 'offline').replace('_', ' ')}</div>
+    listContainer.innerHTML = sortedDrivers.length > 0 ? sortedDrivers.map(driver => {
+        const status = driver.current_status || 'offline';
+        const phase = driver.current_trip_phase || (status === 'on_schedule' ? 'accepted' : '');
+        const displayStatus = phase ? phase : status;
+        
+        return `
+            <div class="driver-item" onclick="focusDriver('${driver.id}')">
+                <div class="status-dot ${displayStatus}"></div>
+                <div class="driver-info">
+                    <div class="driver-name">${driver.driver_name || 'Unnamed Driver'}</div>
+                    <div class="driver-status-text">${displayStatus.replace('_', ' ')}</div>
+                </div>
+                ${status === 'available' ? '<i class="fas fa-check-circle" style="color: #10b981; font-size: 0.8em;"></i>' : ''}
             </div>
-            ${driver.current_status === 'available' ? '<i class="fas fa-check-circle" style="color: #10b981; font-size: 0.8em;"></i>' : ''}
-        </div>
-    `).join('') : '<div style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 0.85em;">No drivers online.</div>';
+        `;
+    }).join('') : '<div style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 0.85em;">No drivers online.</div>';
     
     // The badge should only count 'available' and 'on_trip' (not offline)
     const onlineOnlyCount = Object.values(allDriversData).filter(d => d.current_status && d.current_status !== 'offline').length;
@@ -354,7 +360,10 @@ function getStatusColor(status) {
     const colors = {
         'available': '#10b981',
         'on_schedule': '#3b82f6',
-        'in_progress': '#f59e0b',
+        'accepted': '#3b82f6',
+        'pickup': '#8b5cf6',
+        'dropoff': '#f97316',
+        'in_progress': '#8b5cf6', // Legacy mapping
         'offline': '#6b7280'
     };
     return colors[status] || '#6b7280';

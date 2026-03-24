@@ -151,6 +151,14 @@ async function showCreateBookingModal(clients) {
             <textarea id="special_instructions" class="form-input" rows="2" placeholder="e.g. Near the main gate..."></textarea>
         </div>
 
+        <div class="form-group">
+            <label for="modal_driver">Assign Driver (Optional)</label>
+            <select id="modal_driver" class="form-input">
+                <option value="">-- No Driver Assigned --</option>
+            </select>
+            <small style="color: var(--text-muted); font-size: 0.8em; margin-top: 4px; display: block;">Only available drivers are shown here.</small>
+        </div>
+
         <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-top: 10px; background: rgba(16, 185, 129, 0.05); padding: 12px; border-radius: 8px; border: 1px dashed var(--accent-green);">
             <input type="checkbox" id="modal_auto_dispatch" style="width: auto;">
             <label for="modal_auto_dispatch" style="margin: 0; cursor: pointer; color: var(--accent-green); font-weight: 700;">Auto-Approve & Send to Dispatch</label>
@@ -181,9 +189,12 @@ async function showCreateBookingModal(clients) {
         const time = document.getElementById('pickup_time').value;
         if (!date || !time) throw new Error("Please enter a date and time.");
 
+        const driverId = document.getElementById('modal_driver').value;
         const autoDispatch = document.getElementById('modal_auto_dispatch').checked;
 
+        const bookingId = generateNumericId().toString();
         const data = sanitizeFirestoreData({
+            booking_id: bookingId,
             client_id: clientId,
             client_name: clientName,
             client_email: clientEmail,
@@ -203,13 +214,66 @@ async function showCreateBookingModal(clients) {
             return_to_pickup: document.getElementById('return_to_pickup').checked,
             special_instructions: document.getElementById('special_instructions').value || '',
 
-            status: autoDispatch ? 'approved' : 'pending',
+            driver_id: driverId || null,
+            status: autoDispatch ? 'scheduled' : 'pending',
             createdBy: 'admin',
             created_at: serverTimestamp()
         });
 
-        const bookingId = generateNumericId().toString();
+        // 1. Save Booking
         await setDoc(doc(db, "bookings", bookingId), data);
+
+        // 2. If Auto-Dispatch and Driver selected, create Schedule and update Driver status
+        if (autoDispatch && driverId) {
+            const driverSelect = document.getElementById('modal_driver');
+            const driverName = driverSelect.options[driverSelect.selectedIndex].text.replace('🟢 ', '');
+            
+            // Get driver email
+            const driverUserDoc = await getDoc(doc(db, "users", driverId));
+            const driverEmail = driverUserDoc.exists() ? (driverUserDoc.data().email || "") : "";
+
+            const scheduleData = sanitizeFirestoreData({
+                booking_id: bookingId,
+                numeric_booking_id: parseInt(bookingId), 
+                schedule_id: generateNumericId(),
+                client_id: clientId,
+                client_name: clientName,
+                client_email: clientEmail,
+                company_name: isExisting ? '' : (document.getElementById('modal_company')?.value || ''),
+                driver_id: driverId,
+                driver_email: driverEmail.toLowerCase().trim(),
+                driver_name: driverName,
+                trip_phase: "pending",
+                status: "pending",
+                pickup_location: pickup,
+                pickup_latitude: parseFloat(document.getElementById('pickup_latitude').value) || 0,
+                pickup_longitude: parseFloat(document.getElementById('pickup_longitude').value) || 0,
+                dropoff_location: dropoff,
+                dropoff_latitude: parseFloat(document.getElementById('dropoff_latitude').value) || 0,
+                dropoff_longitude: parseFloat(document.getElementById('dropoff_longitude').value) || 0,
+                schedule_date: date,
+                schedule_time: time,
+                passengers: parseInt(document.getElementById('passengers').value) || 1,
+                return_to_pickup: document.getElementById('return_to_pickup').checked,
+                special_instructions: document.getElementById('special_instructions').value || '',
+                created_at: serverTimestamp(),
+                updated_at: serverTimestamp()
+            });
+
+            await addDoc(collection(db, "schedules"), scheduleData);
+
+            // Update driver status in drivers collection
+            const driverQuery = query(collection(db, "drivers"), where("driver_email", "==", driverEmail));
+            const driverSnap = await getDocs(driverQuery);
+            if (!driverSnap.empty) {
+                await updateDoc(driverSnap.docs[0].ref, {
+                    current_status: "on_schedule",
+                    current_trip_id: bookingId,
+                    current_trip_phase: "pending",
+                    updated_at: serverTimestamp()
+                });
+            }
+        }
         
         // Log Activity
         await addDoc(collection(db, "activity"), {
@@ -223,12 +287,41 @@ async function showCreateBookingModal(clients) {
     });
 
     // Initialize client type toggle logic after modal renders
-    setTimeout(() => {
+    setTimeout(async () => {
         const radios = document.querySelectorAll('input[name="client_type"]');
         radios.forEach(r => r.addEventListener('change', (e) => {
             document.getElementById('existing_client_section').style.display = e.target.value === 'existing' ? 'block' : 'none';
             document.getElementById('new_client_section').style.display = e.target.value === 'new' ? 'block' : 'none';
         }));
+
+        // Populate Drivers List (Only Available)
+        const driverSelect = document.getElementById('modal_driver');
+        if (driverSelect) {
+            try {
+                // We check 'drivers' collection for status, and 'users' for name
+                const availableDriversQuery = query(collection(db, "drivers"), where("current_status", "==", "available"));
+                const driversSnap = await getDocs(availableDriversQuery);
+                
+                if (!driversSnap.empty) {
+                    let driversHtml = '<option value="">-- No Driver Assigned --</option>';
+                    for (const docSnap of driversSnap.docs) {
+                        const d = docSnap.data();
+                        // Find the user UID for this driver via email fallback if needed
+                        const uQuery = query(collection(db, "users"), where("email", "==", d.driver_email));
+                        const uSnap = await getDocs(uQuery);
+                        if (!uSnap.empty) {
+                            const u = uSnap.docs[0];
+                            driversHtml += `<option value="${u.id}">🟢 ${d.driver_name || u.data().full_name}</option>`;
+                        }
+                    }
+                    driverSelect.innerHTML = driversHtml;
+                } else {
+                    driverSelect.innerHTML = '<option value="">No available drivers found</option>';
+                }
+            } catch (err) {
+                console.error("Error loading drivers for booking:", err);
+            }
+        }
     }, 100);
 }
 

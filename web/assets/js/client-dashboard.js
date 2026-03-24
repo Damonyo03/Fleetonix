@@ -59,7 +59,7 @@ function syncDriverTracking() {
     const schedulesQuery = query(
         collection(db, "schedules"),
         where("client_email", "==", userEmail),
-        where("trip_phase", "in", ["pickup", "dropoff", "ready_to_complete"])
+        where("trip_phase", "in", ["accepted", "pickup", "dropoff", "ready_to_complete"])
     );
 
     onSnapshot(schedulesQuery, (snapshot) => {
@@ -140,13 +140,27 @@ function setupLocationListener() {
                         map: clientMap,
                         icon: {
                             path: google.maps.SymbolPath.CIRCLE,
-                            scale: 8,
+                            scale: 10,
                             fillColor: "#3b82f6",
                             fillOpacity: 1,
                             strokeWeight: 2,
                             strokeColor: "#ffffff"
                         },
-                        title: "Your Driver"
+                        title: data.driver_name || "Your Driver"
+                    });
+
+                    const infoWindow = new google.maps.InfoWindow({
+                        content: `
+                            <div style="color: #333; padding: 5px;">
+                                <strong style="display: block; margin-bottom: 5px;">${data.driver_name || 'Your Driver'}</strong>
+                                <span style="font-size: 12px; color: #666;">Status: <span style="color: #3b82f6; font-weight: bold;">En Route</span></span><br>
+                                <span style="font-size: 11px; color: #888;">Vehicle: ${data.vehicle_assigned || 'Fleet Vehicle'}</span>
+                            </div>
+                        `
+                    });
+
+                    markers[email].addListener('click', () => {
+                        infoWindow.open(clientMap, markers[email]);
                     });
                 }
             }
