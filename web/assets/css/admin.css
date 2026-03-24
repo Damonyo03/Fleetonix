@@ -850,6 +850,11 @@
     animation: modalSlideUp 0.3s ease;
 }
 
+/* Ensure Google Places Autocomplete dropdown is above modals */
+.pac-container {
+    z-index: 2001 !important;
+}
+
 .modal-body {
     padding: 20px;
     overflow-y: visible; /* Allow autocomplete dropdown to show */
