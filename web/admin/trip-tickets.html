@@ -8,6 +8,8 @@
     <link rel="stylesheet" href="../assets/css/style.css">
     <link rel="stylesheet" href="../assets/css/admin.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- SheetJS for Excel Export -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <style>
         .ticket-card {
             background: var(--card-bg);
@@ -177,8 +179,8 @@
             <div class="admin-content">
                 <div class="page-header" style="margin-bottom: 20px;">
                     <h1 class="page-title">Completed Trip Tickets</h1>
-                    <button class="btn btn-secondary" onclick="window.print()" style="display:flex;align-items:center;gap:6px;">
-                        <i class="fas fa-print"></i> Print / Export
+                    <button class="btn btn-secondary" onclick="exportTripTickets()" style="display:flex;align-items:center;gap:6px;">
+                        <i class="fas fa-file-excel"></i> Export to Excel
                     </button>
                 </div>
 

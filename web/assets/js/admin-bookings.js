@@ -41,10 +41,12 @@ async function showAdminBookingModal() {
     // Try fetching clients by both `role` and `user_type` fields to handle schema differences
     let clients = [];
     try {
-        const snap1 = await getDocs(query(collection(db, "users"), where("role", "==", "client")));
-        const snap2 = await getDocs(query(collection(db, "users"), where("user_type", "==", "client")));
+        // Query both fields for maximal compatibility during migration
+        const rolesSnap = await getDocs(query(collection(db, "users"), where("role", "==", "client")));
+        const typesSnap = await getDocs(query(collection(db, "users"), where("user_type", "==", "client")));
+        
         const seen = new Set();
-        [...snap1.docs, ...snap2.docs].forEach(d => {
+        [...rolesSnap.docs, ...typesSnap.docs].forEach(d => {
             if (!seen.has(d.id)) {
                 seen.add(d.id);
                 clients.push({ id: d.id, ...d.data() });

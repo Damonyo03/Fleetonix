@@ -91,6 +91,50 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
 const auth = getAuth(app);
 
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { getDoc, doc, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+// ── Admin Role Guard ──────────────────────────────────────────────────────────
+onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+        // Not logged in, redirect to login
+        if (!window.location.pathname.includes('login.html')) {
+            window.location.href = '../login.html';
+        }
+        return;
+    }
+
+    try {
+        // Fetch user doc directly by UID
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
+        let userData = userSnap.exists() ? userSnap.data() : null;
+
+        // Fallback: If UID doc doesn't exist (e.g. manual auth creation), search by email
+        if (!userData) {
+            const q = query(collection(db, "users"), where("email", "==", user.email));
+            const emailSnap = await getDocs(q);
+            if (!emailSnap.empty) {
+                userData = emailSnap.docs[0].data();
+            }
+        }
+
+        if (!userData || (userData.user_type !== 'admin' && userData.role !== 'admin')) {
+            console.error("Access Denied: User is not an administrator.", userData);
+            // Block access and redirect
+            window.location.href = '../login.html?error=unauthorized';
+        } else {
+            // Authorized. Update UI with name if needed
+            const name = userData.full_name || user.email.split('@')[0];
+            // No need to call initLayout here as pages call it themselves, 
+            // but we can ensure the cache is fresh.
+            if (typeof cacheUser === 'function') cacheUser(name, 'admin');
+        }
+    } catch (error) {
+        console.error("Authorization check failed:", error);
+    }
+});
+
 // Global Sidebar Counters
 const updateSidebarBadge = (count) => {
     const counters = document.querySelectorAll('.notif-count');

@@ -6,6 +6,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { initLayout } from "./modules/ui.js";
+import { exportToExcel, mapTicketsForExport } from "./modules/export_utils.js";
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
@@ -211,4 +212,40 @@ window.clearFilters = function() {
     document.getElementById('filterDriver').value = '';
     renderTickets(allTickets);
     updateSummaryStats(allTickets);
+};
+
+window.exportTripTickets = function() {
+    const fromDate = document.getElementById('filterDateFrom').value;
+    const toDate = document.getElementById('filterDateTo').value;
+    const driver = document.getElementById('filterDriver').value;
+    
+    // Use the currently filtered list if any, otherwise all tickets
+    // Actually, it's better to just apply current filters to allTickets
+    let filtered = [...allTickets];
+    if (driver) filtered = filtered.filter(t => t.driver_name === driver);
+    // ... we could use same logic as applyFilters but let's just use a global `currentFilteredTickets`
+    
+    // For simplicity, let's just export what's currently being shown or re-filter
+    if (driver) {
+        filtered = filtered.filter(t => t.driver_name === driver);
+    }
+    if (fromDate) {
+        const from = new Date(fromDate);
+        filtered = filtered.filter(t => {
+            const d = t.completed_at?.toDate ? t.completed_at.toDate() : new Date(t.completed_at || 0);
+            return d >= from;
+        });
+    }
+    if (toDate) {
+        const to = new Date(toDate);
+        to.setHours(23, 59, 59, 999);
+        filtered = filtered.filter(t => {
+            const d = t.completed_at?.toDate ? t.completed_at.toDate() : new Date(t.completed_at || 0);
+            return d <= to;
+        });
+    }
+
+    const exportData = mapTicketsForExport(filtered);
+    const dateStr = new Date().toISOString().split('T')[0];
+    exportToExcel(exportData, `Fleetonix_Trip_Report_${dateStr}.xlsx`, 'Completed Trips');
 };

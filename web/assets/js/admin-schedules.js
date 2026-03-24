@@ -3,6 +3,7 @@ import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/fi
 import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, updateDoc, deleteDoc, orderBy, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { initLayout, showModal, hideModal } from "./modules/ui.js";
+import { exportToExcel } from "./modules/export_utils.js";
 
 // Initialize Firebase
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -25,7 +26,37 @@ onAuthStateChanged(auth, async (user) => {
 
     initScheduleList();
     initClearDataFeature();
+    initExportFeature();
 });
+
+function initExportFeature() {
+    const btn = document.getElementById('exportAllBtn');
+    if (btn) {
+        btn.onclick = () => {
+            if (allSchedules.length === 0) {
+                alert("No schedules found to export.");
+                return;
+            }
+            
+            const data = allSchedules.map(d => {
+                const s = d.data();
+                return {
+                    "Trip ID": d.id,
+                    "Driver": s.driver_name || 'N/A',
+                    "Client": s.company_name || s.client_name || 'N/A',
+                    "Pickup": s.pickup_location || 'N/A',
+                    "Time": s.schedule_time || 'N/A',
+                    "Status": s.status || 'scheduled',
+                    "Phase": s.trip_phase || 'pending',
+                    "Created": s.created_at ? new Date(s.created_at.seconds * 1000).toLocaleString() : 'N/A'
+                };
+            });
+            
+            const dateStr = new Date().toISOString().split('T')[0];
+            exportToExcel(data, `Fleetonix_All_Trips_${dateStr}.xlsx`, 'Active Schedules');
+        };
+    }
+}
 
 function initClearDataFeature() {
     const btn = document.getElementById('clearDataBtn');

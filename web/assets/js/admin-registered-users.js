@@ -37,7 +37,12 @@ function applyFilters() {
     const search = (document.getElementById('searchInput')?.value || '').toLowerCase();
 
     let filtered = allUsers;
-    if (role !== 'all') filtered = filtered.filter(u => (u.role || u.user_type || '') === role);
+    if (role !== 'all') {
+        filtered = filtered.filter(u => {
+            const uRole = u.role || u.user_type || '';
+            return uRole === role;
+        });
+    }
     if (search) filtered = filtered.filter(u =>
         (u.full_name || '').toLowerCase().includes(search) ||
         (u.email || '').toLowerCase().includes(search) ||
@@ -151,7 +156,10 @@ async function showCreateUserModal() {
         </div>
         <div class="form-group">
             <label>Password (Temporary)</label>
-            <input type="password" id="modal_password" class="form-input" placeholder="Min. 8 characters" required>
+            <div style="position:relative;">
+                <input type="password" id="modal_password" class="form-input" placeholder="Min. 8 characters" required style="padding-right: 40px;">
+                <i class="fas fa-eye" id="toggleModalPassword" style="position:absolute; right:12px; top:50%; transform:translateY(-50%); cursor:pointer; color:var(--text-muted); transition:color 0.2s;"></i>
+            </div>
         </div>
         <div class="form-row">
             <div class="form-group">
@@ -189,40 +197,57 @@ async function showCreateUserModal() {
         }
 
         try {
-            // Create a temporary secondary Firebase App instance so we don't sign out the admin
-            const secondaryApp = initializeApp(firebaseConfig, `create_user_${Date.now()}`);
-            const secondaryAuth = getAuth(secondaryApp);
-
-            // Step 1: Create Firebase Auth account (uses secondary app — admin stays signed in)
-            const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
-            const newUid = userCredential.user.uid;
-
-            // Clean up secondary app immediately
-            await deleteApp(secondaryApp);
-
-            // Step 2: Write user profile to Firestore using UID as document ID
-            await setDoc(doc(db, "users", newUid), {
-                uid: newUid,
-                full_name: fullName,
-                email: email.toLowerCase().trim(),
-                user_type: role,
-                company_name: companyName || "",
-                created_at: serverTimestamp(),
-                status: "active"
+            // Use the Cloud Function to create the user (avoids secondary app complexity)
+            const response = await fetch('https://us-central1-appfleetonix.cloudfunctions.net/adminCreateUser', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: email.toLowerCase().trim(),
+                    password: password,
+                    fullName: fullName,
+                    role: role,
+                    companyName: companyName || ""
+                })
             });
 
-            // Step 3: Log activity
-            await addDoc(collection(db, "activity"), {
-                type: 'system',
-                title: 'New User Registered',
-                message: `Admin registered a new ${role}: ${fullName} (${email})`,
-                timestamp: serverTimestamp()
-            });
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.message || "Failed to create user");
+            }
 
+            // The Cloud Function already creates the Firestore document, 
+            // but we can log the activity on the client side for immediate feedback if needed,
+            // though the function could also handle it. For now, just show success.
             alert(`User account for ${fullName} created successfully!`);
         } catch (err) {
             console.error("User creation error:", err);
-            throw new Error("Failed to create user: " + (err.code || err.message));
+            const msg = getFriendlyErrorMessage(err);
+            throw new Error(msg);
         }
     });
+
+    // Toggle Eye Logic for Modal
+    setTimeout(() => {
+        const toggleBtn = document.getElementById('toggleModalPassword');
+        const passInput = document.getElementById('modal_password');
+        if (toggleBtn && passInput) {
+            toggleBtn.addEventListener('click', () => {
+                const isPass = passInput.type === 'password';
+                passInput.type = isPass ? 'text' : 'password';
+                toggleBtn.classList.toggle('fa-eye');
+                toggleBtn.classList.toggle('fa-eye-slash');
+                toggleBtn.style.color = isPass ? 'var(--accent-blue)' : 'var(--text-muted)';
+            });
+        }
+    }, 100);
+}
+
+function getFriendlyErrorMessage(error) {
+    const code = error.code || error.message || "";
+    if (code.includes('email-already-in-use')) return "This email is already registered.";
+    if (code.includes('invalid-email')) return "Please enter a valid email address.";
+    if (code.includes('weak-password')) return "The password is too weak. Use at least 8 characters.";
+    if (code.includes('network-request-failed')) return "Connection error. Please check your internet.";
+    if (code.includes('too-many-requests')) return "Too many attempts. Please try again later.";
+    return "An unexpected error occurred. Please try again.";
 }

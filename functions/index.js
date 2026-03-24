@@ -18,7 +18,7 @@ const {Resend} = require("resend");
 admin.initializeApp();
 
 // Initialize Resend
-const resend = new Resend("re_MQPM73xJ_6TuEnNX5Sow8Wudfr1zpRpN6");
+const resend = new Resend("re_NFPdHfJz_EYUuMuL9mn2Kmn4itA1ZzEfr");
 
 /**
  * Premium HTML Template for OTP
