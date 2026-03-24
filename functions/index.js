@@ -14,6 +14,7 @@ const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 const {Resend} = require("resend");
+const axios = require("axios");
 
 admin.initializeApp();
 
@@ -69,8 +70,6 @@ function getOTPHtmlTemplate(otp, email, isRegistration = false) {
 }
 
 setGlobalOptions({maxInstances: 10});
-
-const axios = require("axios");
 
 // LocationIQ API Token (from legacy PHP script)
 const LOCATIONIQ_TOKEN = "pk.0b57c3a80ea3c7893de95270b2a3ad50";
