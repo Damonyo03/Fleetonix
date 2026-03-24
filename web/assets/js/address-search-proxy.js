@@ -70,6 +70,9 @@ export class CloudAddressSearch {
 
     async search(query) {
         try {
+            this.suggestionsContainer.innerHTML = '<div class="suggestion-item loading">Searching...</div>';
+            this.suggestionsContainer.style.display = 'block';
+
             const url = `https://us-central1-appfleetonix.cloudfunctions.net/addressSearch?q=${encodeURIComponent(query)}`;
             const response = await fetch(url);
             const results = await response.json();
@@ -77,6 +80,7 @@ export class CloudAddressSearch {
             this.renderSuggestions(results);
         } catch (error) {
             console.error("Address search error:", error);
+            this.hideSuggestions();
         }
     }
 
