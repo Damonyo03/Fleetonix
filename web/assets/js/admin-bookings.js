@@ -308,27 +308,52 @@ async function showCreateBookingModal(clients) {
             document.getElementById('new_client_section').style.display = e.target.value === 'new' ? 'block' : 'none';
         }));
 
-        // Populate Drivers List (Only Available)
+        // Populate Drivers List with real-time sync
         const driverSelect = document.getElementById('modal_driver');
         if (driverSelect) {
             try {
-                // We check 'drivers' collection for status, and 'users' for name
-                const availableDriversQuery = query(collection(db, "drivers"), where("current_status", "==", "available"));
-                const driversSnap = await getDocs(availableDriversQuery);
+                const [driversSnap, locationsSnap] = await Promise.all([
+                    getDocs(query(collection(db, "drivers"), where("current_status", "==", "available"))),
+                    getDocs(collection(db, "driver_locations"))
+                ]);
                 
-                if (!driversSnap.empty) {
-                    let driversHtml = '<option value="">-- No Driver Assigned --</option>';
-                    for (const docSnap of driversSnap.docs) {
-                        const d = docSnap.data();
-                        // Find the user UID for this driver via email fallback if needed
-                        const uQuery = query(collection(db, "users"), where("email", "==", d.driver_email));
-                        const uSnap = await getDocs(uQuery);
-                        if (!uSnap.empty) {
-                            const u = uSnap.docs[0];
-                            driversHtml += `<option value="${u.id}">🟢 ${d.driver_name || u.data().full_name}</option>`;
-                        }
+                const locationMap = {};
+                locationsSnap.docs.forEach(doc => {
+                    locationMap[doc.id.toLowerCase().trim()] = doc.data();
+                });
+
+                const driverMap = new Map();
+                const now = Date.now();
+                const tenMins = 10 * 60 * 1000;
+
+                driversSnap.docs.forEach(dDoc => {
+                    const data = dDoc.data();
+                    const email = (data.driver_email || "").toLowerCase().trim();
+                    if (!email || driverMap.has(email)) return;
+
+                    // Sync real-time online status
+                    const loc = locationMap[email];
+                    let isOnline = false;
+                    if (loc && loc.last_updated) {
+                        const lastActive = loc.last_updated.toMillis ? loc.last_updated.toMillis() : (loc.last_updated.seconds * 1000);
+                        if (now - lastActive < tenMins) isOnline = true;
                     }
-                    driverSelect.innerHTML = driversHtml;
+
+                    driverMap.set(email, {
+                        id: dDoc.id, // Using the drivers collection ID
+                        name: data.driver_name,
+                        isOnline: isOnline
+                    });
+                });
+
+                const sortedDrivers = Array.from(driverMap.values()).sort((a, b) => {
+                    if (a.isOnline === b.isOnline) return a.name.localeCompare(b.name);
+                    return a.isOnline ? -1 : 1;
+                });
+
+                if (sortedDrivers.length > 0) {
+                    driverSelect.innerHTML = '<option value="">-- No Driver Assigned --</option>' + 
+                        sortedDrivers.map(d => `<option value="${d.id}">${d.isOnline ? '🟢 [ONLINE]' : '⚪ [OFFLINE]'} ${d.name}</option>`).join('');
                 } else {
                     driverSelect.innerHTML = '<option value="">No available drivers found</option>';
                 }
@@ -414,27 +439,74 @@ window.assignDriver = async (id) => {
     if (!bookingDoc.exists()) return;
     const booking = bookingDoc.data();
 
-    // Fetch available drivers
-    const driversSnap = await getDocs(query(collection(db, "drivers"), where("current_status", "==", "available")));
-    const drivers = driversSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // 1. Fetch available drivers and real-time locations
+    const [driversSnap, locationsSnap] = await Promise.all([
+        getDocs(query(collection(db, "drivers"), where("current_status", "==", "available"))),
+        getDocs(collection(db, "driver_locations"))
+    ]);
+
+    // 2. Map locations by driver email for quick lookup
+    const locationMap = {};
+    locationsSnap.docs.forEach(doc => {
+        locationMap[doc.id.toLowerCase().trim()] = doc.data();
+    });
+
+    // 3. Process and de-duplicate driver list
+    const driverMap = new Map();
+    const now = Date.now();
+    const tenMins = 10 * 60 * 1000;
+
+    driversSnap.docs.forEach(dDoc => {
+        const data = dDoc.data();
+        const email = (data.driver_email || "").toLowerCase().trim();
+        if (!email) return;
+
+        // Skip if we already processed this driver (De-duplication)
+        if (driverMap.has(email)) return;
+
+        // Determine real-time "Online" status
+        const loc = locationMap[email];
+        let isOnline = false;
+        if (loc && loc.last_updated) {
+            const lastActive = loc.last_updated.toMillis ? loc.last_updated.toMillis() : (loc.last_updated.seconds * 1000);
+            if (now - lastActive < tenMins) {
+                isOnline = true;
+            }
+        }
+
+        driverMap.set(email, {
+            id: dDoc.id,
+            ...data,
+            isOnline: isOnline
+        });
+    });
+
+    // 4. Convert to array and sort (Online first)
+    const processedDrivers = Array.from(driverMap.values()).sort((a, b) => {
+        if (a.isOnline === b.isOnline) return a.driver_name.localeCompare(b.driver_name);
+        return a.isOnline ? -1 : 1;
+    });
 
     const content = `
         <div class="form-group">
             <label>Select Driver</label>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 10px;">
+                <i class="fas fa-info-circle"></i> Online drivers have updated their location in the last 10 minutes.
+            </p>
             <select id="modal_driver" class="form-input" required>
                 <option value="">-- Choose a Driver --</option>
-                ${drivers.map(d => `
+                ${processedDrivers.map(d => `
                     <option value="${d.id}" 
                             data-email="${d.driver_email || ''}" 
                             data-name="${d.driver_name || ''}"
                             data-phone="${d.driver_phone || ''}"
                             data-plate="${d.plate_number || ''}"
                             data-vehicle="${d.vehicle_assigned || ''}">
-                        ${d.driver_name} - ${d.vehicle_assigned} (${d.plate_number})
+                        ${d.isOnline ? '🟢 [ONLINE]' : '⚪ [OFFLINE]'} ${d.driver_name} - ${d.vehicle_assigned} (${d.plate_number})
                     </option>`).join('')}
             </select>
         </div>
-        ${drivers.length === 0 ? '<p style="color:var(--accent-orange);"><i class="fas fa-exclamation-triangle"></i> No available drivers at the moment.</p>' : ''}
+        ${processedDrivers.length === 0 ? '<p style="color:var(--accent-orange);"><i class="fas fa-exclamation-triangle"></i> No available drivers at the moment.</p>' : ''}
         <div class="form-group">
             <label>Schedule Date</label>
             <input type="date" id="modal_sched_date" class="form-input" value="${booking.pickup_date || ''}" required>
