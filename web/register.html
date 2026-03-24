@@ -251,6 +251,18 @@
         function setupPasswordToggle(toggleId, inputId) {
             const toggle = document.getElementById(toggleId);
             const input = document.getElementById(inputId);
+            
+            input.addEventListener('input', function() {
+                if (this.value.length > 0) {
+                    toggle.classList.add('visible');
+                } else {
+                    toggle.classList.remove('visible');
+                    input.setAttribute('type', 'password');
+                    toggle.classList.add('fa-eye');
+                    toggle.classList.remove('fa-eye-slash');
+                }
+            });
+
             toggle.addEventListener('click', function() {
                 const type = input.getAttribute('type') === 'password' ? 'text' : 'password';
                 input.setAttribute('type', type);

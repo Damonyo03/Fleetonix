@@ -133,6 +133,18 @@
         const togglePassword = document.getElementById('togglePassword');
         const passwordInput = document.getElementById('password');
 
+        passwordInput.addEventListener('input', function() {
+            if (this.value.length > 0) {
+                togglePassword.classList.add('visible');
+            } else {
+                togglePassword.classList.remove('visible');
+                // Also reset to password type if cleared
+                passwordInput.setAttribute('type', 'password');
+                togglePassword.classList.add('fa-eye');
+                togglePassword.classList.remove('fa-eye-slash');
+            }
+        });
+
         togglePassword.addEventListener('click', function() {
             const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
             passwordInput.setAttribute('type', type);

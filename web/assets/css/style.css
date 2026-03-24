@@ -273,9 +273,16 @@ body {
     transform: translateY(-50%);
     cursor: pointer;
     color: var(--text-muted);
-    transition: color 0.3s ease;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
     z-index: 10;
-    padding: 10px; /* Increase clickable area */
+    padding: 10px;
+}
+
+.password-toggle.visible {
+    opacity: 1;
+    visibility: visible;
 }
 
 .password-toggle:hover {
