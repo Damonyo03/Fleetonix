@@ -3,7 +3,6 @@ import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/
 import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, updateDoc, deleteDoc, orderBy, getDocs, setDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { initLayout, showModal, hideModal } from "./modules/ui.js";
-import { CloudAddressSearch } from "./address-search-proxy.js";
 import { sanitizeFirestoreData, generateNumericId } from "./modules/data.js";
 
 // Initialize Firebase
@@ -53,14 +52,17 @@ async function showAdminBookingModal() {
                 clients.push({ id: d.id, ...d.data() });
             }
         });
+
+        // Show the UI with the fetched clients
+        showCreateBookingModal(clients);
     } catch (error) {
-        console.warn("Could not fetch clients:", error.message);
+        console.error("Error fetching clients:", error);
+        // Still show the modal even if clients fail to load
+        showCreateBookingModal([]);
     }
+}
 
-    const clientOptions = clients.length > 0
-        ? clients.map(c => `<option value="${c.id}" data-name="${c.full_name || ''}" data-email="${c.email || ''}">${c.full_name || c.email || c.id}</option>`).join('')
-        : '<option value="">No registered clients found</option>';
-
+async function showCreateBookingModal(clients) {
     const today = new Date().toISOString().split('T')[0];
 
     const content = `
@@ -102,23 +104,23 @@ async function showAdminBookingModal() {
         </div>
 
         <div class="form-group" style="position: relative;">
-            <label for="modal_pickup">Pickup Location</label>
+            <label for="pickup_location">Pickup Location</label>
             <div class="input-with-action">
-                <input type="text" id="modal_pickup" class="form-input" placeholder="Search for pickup address..." required autocomplete="off">
+                <input type="text" id="pickup_location" class="form-input" placeholder="Search for pickup address..." required autocomplete="off">
                 <button type="button" class="btn-input-action" id="locatePickup" title="Use current location"><i class="fas fa-location-crosshairs"></i></button>
             </div>
-            <input type="hidden" id="modal_pickup_lat" value="0">
-            <input type="hidden" id="modal_pickup_lng" value="0">
+            <input type="hidden" id="pickup_latitude" value="0">
+            <input type="hidden" id="pickup_longitude" value="0">
         </div>
 
         <div class="form-group" style="position: relative;">
-            <label for="modal_dropoff">Dropoff Location</label>
+            <label for="dropoff_location">Dropoff Location</label>
             <div class="input-with-action">
-                <input type="text" id="modal_dropoff" class="form-input" placeholder="Search for dropoff address..." required autocomplete="off">
+                <input type="text" id="dropoff_location" class="form-input" placeholder="Search for dropoff address..." required autocomplete="off">
                 <button type="button" class="btn-input-action" id="locateDropoff" title="Use current location"><i class="fas fa-location-crosshairs"></i></button>
             </div>
-            <input type="hidden" id="modal_dropoff_lat" value="0">
-            <input type="hidden" id="modal_dropoff_lng" value="0">
+            <input type="hidden" id="dropoff_latitude" value="0">
+            <input type="hidden" id="dropoff_longitude" value="0">
         </div>
 
         <div class="modal-form-row">
@@ -171,8 +173,8 @@ async function showAdminBookingModal() {
         if (isExisting && !clientId) throw new Error("Please select a registered client.");
         if (!isExisting && (!clientName || !clientEmail)) throw new Error("Please enter Guest name and email.");
 
-        const pickup = document.getElementById('modal_pickup').value.trim();
-        const dropoff = document.getElementById('modal_dropoff').value.trim();
+        const pickup = document.getElementById('pickup_location').value.trim();
+        const dropoff = document.getElementById('dropoff_location').value.trim();
         if (!pickup || !dropoff) throw new Error("Please enter pickup and dropoff locations.");
 
         const date = document.getElementById('modal_date').value;
@@ -188,12 +190,12 @@ async function showAdminBookingModal() {
             company_name: isExisting ? '' : (document.getElementById('modal_company')?.value || ''),
 
             pickup_location: pickup,
-            pickup_latitude: parseFloat(document.getElementById('modal_pickup_lat').value) || 0,
-            pickup_longitude: parseFloat(document.getElementById('modal_pickup_lng').value) || 0,
+            pickup_latitude: parseFloat(document.getElementById('pickup_latitude').value) || 0,
+            pickup_longitude: parseFloat(document.getElementById('pickup_longitude').value) || 0,
 
             dropoff_location: dropoff,
-            dropoff_latitude: parseFloat(document.getElementById('modal_dropoff_lat').value) || 0,
-            dropoff_longitude: parseFloat(document.getElementById('modal_dropoff_lng').value) || 0,
+            dropoff_latitude: parseFloat(document.getElementById('dropoff_latitude').value) || 0,
+            dropoff_longitude: parseFloat(document.getElementById('dropoff_longitude').value) || 0,
 
             pickup_date: date,
             pickup_time: time,
@@ -220,7 +222,7 @@ async function showAdminBookingModal() {
         alert("Booking created successfully! " + (autoDispatch ? "It has been sent to dispatch." : "It is now pending approval."));
     });
 
-    // Initialize Toggle Logic after modal renders
+    // Initialize logic after modal renders
     setTimeout(() => {
         const radios = document.querySelectorAll('input[name="client_type"]');
         radios.forEach(r => r.addEventListener('change', (e) => {
@@ -228,24 +230,15 @@ async function showAdminBookingModal() {
             document.getElementById('new_client_section').style.display = e.target.value === 'new' ? 'block' : 'none';
         }));
 
-        // Google Places Autocomplete
-        if (window.AddressAutocomplete) {
-            const pickupSearch = new AddressAutocomplete(
-                document.getElementById('modal_pickup'),
-                document.getElementById('modal_pickup_lat'),
-                document.getElementById('modal_pickup_lng')
-            );
-            const dropoffSearch = new AddressAutocomplete(
-                document.getElementById('modal_dropoff'),
-                document.getElementById('modal_dropoff_lat'),
-                document.getElementById('modal_dropoff_lng')
-            );
+        // Initialize Google Places Autocomplete using EXACT SAME logic as client
+        if (window.initGoogleAutocompletes) {
+            window.initGoogleAutocompletes();
 
             // Location Action Buttons (Target Icons)
-            document.getElementById('locatePickup').onclick = () => pickupSearch.getCurrentLocation();
-            document.getElementById('locateDropoff').onclick = () => dropoffSearch.getCurrentLocation();
-        } else {
-            console.error("AddressAutocomplete class not found. Ensure address-autocomplete.js is loaded.");
+            if (window.pickupAutocomplete && window.dropoffAutocomplete) {
+                document.getElementById('locatePickup').onclick = () => window.pickupAutocomplete.getCurrentLocation();
+                document.getElementById('locateDropoff').onclick = () => window.dropoffAutocomplete.getCurrentLocation();
+            }
         }
     }, 250); // Small delay to ensure modal is fully in DOM
 }

@@ -34,12 +34,22 @@ class AddressAutocomplete {
             return;
         }
 
-        // Initialize Autocomplete
+        // Initialize Google Autocomplete
         this.autocomplete = new google.maps.places.Autocomplete(this.input, {
-            componentRestrictions: { country: "ph" }, // Restrict to Philippines
+            componentRestrictions: { country: "ph" },
             fields: ["address_components", "geometry", "formatted_address"],
-            types: ["geocode", "establishment"]
+            types: ["geocode", "establishment"] // More inclusive than just "address"
         });
+
+        // Ensure the dropdown appears above modals
+        // Google appends .pac-container to body on first show
+        // We can force a style rule or wait for it
+        if (!document.getElementById('google-pac-style')) {
+            const style = document.createElement('style');
+            style.id = 'google-pac-style';
+            style.innerHTML = '.pac-container { z-index: 2100 !important; }';
+            document.head.appendChild(style);
+        }
 
         // Prevent form submission on enter while selecting suggestion
         this.input.addEventListener('keydown', (e) => {
@@ -109,30 +119,35 @@ class AddressAutocomplete {
     }
 }
 
-// Initialize when DOM is ready
+// Function to initialize autocompletes on any set of elements
+window.initGoogleAutocompletes = () => {
+    console.log("Initializing Google Autocompletes...");
+    
+    // Pickup
+    const pickupInput = document.getElementById('pickup_location');
+    const pickupLat = document.getElementById('pickup_latitude');
+    const pickupLng = document.getElementById('pickup_longitude');
+    if (pickupInput && pickupLat) {
+        window.pickupAutocomplete = new AddressAutocomplete(pickupInput, pickupLat, pickupLng);
+    }
+
+    // Dropoff
+    const dropoffInput = document.getElementById('dropoff_location');
+    const dropoffLat = document.getElementById('dropoff_latitude');
+    const dropoffLng = document.getElementById('dropoff_longitude');
+    if (dropoffInput && dropoffLat) {
+        window.dropoffAutocomplete = new AddressAutocomplete(dropoffInput, dropoffLat, dropoffLng);
+    }
+};
+
+// Initialize when DOM is ready (for static pages like client booking)
 document.addEventListener('DOMContentLoaded', () => {
-    // We need to wait a small bit or ensure Google is loaded if script is async
-    const initAutocompletes = () => {
-        // Pickup
-        const pickupInput = document.getElementById('pickup_location');
-        const pickupLat = document.getElementById('pickup_latitude');
-        const pickupLng = document.getElementById('pickup_longitude');
-        if (pickupInput && pickupLat) new AddressAutocomplete(pickupInput, pickupLat, pickupLng);
-
-        // Dropoff
-        const dropoffInput = document.getElementById('dropoff_location');
-        const dropoffLat = document.getElementById('dropoff_latitude');
-        const dropoffLng = document.getElementById('dropoff_longitude');
-        if (dropoffInput && dropoffLat) new AddressAutocomplete(dropoffInput, dropoffLat, dropoffLng);
-    };
-
     if (window.google && window.google.maps) {
-        initAutocompletes();
+        window.initGoogleAutocompletes();
     } else {
-        // Fallback for async loading
         const checkGoogle = setInterval(() => {
             if (window.google && window.google.maps && window.google.maps.places) {
-                initAutocompletes();
+                window.initGoogleAutocompletes();
                 clearInterval(checkGoogle);
             }
         }, 100);
