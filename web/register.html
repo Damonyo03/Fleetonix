@@ -149,7 +149,7 @@
             setLoading(true);
             try {
                 // Call Cloud Function to send OTP
-                const response = await fetch('https://sendregistrationotp-appfleetonix.a.run.app', {
+                const response = await fetch('https://us-central1-appfleetonix.cloudfunctions.net/sendRegistrationOTP', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email, phone })
@@ -184,7 +184,7 @@
             setVerifyLoading(true);
             try {
                 // Call Cloud Function to complete registration
-                const response = await fetch('https://completeregistration-appfleetonix.a.run.app', {
+                const response = await fetch('https://us-central1-appfleetonix.cloudfunctions.net/completeRegistration', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -225,7 +225,7 @@
             e.preventDefault();
             showStatus("Resending code...", "info", verifyStatus);
             try {
-                const response = await fetch('https://sendregistrationotp-appfleetonix.a.run.app', {
+                const response = await fetch('https://us-central1-appfleetonix.cloudfunctions.net/sendRegistrationOTP', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 

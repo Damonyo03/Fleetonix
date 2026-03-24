@@ -79,7 +79,7 @@ const LOCATIONIQ_TOKEN = "pk.0b57c3a80ea3c7893de95270b2a3ad50";
  * Address Search Proxy for LocationIQ
  * Replaces legacy PHP api/address_search.php
  */
-exports.addressSearch = onRequest(async (req, res) => {
+exports.addressSearch = onRequest({ cors: true }, async (req, res) => {
   // Enable CORS
   res.set("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") {
@@ -162,7 +162,7 @@ exports.addressSearch = onRequest(async (req, res) => {
 /**
  * Send Password Reset OTP
  */
-exports.sendPasswordResetOTP = onRequest(async (req, res) => {
+exports.sendPasswordResetOTP = onRequest({ cors: true }, async (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") {
     res.set("Access-Control-Allow-Methods", "POST");
@@ -214,7 +214,7 @@ exports.sendPasswordResetOTP = onRequest(async (req, res) => {
 /**
  * Reset Password with OTP
  */
-exports.resetPasswordWithOTP = onRequest(async (req, res) => {
+exports.resetPasswordWithOTP = onRequest({ cors: true }, async (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") {
     res.set("Access-Control-Allow-Methods", "POST");
@@ -265,7 +265,7 @@ exports.resetPasswordWithOTP = onRequest(async (req, res) => {
 /**
  * Verify Verification Code (General use)
  */
-exports.verifyOTP = onRequest(async (req, res) => {
+exports.verifyOTP = onRequest({ cors: true }, async (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
   const {userId, otpCode} = req.body;
   if (!userId || !otpCode) {
@@ -288,7 +288,7 @@ exports.verifyOTP = onRequest(async (req, res) => {
  * Admin Create User
  * Safely creates a new Auth user and Firestore document without logging out the admin.
  */
-exports.adminCreateUser = onRequest(async (req, res) => {
+exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
   // CORS configuration
   res.set("Access-Control-Allow-Origin", "*");
   res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -402,7 +402,7 @@ exports.onScheduleUpdate = onDocumentUpdated("schedules/{docId}", async (event) 
  * Admin Data Clearing Function
  * Securely deletes transaction data and returns a backup
  */
-exports.adminClearData = onRequest(async (req, res) => {
+exports.adminClearData = onRequest({ cors: true }, async (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") {
     res.set("Access-Control-Allow-Methods", "POST");
@@ -450,7 +450,7 @@ exports.adminClearData = onRequest(async (req, res) => {
 /**
  * Send Registration OTP (CORS enabled)
  */
-exports.sendRegistrationOTP = onRequest(async (req, res) => {
+exports.sendRegistrationOTP = onRequest({ cors: true }, async (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
   res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.set("Access-Control-Allow-Headers", "Content-Type");
@@ -506,7 +506,7 @@ exports.sendRegistrationOTP = onRequest(async (req, res) => {
 /**
  * Complete Registration after OTP verification
  */
-exports.completeRegistration = onRequest(async (req, res) => {
+exports.completeRegistration = onRequest({ cors: true }, async (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
   res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.set("Access-Control-Allow-Headers", "Content-Type");
