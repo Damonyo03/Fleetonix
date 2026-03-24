@@ -125,30 +125,30 @@ async function showCreateBookingModal(clients) {
 
         <div class="modal-form-row">
             <div class="form-group">
-                <label for="modal_date">Pickup Date</label>
-                <input type="date" id="modal_date" class="form-input" value="${today}" required>
+                <label for="pickup_date">Pickup Date</label>
+                <input type="date" id="pickup_date" class="form-input" value="${today}" required>
             </div>
             <div class="form-group">
-                <label for="modal_time">Pickup Time</label>
-                <input type="time" id="modal_time" class="form-input" required>
+                <label for="pickup_time">Pickup Time</label>
+                <input type="time" id="pickup_time" class="form-input" required>
             </div>
         </div>
 
         <div class="modal-form-row">
             <div class="form-group">
-                <label for="modal_pax">Passengers (Pax)</label>
-                <input type="number" id="modal_pax" class="form-input" value="1" min="1" required>
+                <label for="passengers">Passengers (Pax)</label>
+                <input type="number" id="passengers" class="form-input" value="1" min="1" required>
             </div>
             <div class="form-group" style="display: flex; align-items: center; padding-top: 25px;">
                 <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9em;">
-                    <input type="checkbox" id="modal_return" style="width: auto;"> Return to Pickup
+                    <input type="checkbox" id="return_to_pickup" style="width: auto;"> Return to Pickup
                 </label>
             </div>
         </div>
 
         <div class="form-group">
-            <label for="modal_instructions">Special Instructions (Optional)</label>
-            <textarea id="modal_instructions" class="form-input" rows="2" placeholder="e.g. Near the main gate..."></textarea>
+            <label for="special_instructions">Special Instructions (Optional)</label>
+            <textarea id="special_instructions" class="form-input" rows="2" placeholder="e.g. Near the main gate..."></textarea>
         </div>
 
         <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-top: 10px; background: rgba(16, 185, 129, 0.05); padding: 12px; border-radius: 8px; border: 1px dashed var(--accent-green);">
@@ -177,8 +177,8 @@ async function showCreateBookingModal(clients) {
         const dropoff = document.getElementById('dropoff_location').value.trim();
         if (!pickup || !dropoff) throw new Error("Please enter pickup and dropoff locations.");
 
-        const date = document.getElementById('modal_date').value;
-        const time = document.getElementById('modal_time').value;
+        const date = document.getElementById('pickup_date').value;
+        const time = document.getElementById('pickup_time').value;
         if (!date || !time) throw new Error("Please enter a date and time.");
 
         const autoDispatch = document.getElementById('modal_auto_dispatch').checked;
@@ -199,9 +199,9 @@ async function showCreateBookingModal(clients) {
 
             pickup_date: date,
             pickup_time: time,
-            pax: parseInt(document.getElementById('modal_pax').value) || 1,
-            return_to_pickup: document.getElementById('modal_return').checked,
-            special_instructions: document.getElementById('modal_instructions').value || '',
+            passengers: parseInt(document.getElementById('passengers').value) || 1,
+            return_to_pickup: document.getElementById('return_to_pickup').checked,
+            special_instructions: document.getElementById('special_instructions').value || '',
 
             status: autoDispatch ? 'approved' : 'pending',
             createdBy: 'admin',
@@ -222,25 +222,14 @@ async function showCreateBookingModal(clients) {
         alert("Booking created successfully! " + (autoDispatch ? "It has been sent to dispatch." : "It is now pending approval."));
     });
 
-    // Initialize logic after modal renders
+    // Initialize client type toggle logic after modal renders
     setTimeout(() => {
         const radios = document.querySelectorAll('input[name="client_type"]');
         radios.forEach(r => r.addEventListener('change', (e) => {
             document.getElementById('existing_client_section').style.display = e.target.value === 'existing' ? 'block' : 'none';
             document.getElementById('new_client_section').style.display = e.target.value === 'new' ? 'block' : 'none';
         }));
-
-        // Initialize Google Places Autocomplete using EXACT SAME logic as client
-        if (window.initGoogleAutocompletes) {
-            window.initGoogleAutocompletes();
-
-            // Location Action Buttons (Target Icons)
-            if (window.pickupAutocomplete && window.dropoffAutocomplete) {
-                document.getElementById('locatePickup').onclick = () => window.pickupAutocomplete.getCurrentLocation();
-                document.getElementById('locateDropoff').onclick = () => window.dropoffAutocomplete.getCurrentLocation();
-            }
-        }
-    }, 250); // Small delay to ensure modal is fully in DOM
+    }, 100);
 }
 
 // --- Booking List ---

@@ -17,8 +17,15 @@ window.gm_authFailure = () => {
     }
 };
 
+/**
+ * Fleetonix - Shared Address Autocomplete (Google Places)
+ * Optimized for both static pages and dynamic modals.
+ */
+
 class AddressAutocomplete {
     constructor(inputElement, latInput, lngInput) {
+        if (!inputElement || !latInput || !lngInput) return;
+        
         this.input = inputElement;
         this.latInput = latInput;
         this.lngInput = lngInput;
@@ -26,63 +33,47 @@ class AddressAutocomplete {
         
         this.init();
     }
-    
+
     init() {
-        console.log("Initializing AddressAutocomplete for input:", this.input.id);
-        if (!window.google || !window.google.maps || !window.google.maps.places) {
-            console.error("Google Maps Places library not loaded. Check script tag and API key.");
-            return;
-        }
+        if (!window.google || !window.google.maps || !window.google.maps.places) return;
 
         // Initialize Google Autocomplete
         this.autocomplete = new google.maps.places.Autocomplete(this.input, {
             componentRestrictions: { country: "ph" },
             fields: ["address_components", "geometry", "formatted_address"],
-            types: ["geocode", "establishment"] // More inclusive than just "address"
+            types: ["geocode", "establishment"]
         });
 
-        // Ensure the dropdown appears above modals
-        // Google appends .pac-container to body on first show
-        // We can force a style rule or wait for it
-        if (!document.getElementById('google-pac-style')) {
+        // Ensure dropdown Visibility above modals
+        if (!document.getElementById('pac-style-fix')) {
             const style = document.createElement('style');
-            style.id = 'google-pac-style';
-            style.innerHTML = '.pac-container { z-index: 2100 !important; }';
+            style.id = 'pac-style-fix';
+            style.innerHTML = '.pac-container { z-index: 9999 !important; }';
             document.head.appendChild(style);
         }
 
-        // Prevent form submission on enter while selecting suggestion
-        this.input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && document.querySelector('.pac-container:not([style*="display: none"])')) {
-                e.preventDefault();
-            }
+        // Prevent form submission on enter
+        this.input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") e.preventDefault();
         });
 
         // Handle place selection
         this.autocomplete.addListener("place_changed", () => {
             const place = this.autocomplete.getPlace();
-            
-            if (!place.geometry || !place.geometry.location) {
-                // User pressed enter without selecting a suggestion
-                console.warn("No geometry found for selected place.");
-                return;
-            }
+            if (!place.geometry || !place.geometry.location) return;
 
-            // Update hidden inputs
             this.latInput.value = place.geometry.location.lat();
             this.lngInput.value = place.geometry.location.lng();
             
-            // Dispatch change events for any observers
+            // Trigger events
+            this.input.dispatchEvent(new Event('change', { bubbles: true }));
             this.latInput.dispatchEvent(new Event('change', { bubbles: true }));
-            this.lngInput.dispatchEvent(new Event('change', { bubbles: true }));
-
-            console.log(`Selected: ${place.formatted_address} (${this.latInput.value}, ${this.lngInput.value})`);
         });
     }
 
     async getCurrentLocation() {
         if (!navigator.geolocation) {
-            alert("Geolocation is not supported by your browser.");
+            alert("Geolocation not supported.");
             return;
         }
 
@@ -94,62 +85,57 @@ class AddressAutocomplete {
             this.latInput.value = latitude;
             this.lngInput.value = longitude;
 
-            try {
-                // Reverse geocode using Google Geocoder since we are using Google anyway
-                const geocoder = new google.maps.Geocoder();
-                const response = await geocoder.geocode({ location: { lat: latitude, lng: longitude } });
-                
-                if (response.results && response.results[0]) {
-                    this.input.value = response.results[0].formatted_address;
-                } else {
-                    this.input.value = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+            const geocoder = new google.maps.Geocoder();
+            geocoder.geocode({ location: { lat: latitude, lng: longitude } }, (results, status) => {
+                if (status === "OK" && results[0]) {
+                    this.input.value = results[0].formatted_address;
                 }
                 this.input.placeholder = originalPlaceholder;
                 this.input.dispatchEvent(new Event('change', { bubbles: true }));
-            } catch (error) {
-                console.error("Reverse geocoding error:", error);
-                this.input.value = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-                this.input.placeholder = originalPlaceholder;
-            }
-        }, (error) => {
-            console.error("Geolocation error:", error);
-            alert("Unable to retrieve your location. Please type it manually.");
+            });
+        }, () => {
             this.input.placeholder = originalPlaceholder;
+            alert("Unable to get location.");
         });
     }
 }
 
-// Function to initialize autocompletes on any set of elements
-window.initGoogleAutocompletes = () => {
-    console.log("Initializing Google Autocompletes...");
-    
-    // Pickup
-    const pickupInput = document.getElementById('pickup_location');
-    const pickupLat = document.getElementById('pickup_latitude');
-    const pickupLng = document.getElementById('pickup_longitude');
-    if (pickupInput && pickupLat) {
-        window.pickupAutocomplete = new AddressAutocomplete(pickupInput, pickupLat, pickupLng);
-    }
+// Global initialization function
+window.initAllAutocompletes = () => {
+    const configs = [
+        { input: 'pickup_location', lat: 'pickup_latitude', lng: 'pickup_longitude', key: 'pickupAuto' },
+        { input: 'dropoff_location', lat: 'dropoff_latitude', lng: 'dropoff_longitude', key: 'dropoffAuto' }
+    ];
 
-    // Dropoff
-    const dropoffInput = document.getElementById('dropoff_location');
-    const dropoffLat = document.getElementById('dropoff_latitude');
-    const dropoffLng = document.getElementById('dropoff_longitude');
-    if (dropoffInput && dropoffLat) {
-        window.dropoffAutocomplete = new AddressAutocomplete(dropoffInput, dropoffLat, dropoffLng);
-    }
+    configs.forEach(conf => {
+        const input = document.getElementById(conf.input);
+        const lat = document.getElementById(conf.lat);
+        const lng = document.getElementById(conf.lng);
+
+        if (input && lat && !input.dataset.autocompleteBound) {
+            input.dataset.autocompleteBound = "true";
+            window[conf.key] = new AddressAutocomplete(input, lat, lng);
+            
+            // Re-bind target buttons if they exist
+            const targetBtn = input.id === 'pickup_location' ? document.getElementById('locatePickup') : document.getElementById('locateDropoff');
+            if (targetBtn) {
+                targetBtn.onclick = () => window[conf.key].getCurrentLocation();
+            }
+        }
+    });
 };
 
-// Initialize when DOM is ready (for static pages like client booking)
+// Auto-init on DOM changes (to catch modals)
+const observer = new MutationObserver(() => {
+    if (window.google && window.google.maps && window.google.maps.places) {
+        window.initAllAutocompletes();
+    }
+});
+observer.observe(document.body, { childList: true, subtree: true });
+
+// Initial check
 document.addEventListener('DOMContentLoaded', () => {
-    if (window.google && window.google.maps) {
-        window.initGoogleAutocompletes();
-    } else {
-        const checkGoogle = setInterval(() => {
-            if (window.google && window.google.maps && window.google.maps.places) {
-                window.initGoogleAutocompletes();
-                clearInterval(checkGoogle);
-            }
-        }, 100);
+    if (window.google && window.google.maps && window.google.maps.places) {
+        window.initAllAutocompletes();
     }
 });
