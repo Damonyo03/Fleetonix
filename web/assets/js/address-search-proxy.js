@@ -90,19 +90,30 @@ export class CloudAddressSearch {
             return;
         }
 
-        this.suggestionsContainer.innerHTML = results.map((res, index) => `
-            <div class="suggestion-item" data-index="${index}" data-lat="${res.lat}" data-lng="${res.lon}">
-                <div class="suggestion-icon">
-                    <i class="fas fa-map-marker-alt"></i>
-                </div>
-                <div class="suggestion-content">
-                    <div class="suggestion-address">${res.display_name}</div>
-                    <div class="suggestion-details">
-                        <span class="suggestion-region">${this.getRegion(res.display_name)}</span>
+        const suggestionsHTML = results.map((res, index) => {
+            const parts = res.display_name.split(',');
+            const mainText = parts[0].trim();
+            const secondaryText = parts.slice(1).join(',').trim();
+
+            return `
+                <div class="suggestion-item" data-index="${index}" data-lat="${res.lat}" data-lng="${res.lon}">
+                    <div class="suggestion-icon">
+                        <i class="fas fa-map-marker-alt"></i>
+                    </div>
+                    <div class="suggestion-content">
+                        <div class="suggestion-address"><strong>${mainText}</strong></div>
+                        <div class="suggestion-details">${secondaryText}</div>
                     </div>
                 </div>
+            `;
+        }).join('');
+
+        this.suggestionsContainer.innerHTML = `
+            ${suggestionsHTML}
+            <div class="suggestions-footer">
+                Powered by <span>Fleetonix Cloud Search</span>
             </div>
-        `).join('');
+        `;
 
         this.suggestionsContainer.style.display = 'block';
 
@@ -112,16 +123,18 @@ export class CloudAddressSearch {
             item.onclick = (e) => {
                 const lat = item.getAttribute('data-lat');
                 const lng = item.getAttribute('data-lng');
-                const address = item.querySelector('.suggestion-address').innerText;
+                const mainAddress = item.querySelector('.suggestion-address strong').innerText;
+                const secondaryAddress = item.querySelector('.suggestion-details').innerText;
+                const fullAddress = secondaryAddress ? `${mainAddress}, ${secondaryAddress}` : mainAddress;
 
-                this.input.value = address;
+                this.input.value = fullAddress;
                 this.latInput.value = lat;
                 this.lngInput.value = lng;
                 
                 this.hideSuggestions();
 
                 if (this.options.onSelect) {
-                    this.options.onSelect({ address, lat, lng });
+                    this.options.onSelect({ address: fullAddress, lat, lng });
                 }
                 
                 // Trigger change event
@@ -130,11 +143,43 @@ export class CloudAddressSearch {
         });
     }
 
-    getRegion(displayName) {
-        if (displayName.includes("Metro Manila") || displayName.includes("NCR")) return "NCR";
-        if (displayName.includes("Pampanga")) return "Central Luzon";
-        if (displayName.includes("Cavite") || displayName.includes("Laguna") || displayName.includes("Batangas")) return "South Luzon";
-        return "Philippines";
+    async getCurrentLocation() {
+        if (!navigator.geolocation) {
+            alert("Geolocation is not supported by your browser.");
+            return;
+        }
+
+        this.input.placeholder = "Detecting location...";
+        this.input.value = "";
+        
+        navigator.geolocation.getCurrentPosition(async (position) => {
+            const { latitude, longitude } = position.coords;
+            this.latInput.value = latitude;
+            this.lngInput.value = longitude;
+
+            try {
+                // Reverse geocode via LocationIQ
+                const url = `https://us-central1-appfleetonix.cloudfunctions.net/addressSearch?reverse=true&lat=${latitude}&lng=${longitude}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data && data.display_name) {
+                    this.input.value = data.display_name;
+                } else {
+                    this.input.value = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+                }
+                this.input.placeholder = "Search for address...";
+                this.input.dispatchEvent(new Event('change', { bubbles: true }));
+            } catch (error) {
+                console.error("Reverse geocoding error:", error);
+                this.input.value = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+                this.input.placeholder = "Search for address...";
+            }
+        }, (error) => {
+            console.error("Geolocation error:", error);
+            alert("Unable to retrieve your location. Please type it manually.");
+            this.input.placeholder = "Search for address...";
+        });
     }
 
     hideSuggestions() {

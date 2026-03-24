@@ -64,74 +64,77 @@ async function showAdminBookingModal() {
     const today = new Date().toISOString().split('T')[0];
 
     const content = `
-        <div class="form-group" style="background: rgba(59, 130, 246, 0.05); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-            <label style="font-weight: 700; color: var(--accent-blue); display: block; margin-bottom: 10px;">Client Type</label>
-            <div style="display: flex; gap: 20px;">
-                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+        <div class="form-group">
+            <label style="display: block; margin-bottom: 10px; font-weight: 600;">Client Type</label>
+            <div style="display: flex; gap: 20px; background: rgba(0, 212, 255, 0.05); padding: 12px; border-radius: 8px; border: 1px solid rgba(0, 212, 255, 0.1);">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                     <input type="radio" name="client_type" value="existing" checked style="width: auto;"> Registered Client
                 </label>
-                <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                     <input type="radio" name="client_type" value="new" style="width: auto;"> New / Guest
                 </label>
             </div>
         </div>
 
-        <!-- Existing Client Section -->
-        <div id="existing_client_section">
-            <div class="form-group">
-                <label>Select Client</label>
-                <select id="modal_client" class="form-input">
-                    <option value="">-- Choose a Client --</option>
-                    ${clientOptions}
-                </select>
-            </div>
+        <div id="existing_client_section" class="form-group">
+            <label for="modal_client">Select Client</label>
+            <select id="modal_client" class="form-input">
+                <option value="">-- Choose a Client --</option>
+                ${clients.map(c => `<option value="${c.id}" data-name="${c.full_name}" data-email="${c.email}">${c.full_name} (${c.email})</option>`).join('')}
+            </select>
         </div>
 
-        <!-- New Client Section (Hidden by default) -->
         <div id="new_client_section" style="display: none;">
-            <div class="form-group">
-                <label>Guest Full Name</label>
-                <input type="text" id="modal_guest_name" class="form-input" placeholder="e.g. John Doe">
+            <div class="modal-form-row">
+                <div class="form-group">
+                    <label for="modal_guest_name">Guest Name</label>
+                    <input type="text" id="modal_guest_name" class="form-input" placeholder="Enter guest name...">
+                </div>
+                <div class="form-group">
+                    <label for="modal_guest_email">Guest Email</label>
+                    <input type="email" id="modal_guest_email" class="form-input" placeholder="Enter guest email...">
+                </div>
             </div>
             <div class="form-group">
-                <label>Guest Email</label>
-                <input type="email" id="modal_guest_email" class="form-input" placeholder="john@example.com">
-            </div>
-            <div class="form-group">
-                <label>Company / Organization (Optional)</label>
-                <input type="text" id="modal_company" class="form-input" placeholder="Company Name">
+                <label for="modal_company">Company Name (Optional)</label>
+                <input type="text" id="modal_company" class="form-input" placeholder="Enter company name...">
             </div>
         </div>
 
-        <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 20px 0;">
-
-        <div class="form-group">
-            <label>Pickup Location</label>
-            <input type="text" id="modal_pickup" class="form-input" placeholder="Enter pickup address..." required>
+        <div class="form-group" style="position: relative;">
+            <label for="modal_pickup">Pickup Location</label>
+            <div class="input-with-action">
+                <input type="text" id="modal_pickup" class="form-input" placeholder="Search for pickup address..." required autocomplete="off">
+                <button type="button" class="btn-input-action" id="locatePickup" title="Use current location"><i class="fas fa-location-crosshairs"></i></button>
+            </div>
             <input type="hidden" id="modal_pickup_lat" value="0">
             <input type="hidden" id="modal_pickup_lng" value="0">
         </div>
-        <div class="form-group">
-            <label>Dropoff Location</label>
-            <input type="text" id="modal_dropoff" class="form-input" placeholder="Enter destination..." required>
+
+        <div class="form-group" style="position: relative;">
+            <label for="modal_dropoff">Dropoff Location</label>
+            <div class="input-with-action">
+                <input type="text" id="modal_dropoff" class="form-input" placeholder="Search for dropoff address..." required autocomplete="off">
+                <button type="button" class="btn-input-action" id="locateDropoff" title="Use current location"><i class="fas fa-location-crosshairs"></i></button>
+            </div>
             <input type="hidden" id="modal_dropoff_lat" value="0">
             <input type="hidden" id="modal_dropoff_lng" value="0">
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+        <div class="modal-form-row">
             <div class="form-group">
-                <label>Pickup Date</label>
+                <label for="modal_date">Pickup Date</label>
                 <input type="date" id="modal_date" class="form-input" value="${today}" required>
             </div>
             <div class="form-group">
-                <label>Pickup Time</label>
+                <label for="modal_time">Pickup Time</label>
                 <input type="time" id="modal_time" class="form-input" required>
             </div>
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+        <div class="modal-form-row">
             <div class="form-group">
-                <label>Passengers (Pax)</label>
+                <label for="modal_pax">Passengers (Pax)</label>
                 <input type="number" id="modal_pax" class="form-input" value="1" min="1" required>
             </div>
             <div class="form-group" style="display: flex; align-items: center; padding-top: 25px;">
@@ -142,7 +145,7 @@ async function showAdminBookingModal() {
         </div>
 
         <div class="form-group">
-            <label>Special Instructions (Optional)</label>
+            <label for="modal_instructions">Special Instructions (Optional)</label>
             <textarea id="modal_instructions" class="form-input" rows="2" placeholder="e.g. Near the main gate..."></textarea>
         </div>
 
@@ -225,18 +228,21 @@ async function showAdminBookingModal() {
             document.getElementById('new_client_section').style.display = e.target.value === 'new' ? 'block' : 'none';
         }));
 
-        // Initialize Google Places Autocomplete if available
         // Enhanced Address Autocomplete (Cloud Proxy)
-        new CloudAddressSearch(
+        const pickupSearch = new CloudAddressSearch(
             document.getElementById('modal_pickup'),
             document.getElementById('modal_pickup_lat'),
             document.getElementById('modal_pickup_lng')
         );
-        new CloudAddressSearch(
+        const dropoffSearch = new CloudAddressSearch(
             document.getElementById('modal_dropoff'),
             document.getElementById('modal_dropoff_lat'),
             document.getElementById('modal_dropoff_lng')
         );
+
+        // Location Action Buttons
+        document.getElementById('locatePickup').onclick = () => pickupSearch.getCurrentLocation();
+        document.getElementById('locateDropoff').onclick = () => dropoffSearch.getCurrentLocation();
     }, 250); // Small delay to ensure modal is fully in DOM
 }
 
