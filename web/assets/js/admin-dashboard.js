@@ -525,27 +525,75 @@ window.openDispatchModal = async function(bookingId) {
     select.innerHTML = '<option value="">Loading drivers...</option>';
     modal.classList.add('active');
     
-    // Fetch drivers
-    const q = query(collection(db, "users"), where("user_type", "==", "driver"));
-    const snap = await getDocs(q);
+    // Fetch drivers and their location heartbeats (real-time check)
+    const [driversSnap, locationsSnap] = await Promise.all([
+        getDocs(query(collection(db, "drivers"), where("current_status", "==", "available"))),
+        getDocs(collection(db, "driver_locations"))
+    ]);
     
-    if (snap.empty) {
-        select.innerHTML = '<option value="">No drivers found in system</option>';
+    const locationMap = {};
+    locationsSnap.docs.forEach(doc => {
+        locationMap[doc.id.toLowerCase().trim()] = doc.data();
+    });
+
+    const now = Date.now();
+    const tenMins = 10 * 60 * 1000;
+    const driverMap = new Map();
+
+    driversSnap.docs.forEach(dDoc => {
+        const d = dDoc.data();
+        const email = (d.driver_email || "").toLowerCase().trim();
+        if (!email || driverMap.has(email)) return;
+
+        // Check real-time heartbeat (online/offline)
+        const loc = locationMap[email];
+        let isOnline = false;
+        if (loc && loc.last_updated) {
+            const lastActive = loc.last_updated.toMillis ? loc.last_updated.toMillis() : (loc.last_updated.seconds * 1000);
+            if (now - lastActive < tenMins) isOnline = true;
+        }
+
+        driverMap.set(email, {
+            id: dDoc.id,
+            name: d.driver_name,
+            vehicle: d.vehicle_assigned,
+            plate: d.plate_number,
+            isOnline: isOnline
+        });
+    });
+
+    // Sort: Online first, then alphabetical
+    const sortedDrivers = Array.from(driverMap.values()).sort((a, b) => {
+        if (a.isOnline === b.isOnline) return a.name.localeCompare(b.name);
+        return a.isOnline ? -1 : 1;
+    });
+    
+    if (sortedDrivers.length === 0) {
+        select.innerHTML = '<option value="">No available drivers found</option>';
         return;
     }
     
     let optionsHtml = '<option value="">-- Select a Driver --</option>';
-    snap.forEach(d => {
-        const driverData = d.data();
-        const liveStatus = allDriversData[d.id]?.current_status || 'offline';
-        const statusText = liveStatus.replace('_', ' ').toUpperCase();
+    let autoSelectedId = "";
+
+    sortedDrivers.forEach((d, index) => {
+        // Auto-select the first online driver
+        if (d.isOnline && !autoSelectedId) {
+            autoSelectedId = d.id;
+        }
         
-        // Add a visual indicator indicator for available
-        const icon = liveStatus === 'available' ? '🟢' : '⚫';
-        optionsHtml += `<option value="${d.id}">${icon} [${statusText}] ${driverData.full_name || 'Unnamed'}</option>`;
+        const icon = d.isOnline ? '🟢' : '⚪';
+        const statusText = d.isOnline ? '[ONLINE]' : '[OFFLINE]';
+        optionsHtml += `<option value="${d.id}" ${d.id === autoSelectedId ? 'selected' : ''}>${icon} ${statusText} ${d.name} - ${d.vehicle} (${d.plate})</option>`;
     });
     
     select.innerHTML = optionsHtml;
+    
+    // If we auto-selected someone, focus or highlight the selection
+    if (autoSelectedId) {
+        console.log(`Auto-selected online driver: ${autoSelectedId}`);
+        select.value = autoSelectedId;
+    }
 };
 
 window.closeDispatchModal = function() {
