@@ -286,8 +286,7 @@ fun DriverDashboard(
 
     // Button visibility logic
     val isTripCompleted = tripPhase == "completed"
-    val canAcceptBooking = tripPhase == "pending" && !isTripCompleted
-    val canStartTrip = tripPhase == "accepted" && !isTripCompleted && isStartWindowOpen
+    val canStartTrip = tripPhase == "pending" && !isTripCompleted && isStartWindowOpen
     val canMarkPickup = tripPhase == "pickup" && !isTripCompleted
     val canMarkDropoff = tripPhase == "dropoff" && !isTripCompleted
     val canMarkReturnPickup = tripPhase == "return_pickup" && returnToPickup && !isTripCompleted
@@ -632,7 +631,7 @@ fun DriverDashboard(
                         currentHeading = bearing
                         totalDistanceMetres = totalDist
 
-                        // Sync to Firestore if docRef is ready
+                         // Sync to Firestore if docRef is ready
                         scope.launch {
                             val locData = hashMapOf(
                                 "current_latitude" to lat,
@@ -650,16 +649,6 @@ fun DriverDashboard(
                             )
                             // Use set(merge) so the document is created if it doesn't exist yet
                             driverDocRef?.set(locData, com.google.firebase.firestore.SetOptions.merge())
-
-                            // ALSO: Update the actual trip schedule with the current accumulated distance
-                            val scheduleDocId = nextSchedule?.docId
-                            if (scheduleDocId != null && (tripPhase == "pickup" || tripPhase == "dropoff" || tripPhase == "return_pickup")) {
-                                val distanceKm = totalDist / 1000.0
-                                db.collection("schedules").document(scheduleDocId).update(
-                                    "total_km_travelled", distanceKm,
-                                    "updated_at", FieldValue.serverTimestamp()
-                                )
-                            }
                         }
                     }
                 }
@@ -1628,43 +1617,12 @@ fun DriverDashboard(
                         shadowElevation = 16.dp,
                         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
                     ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Left icon: Call Client
-                                FilledIconButton(
-                                    onClick = {
-                                        val phone = nextSchedule.client?.phone ?: nextSchedule.client_phone
-                                        if (!phone.isNullOrBlank()) {
-                                            val intent = Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:$phone"))
-                                            context.startActivity(intent)
-                                        }
-                                    },
-                                    modifier = Modifier.size(54.dp),
-                                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = AccentTeal),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Icon(Icons.Default.Phone, contentDescription = "Call Client", tint = Color.White)
-                                }
-
-                                // Right info: Trip Info
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = nextSchedule.client?.name ?: "Client Assignment",
-                                        color = TextPrimary,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "Current Phase: ${tripPhase.replace("_", " ").uppercase()}",
-                                        color = TextSecondary,
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
-                                }
-                            }
-
+                        Column(
+                            modifier = Modifier
+                                .padding(20.dp)
+                                .navigationBarsPadding(),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
                             if (tripActionError != null) {
                                 Text(
                                     text = tripActionError ?: "",
@@ -1677,7 +1635,7 @@ fun DriverDashboard(
                             val isAnyLoading = isStartingTrip || isMarkingPickup || isMarkingDropoff || isMarkingReturnPickup || isCompletingTrip
                             
                             when {
-                                canAcceptBooking -> {
+                                canStartTrip -> {
                                     Button(
                                         onClick = {
                                             val docId = nextSchedule.docId ?: return@Button
@@ -1687,11 +1645,16 @@ fun DriverDashboard(
                                                     tripActionError = null
                                                     db.collection("schedules").document(docId).update(
                                                         "status", "accepted",
-                                                        "trip_phase", "accepted",
+                                                        "trip_phase", "pickup",
                                                         "accepted_at", FieldValue.serverTimestamp()
                                                     ).await()
 
                                                     acceptedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+                                                    val startTripIntent = Intent(context, LocationService::class.java).apply {
+                                                        action = LocationService.ACTION_START_TRIP
+                                                    }
+                                                    context.startService(startTripIntent)
+                                                    totalDistanceMetres = 0f
                                                     
                                                      // Update driver status
                                                     val email = auth.currentUser?.email
@@ -1702,11 +1665,10 @@ fun DriverDashboard(
                                                         driverSnap.documents.firstOrNull()?.reference?.update(
                                                             "current_status", "on_schedule",
                                                             "current_trip_id", docId,
-                                                            "current_trip_phase", "accepted",
+                                                            "current_trip_phase", "pickup",
                                                             "accepted_at", acceptedAt
                                                         )
                                                     }
-                                                    tripActionSuccess = "Booking accepted! Click START TRIP when ready to move."
                                                 } catch (e: Exception) {
                                                     tripActionError = "Failed: ${e.message}"
                                                 } finally {
@@ -1721,45 +1683,6 @@ fun DriverDashboard(
                                     ) {
                                         if (isStartingTrip) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                                         else Text("ACCEPT BOOKING", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                                canStartTrip -> {
-                                    Button(
-                                        onClick = {
-                                            val docId = nextSchedule.docId ?: return@Button
-                                            scope.launch {
-                                                try {
-                                                    isStartingTrip = true
-                                                    tripActionError = null
-                                                    db.collection("schedules").document(docId).update(
-                                                        "trip_phase", "pickup",
-                                                        "started_at", FieldValue.serverTimestamp()
-                                                    ).await()
-
-                                                    val startTripIntent = Intent(context, LocationService::class.java).apply {
-                                                        action = LocationService.ACTION_START_TRIP
-                                                    }
-                                                    context.startService(startTripIntent)
-                                                    totalDistanceMetres = 0f
-                                                    
-                                                     // Update driver status
-                                                    driverDocRef?.update("current_trip_phase", "pickup")
-                                                    
-                                                    tripActionSuccess = "Trip started! Use the map for directions to pickup."
-                                                } catch (e: Exception) {
-                                                    tripActionError = "Failed: ${e.message}"
-                                                } finally {
-                                                    isStartingTrip = false
-                                                }
-                                            }
-                                        },
-                                        modifier = Modifier.fillMaxWidth().height(64.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6)), // Purple
-                                        shape = RoundedCornerShape(16.dp),
-                                        enabled = !isAnyLoading
-                                    ) {
-                                        if (isStartingTrip) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                                        else Text("START TRIP (EN ROUTE)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                     }
                                 }
                                 canMarkPickup -> {
@@ -1922,67 +1845,19 @@ fun DriverDashboard(
                                     Text("Dropoff: ${nextSchedule?.dropoff_location?.address}", color = TextSecondary)
                                 }
                             }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            Button(
+                                onClick = { showNewTaskOverlay = false },
+                                modifier = Modifier.fillMaxWidth().height(64.dp),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
                             ) {
-                                Button(
-                                    onClick = { 
-                                        val docId = nextSchedule?.docId ?: return@Button
-                                        scope.launch {
-                                            try {
-                                                isStartingTrip = true
-                                                tripActionError = null
-                                                db.collection("schedules").document(docId).update(
-                                                    "status", "accepted",
-                                                    "trip_phase", "accepted",
-                                                    "accepted_at", FieldValue.serverTimestamp()
-                                                ).await()
-
-                                                acceptedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
-                                                
-                                                val email = auth.currentUser?.email
-                                                if (email != null) {
-                                                    val driverSnap = db.collection("drivers")
-                                                        .whereEqualTo("driver_email", email)
-                                                        .get().await()
-                                                    driverSnap.documents.firstOrNull()?.reference?.update(
-                                                        "current_status", "on_schedule",
-                                                        "current_trip_id", docId,
-                                                        "current_trip_phase", "accepted",
-                                                        "accepted_at", acceptedAt
-                                                    )
-                                                }
-                                                showNewTaskOverlay = false
-                                                tripActionSuccess = "Booking accepted! You can now start the trip when ready."
-                                            } catch (e: Exception) {
-                                                tripActionError = "Failed: ${e.message}"
-                                            } finally {
-                                                isStartingTrip = false
-                                            }
-                                        }
-                                    },
-                                    modifier = Modifier.weight(1f).height(64.dp),
-                                    shape = RoundedCornerShape(16.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
-                                    enabled = !isStartingTrip
-                                ) {
-                                    if (isStartingTrip) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                                    else Text("ACCEPT JOB", fontWeight = FontWeight.Bold)
-                                }
-                                
-                                OutlinedButton(
-                                    onClick = { showNewTaskOverlay = false },
-                                    modifier = Modifier.weight(1f).height(64.dp),
-                                    shape = RoundedCornerShape(16.dp),
-                                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.5f))
-                                ) {
-                                    Text("VIEW DETAILS", color = Color.White)
-                                }
+                                Text("VIEW DETAILS", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
                 }
+            }
+        }
 
         if (showTripTicket) {
             TripTicketDialog(
@@ -2053,7 +1928,8 @@ fun DriverDashboard(
                 onReport = handleVehicleIssueReport,
                 isReporting = isReportingVehicleIssue
             )
+        }
+
     }
 }
-}
-}
+

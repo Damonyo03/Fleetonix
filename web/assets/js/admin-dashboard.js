@@ -79,6 +79,36 @@ function initStats() {
     });
 }
 
+function animateMarkerTo(marker, newPos) {
+    if (!marker) return;
+    const startPos = marker.getPosition();
+    const startTime = performance.now();
+    const duration = 2500; // Animate over 2.5 seconds (we update every 3s)
+
+    // Cancel existing animation if any
+    if (marker.animationId) {
+        cancelAnimationFrame(marker.animationId);
+    }
+
+    function step(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // Linear interpolation
+        const lat = startPos.lat() + (newPos.lat - startPos.lat()) * progress;
+        const lng = startPos.lng() + (newPos.lng - startPos.lng()) * progress;
+        
+        marker.setPosition({ lat, lng });
+
+        if (progress < 1) {
+            marker.animationId = requestAnimationFrame(step);
+        } else {
+            marker.animationId = null;
+        }
+    }
+    marker.animationId = requestAnimationFrame(step);
+}
+
 function initMap() {
     // Initialize Google Map
     const mapOptions = {
@@ -214,8 +244,8 @@ function initMap() {
                 }
 
                 if (driverMarkers[driverId]) {
-                    // Update existing marker
-                    driverMarkers[driverId].setPosition(position);
+                    // Update existing marker with smooth animation
+                    animateMarkerTo(driverMarkers[driverId], position);
                     driverMarkers[driverId].setIcon(markerIcon);
                     
                     // Fading logic: offline is most faded, others are full opacity

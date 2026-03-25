@@ -103,6 +103,34 @@ function syncDriverTracking() {
     });
 }
 
+function animateMarkerTo(marker, newPos) {
+    if (!marker) return;
+    const startPos = marker.getPosition();
+    const startTime = performance.now();
+    const duration = 2500; // Animate over 2.5 seconds
+
+    if (marker.animationId) {
+        cancelAnimationFrame(marker.animationId);
+    }
+
+    function step(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        const lat = startPos.lat() + (newPos.lat - startPos.lat()) * progress;
+        const lng = startPos.lng() + (newPos.lng - startPos.lng()) * progress;
+        
+        marker.setPosition({ lat, lng });
+
+        if (progress < 1) {
+            marker.animationId = requestAnimationFrame(step);
+        } else {
+            marker.animationId = null;
+        }
+    }
+    marker.animationId = requestAnimationFrame(step);
+}
+
 let locationUnsubscribe = null;
 function setupLocationListener() {
     if (locationUnsubscribe) return; // Only one listener needed
@@ -140,7 +168,7 @@ function setupLocationListener() {
 
                 // Marker
                 if (markers[email]) {
-                    markers[email].setPosition(pos);
+                    animateMarkerTo(markers[email], pos);
                     // Update icon color if phase changed
                     const phase = data.current_trip_phase || "pickup";
                     const phaseColors = {
