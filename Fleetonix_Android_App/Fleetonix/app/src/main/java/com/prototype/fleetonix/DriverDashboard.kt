@@ -1884,11 +1884,6 @@ fun DriverDashboard(
                                                     
                                                     docRef.update("trip_phase", nextP, "dropped_off_at", FieldValue.serverTimestamp()).await()
                                                     
-                                                    // AUTOMATION: Automatically show trip ticket if ready to complete
-                                                    if (nextP == "ready_to_complete") {
-                                                        completedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
-                                                        showTripTicket = true
-                                                    }
                                                     
                                                     // Sync to drivers collection
                                                     val driverEmail = auth.currentUser?.email
@@ -1932,9 +1927,6 @@ fun DriverDashboard(
                                                         "return_picked_up_at", FieldValue.serverTimestamp()
                                                     ).await()
                                                     
-                                                    // AUTOMATION: Automatically show trip ticket
-                                                    completedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
-                                                    showTripTicket = true
                                                     
                                                     // Sync to driver doc
                                                     driverDocRef?.update("current_trip_phase", "ready_to_complete")
