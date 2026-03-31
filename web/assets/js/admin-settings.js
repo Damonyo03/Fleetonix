@@ -61,7 +61,7 @@ function initClearDataFeature() {
         clearBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
 
         try {
-            const COLLECTIONS = ["schedules", "bookings", "activity", "accidents", "vehicle_issues"];
+            const COLLECTIONS = ["schedules", "bookings", "activity", "driver_locations", "notifications", "accidents", "vehicle_issues"];
             const backup = {};
 
             // Step 1: Backup — read all data first

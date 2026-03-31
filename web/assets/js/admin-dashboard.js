@@ -535,10 +535,9 @@ window.instantDispatch = async function(bookingId, driverId, driverName, btn) {
         }
 
         // Feedback
-        const badge = event.target;
-        if (badge) {
-            badge.innerHTML = "✅ Done";
-            badge.style.background = "var(--accent-green)";
+        if (btn) {
+            btn.innerHTML = "✅ Done";
+            btn.style.background = "var(--accent-green)";
         }
     } catch (error) {
         console.error("Instant dispatch error:", error);

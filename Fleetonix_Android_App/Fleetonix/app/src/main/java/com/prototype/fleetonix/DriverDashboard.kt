@@ -387,8 +387,8 @@ fun DriverDashboard(
 
         val origin = "$currentLatitude,$currentLongitude"
         val destination = when (tripPhase) {
-            "pending", "assigned", "accepted", "pickup", "return_pickup" -> if (schedule.pickup_location?.latitude != null) "${schedule.pickup_location.latitude},${schedule.pickup_location.longitude}" else null
-            "dropoff" -> if (schedule.dropoff_location?.latitude != null) "${schedule.dropoff_location.latitude},${schedule.dropoff_location.longitude}" else null
+            "pending", "assigned", "accepted", "return_pickup" -> if (schedule.pickup_location?.latitude != null) "${schedule.pickup_location.latitude},${schedule.pickup_location.longitude}" else null
+            "pickup", "dropoff" -> if (schedule.dropoff_location?.latitude != null) "${schedule.dropoff_location.latitude},${schedule.dropoff_location.longitude}" else null
             else -> null
         }
 
@@ -1083,6 +1083,7 @@ fun DriverDashboard(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(Midnight)
+                        .navigationBarsPadding()
                         .padding(horizontal = 16.dp, vertical = 24.dp)
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -1671,7 +1672,8 @@ fun DriverDashboard(
                     Surface(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .fillMaxWidth(),
+                            .fillMaxWidth()
+                            .navigationBarsPadding(),
                         color = CardBlue,
                         tonalElevation = 8.dp,
                         shadowElevation = 16.dp,
@@ -1882,6 +1884,12 @@ fun DriverDashboard(
                                                     
                                                     docRef.update("trip_phase", nextP, "dropped_off_at", FieldValue.serverTimestamp()).await()
                                                     
+                                                    // AUTOMATION: Automatically show trip ticket if ready to complete
+                                                    if (nextP == "ready_to_complete") {
+                                                        completedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+                                                        showTripTicket = true
+                                                    }
+                                                    
                                                     // Sync to drivers collection
                                                     val driverEmail = auth.currentUser?.email
                                                     if (driverEmail != null) {
@@ -1923,6 +1931,10 @@ fun DriverDashboard(
                                                         "trip_phase", "ready_to_complete",
                                                         "return_picked_up_at", FieldValue.serverTimestamp()
                                                     ).await()
+                                                    
+                                                    // AUTOMATION: Automatically show trip ticket
+                                                    completedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+                                                    showTripTicket = true
                                                     
                                                     // Sync to driver doc
                                                     driverDocRef?.update("current_trip_phase", "ready_to_complete")
