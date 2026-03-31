@@ -267,12 +267,14 @@ fun DriverDashboard(
     var showTripTicket by remember { mutableStateOf(false) }
 
     // New Task Popup states
-    var lastKnownScheduleId by remember { mutableStateOf<Int?>(nextSchedule?.scheduleId) }
+    var lastKnownScheduleId by remember { mutableStateOf<Int?>(null) }
     var showNewTaskOverlay by remember { mutableStateOf(false) }
 
     // Trigger reactive overlay when a new assignment arrives
     LaunchedEffect(nextSchedule?.scheduleId) {
+        // Trigger if we have a new schedule and it is in the pending phase
         if (nextSchedule?.scheduleId != null && nextSchedule.scheduleId != lastKnownScheduleId && tripPhase == "pending") {
+            Log.d("DriverDashboard", "New task detected: id=${nextSchedule.scheduleId}")
             showNewTaskOverlay = true
             lastKnownScheduleId = nextSchedule.scheduleId
         } else if (nextSchedule?.scheduleId == null) {
@@ -1416,30 +1418,28 @@ fun DriverDashboard(
                                             val docId = nextSchedule.docId ?: throw Exception("Schedule ID missing")
                                             db.collection("schedules").document(docId).update(
                                                 "status", "accepted",
-                                                "trip_phase", "pickup",
+                                                "trip_phase", "accepted",
                                                 "accepted_at", FieldValue.serverTimestamp()
                                             ).await()
 
                                             acceptedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
-                                            val startTripIntent = Intent(context, LocationService::class.java).apply {
-                                                action = LocationService.ACTION_START_TRIP
-                                                putExtra(LocationService.EXTRA_DRIVER_ID, session.user?.email)
-                                            }
-                                            context.startService(startTripIntent)
-                                            totalDistanceMetres = 0f
                                             
-                                            // Also update driver status
-                                            val email = auth.currentUser?.email
-                                            if (email != null) {
-                                                val driverSnap = db.collection("drivers")
-                                                    .whereEqualTo("driver_email", email)
+                                            // Sync to drivers collection for Admin visibility
+                                            val driverEmail = auth.currentUser?.email
+                                            if (driverEmail != null) {
+                                                val dSnap = db.collection("drivers")
+                                                    .whereEqualTo("driver_email", driverEmail.lowercase().trim())
                                                     .get().await()
-                                                driverSnap.documents.firstOrNull()?.reference?.update("current_status", "on_schedule")
+                                                dSnap.documents.firstOrNull()?.reference?.update(
+                                                    "current_status", "on_schedule",
+                                                    "current_trip_id", docId,
+                                                    "current_trip_phase", "accepted"
+                                                )
                                             }
-                                            
-                                            tripActionSuccess = "Booking accepted! Use the map for directions to pickup."
+
+                                            tripActionSuccess = "Booking accepted! Use the Start Trip button when ready to move."
                                         } catch (e: Exception) {
-                                            tripActionError = "Failed to accept booking: ${e.message}"
+                                            tripActionError = "Failed to accept: ${e.message}"
                                         } finally {
                                             isStartingTrip = false
                                         }
@@ -1472,13 +1472,26 @@ fun DriverDashboard(
                                             tripActionError = null
                                             tripActionSuccess = null
 
-                                            val docId = nextSchedule.docId ?: throw Exception("Schedule ID missing")
                                             db.collection("schedules").document(docId).update(
                                                 "trip_phase", "dropoff",
                                                 "picked_up_at", FieldValue.serverTimestamp()
                                             ).await()
+
+                                            pickedUpAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
                                             
-                                            tripActionSuccess = "Pickup confirmed! Proceed to dropoff location."
+                                            // Sync to drivers collection for Admin visibility
+                                            val driverEmail = auth.currentUser?.email
+                                            if (driverEmail != null) {
+                                                val dSnap = db.collection("drivers")
+                                                    .whereEqualTo("driver_email", driverEmail.lowercase().trim())
+                                                    .get().await()
+                                                dSnap.documents.firstOrNull()?.reference?.update(
+                                                    "current_status", "dropoff",
+                                                    "current_trip_phase", "dropoff"
+                                                )
+                                            }
+
+                                            tripActionSuccess = "Pickup confirmed! Status synced to Admin Dashboard."
                                         } catch (e: Exception) {
                                             tripActionError = "Failed to mark pickup: ${e.message}"
                                         } finally {
@@ -1525,11 +1538,19 @@ fun DriverDashboard(
                                                 "dropped_off_at", FieldValue.serverTimestamp()
                                             ).await()
 
-                                            if (returnReq) {
-                                                tripActionSuccess = "Dropoff confirmed! Return to pickup point."
-                                            } else {
-                                                tripActionSuccess = "Dropoff confirmed! Trip ready to complete."
+                                            // Sync to drivers collection
+                                            val driverEmail = auth.currentUser?.email
+                                            if (driverEmail != null) {
+                                                val dSnap = db.collection("drivers")
+                                                    .whereEqualTo("driver_email", driverEmail.lowercase().trim())
+                                                    .get().await()
+                                                dSnap.documents.firstOrNull()?.reference?.update(
+                                                    "current_status", nextPhase,
+                                                    "current_trip_phase", nextPhase
+                                                )
                                             }
+
+                                            tripActionSuccess = if (returnReq) "Dropoff confirmed! Return required." else "Dropoff confirmed! Ready to complete."
                                         } catch (e: Exception) {
                                             tripActionError = "Failed to mark dropoff: ${e.message}"
                                         } finally {
@@ -1772,8 +1793,17 @@ fun DriverDashboard(
                                                     context.startService(startTripIntent)
                                                     totalDistanceMetres = 0f
                                                     
-                                                     // Update driver status
-                                                    driverDocRef?.update("current_trip_phase", "pickup")
+                                                    // Sync to drivers collection
+                                                    val driverEmail = auth.currentUser?.email
+                                                    if (driverEmail != null) {
+                                                        val dSnap = db.collection("drivers")
+                                                            .whereEqualTo("driver_email", driverEmail.lowercase().trim())
+                                                            .get().await()
+                                                        dSnap.documents.firstOrNull()?.reference?.update(
+                                                            "current_status", "pickup",
+                                                            "current_trip_phase", "pickup"
+                                                        )
+                                                    }
                                                     
                                                     tripActionSuccess = "Trip started! Use the map for directions to pickup."
                                                 } catch (e: Exception) {
@@ -1807,11 +1837,19 @@ fun DriverDashboard(
 
                                                     pickedUpAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
                                                     
-                                                    // Sync to driver doc
-                                                    driverDocRef?.update(
-                                                        "current_trip_phase", "dropoff",
-                                                        "picked_up_at", pickedUpAt
-                                                    )
+                                                    // Sync to drivers collection
+                                                    val driverEmail = auth.currentUser?.email
+                                                    if (driverEmail != null) {
+                                                        val dSnap = db.collection("drivers")
+                                                            .whereEqualTo("driver_email", driverEmail.lowercase().trim())
+                                                            .get().await()
+                                                        dSnap.documents.firstOrNull()?.reference?.update(
+                                                            "current_status", "dropoff",
+                                                            "current_trip_phase", "dropoff"
+                                                        )
+                                                    }
+                                                    
+                                                    tripActionSuccess = "Pickup confirmed! Status synced to Admin Dashboard."
                                                 } catch (e: Exception) {
                                                     tripActionError = "Failed: ${e.message}"
                                                 } finally {
@@ -1834,16 +1872,28 @@ fun DriverDashboard(
                                             val docId = nextSchedule.docId ?: return@Button
                                             scope.launch {
                                                 try {
-                                                    isMarkingDropoff = true
+                                                     isMarkingDropoff = true
                                                     tripActionError = null
                                                     val docRef = db.collection("schedules").document(docId)
                                                     val doc = docRef.get().await()
                                                     val returnReq = doc.getBoolean("return_to_pickup") ?: false
-                                                     val nextP = if (returnReq) "return_pickup" else "ready_to_complete"
+                                                    val nextP = if (returnReq) "return_pickup" else "ready_to_complete"
+                                                    
                                                     docRef.update("trip_phase", nextP, "dropped_off_at", FieldValue.serverTimestamp()).await()
                                                     
-                                                    // Sync to driver doc
-                                                    driverDocRef?.update("current_trip_phase", nextP)
+                                                    // Sync to drivers collection
+                                                    val driverEmail = auth.currentUser?.email
+                                                    if (driverEmail != null) {
+                                                        val dSnap = db.collection("drivers")
+                                                            .whereEqualTo("driver_email", driverEmail.lowercase().trim())
+                                                            .get().await()
+                                                        dSnap.documents.firstOrNull()?.reference?.update(
+                                                            "current_status", nextP,
+                                                            "current_trip_phase", nextP
+                                                        )
+                                                    }
+                                                    
+                                                    tripActionSuccess = if (returnReq) "Dropoff confirmed! Return required." else "Dropoff confirmed! Trip ready to complete."
                                                 } catch (e: Exception) {
                                                     tripActionError = "Failed: ${e.message}"
                                                 } finally {
@@ -1997,6 +2047,11 @@ fun DriverDashboard(
                                                 tripActionError = "Failed: ${e.message}"
                                             } finally {
                                                 isStartingTrip = false
+                                                // Sync overlay acceptance to drivers collection
+                                                driverDocRef?.update(
+                                                    "current_status", "on_schedule",
+                                                    "current_trip_phase", "accepted"
+                                                )
                                             }
                                         }
                                     },
@@ -2055,16 +2110,22 @@ fun DriverDashboard(
                             
                             db.collection("schedules").document(docId).update(tripData as Map<String, Any>).await()
                             
-                            // Update driver back to available and increment mileage
+                            // Update driver back to available and sync to drivers collection
                             val currentMileage = session.driver?.currentMileage ?: 0.0
                             val newMileage = currentMileage + (totalDistanceMetres / 1000.0)
                             
-                            driverDocRef?.update(
-                                "current_status", "available",
-                                "current_trip_id", "",
-                                "current_trip_phase", "completed",
-                                "current_mileage", newMileage
-                            )?.await()
+                            val driverEmail = auth.currentUser?.email
+                            if (driverEmail != null) {
+                                val dSnap = db.collection("drivers")
+                                    .whereEqualTo("driver_email", driverEmail.lowercase().trim())
+                                    .get().await()
+                                dSnap.documents.firstOrNull()?.reference?.update(
+                                    "current_status", "available",
+                                    "current_trip_id", "",
+                                    "current_trip_phase", "completed",
+                                    "current_mileage", newMileage
+                                )
+                            }
                             
                             showTripTicket = false
                         } catch (e: Exception) {

@@ -170,7 +170,14 @@ fun AuthFlow() {
                             client_name = data["client_name"] as? String,
                             client_email = data["client_email"] as? String
                         )
-                    }.sortedByDescending { it.docId }
+                    }.sortedWith(compareByDescending<DriverScheduleData> { 
+                        when (it.trip_phase) {
+                            "pending" -> 3
+                            "accepted", "pickup", "dropoff", "return_pickup", "ready_to_complete" -> 2
+                            "completed" -> 0
+                            else -> 1
+                        }
+                    }.thenByDescending { it.docId })
 
                     Log.d("AuthFlow", "Sync successful: Found ${schedules.size} schedules")
                     feedData = schedules

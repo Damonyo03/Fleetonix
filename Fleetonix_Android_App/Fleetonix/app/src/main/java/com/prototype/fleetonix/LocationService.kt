@@ -97,7 +97,7 @@ class LocationService : Service() {
         val extraDriverId = intent?.getStringExtra(EXTRA_DRIVER_ID)
         if (extraDriverId != null) {
             driverDocId = extraDriverId.lowercase().trim()
-            Log.d("LocationService", "Started tracking for driver: $driverDocId")
+            Log.d("LocationService", "Started tracking for driver: $driverDocId (document ID used for driver_locations)")
         }
 
         when (intent?.action) {
