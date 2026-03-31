@@ -1472,6 +1472,7 @@ fun DriverDashboard(
                                             tripActionError = null
                                             tripActionSuccess = null
 
+                                            val docId = nextSchedule.docId ?: throw Exception("Schedule ID missing")
                                             db.collection("schedules").document(docId).update(
                                                 "trip_phase", "dropoff",
                                                 "picked_up_at", FieldValue.serverTimestamp()

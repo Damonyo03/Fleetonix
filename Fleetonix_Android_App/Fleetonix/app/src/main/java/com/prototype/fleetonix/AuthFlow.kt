@@ -170,7 +170,7 @@ fun AuthFlow() {
                             client_name = data["client_name"] as? String,
                             client_email = data["client_email"] as? String
                         )
-                    }.sortedWith(compareByDescending<DriverScheduleData> { 
+                    }.sortedWith(compareByDescending<DriverSchedule> { 
                         when (it.trip_phase) {
                             "pending" -> 3
                             "accepted", "pickup", "dropoff", "return_pickup", "ready_to_complete" -> 2
