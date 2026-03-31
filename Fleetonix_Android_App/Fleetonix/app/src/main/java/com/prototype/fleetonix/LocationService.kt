@@ -75,6 +75,7 @@ class LocationService : Service() {
                     // 2. Push to Firestore for Admin Dashboard (Real-time tracking)
                     driverDocId?.let { id ->
                         updateLocationInFirestore(id, location)
+                        pushToVehicleLogs(id, location)
                     }
 
                     // 3. Broadcast for internal UI (DriverDashboard)
@@ -146,8 +147,8 @@ class LocationService : Service() {
     }
 
     private fun startLocationUpdates() {
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3000)
-            .setMinUpdateIntervalMillis(1500)
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000)
+            .setMinUpdateIntervalMillis(2500)
             .build()
 
         try {
@@ -204,15 +205,35 @@ class LocationService : Service() {
             "last_updated" to FieldValue.serverTimestamp()
         )
 
-        // Using set(SetOptions.merge()) ensures that we only update these specific location fields
-        // without overwriting the entire driver document. In the case of network failure,
-        // Firestore caches this operation locally and retries it automatically when online.
         driverRef.set(locationData, SetOptions.merge())
             .addOnSuccessListener {
-                Log.d("LocationService", "Successfully queued/wrote location to Firestore.")
+                Log.d("LocationService", "Successfully updated location in driver_locations.")
             }
             .addOnFailureListener { e ->
-                Log.e("LocationService", "Error writing location to Firestore", e)
+                Log.e("LocationService", "Error writing to driver_locations", e)
+            }
+    }
+
+    private fun pushToVehicleLogs(driverId: String, location: android.location.Location) {
+        val firestore = FirebaseFirestore.getInstance()
+        val logData = hashMapOf(
+            "driver_id" to driverId,
+            "latitude" to location.latitude,
+            "longitude" to location.longitude,
+            "speed" to location.speed, // Speed in m/s
+            "speed_kmh" to (location.speed * 3.6), // Calculated KM/H for dashboard
+            "heading" to location.bearing,
+            "accuracy" to location.accuracy,
+            "timestamp" to FieldValue.serverTimestamp()
+        )
+
+        firestore.collection("vehicle_logs")
+            .add(logData)
+            .addOnSuccessListener {
+                Log.d("LocationService", "Pushed high-frequency log to vehicle_logs.")
+            }
+            .addOnFailureListener { e ->
+                Log.e("LocationService", "Error writing to vehicle_logs", e)
             }
     }
 

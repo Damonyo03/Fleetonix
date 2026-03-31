@@ -83,7 +83,7 @@ function animateMarkerTo(marker, newPos) {
     if (!marker) return;
     const startPos = marker.getPosition();
     const startTime = performance.now();
-    const duration = 2500; // Animate over 2.5 seconds (we update every 3s)
+    const duration = 4500; // Animate over 4.5 seconds (we now update every 5s)
 
     // Cancel existing animation if any
     if (marker.animationId) {
@@ -170,18 +170,9 @@ function initMap() {
                 // For brevity, I'll just store it; a real implementation would add the listener too
                 driverMarkers[key] = marker;
                 
-                // Add click listener
-                const infoWindowContent = () => `
-                    <div style="color: #333; padding: 5px; min-width: 150px;">
-                        <strong style="display: block; margin-bottom: 5px; font-size: 14px;">${data.driver_name || 'Driver'}</strong>
-                        <span style="font-size: 12px; color: #666;">Status: <span style="color: ${getStatusColor(data.current_trip_phase || status)}; font-weight: bold;">${(data.current_trip_phase || status).replace('_', ' ')}</span></span><br>
-                        <span style="font-size: 11px; color: #888;">Vehicle: ${data.vehicle_assigned || 'N/A'}</span><br>
-                        <span style="font-size: 10px; color: #999;">Offline / Last Known Location</span>
-                    </div>
-                `;
-                const infoWindow = new google.maps.InfoWindow({ content: infoWindowContent() });
+                const infoWindow = new google.maps.InfoWindow({ content: getInfoWindowContent(data) });
                 marker.addListener('click', () => {
-                    infoWindow.setContent(infoWindowContent());
+                    infoWindow.setContent(getInfoWindowContent(allDriversData[key] || data));
                     infoWindow.open(driversMap, marker);
                 });
             }
@@ -263,22 +254,12 @@ function initMap() {
                         animation: google.maps.Animation.DROP
                     });
 
-                    const infoWindowContent = () => `
-                        <div style="color: #333; padding: 5px; min-width: 150px;">
-                            <strong style="display: block; margin-bottom: 5px; font-size: 14px;">${driver.driver_name || 'Driver'}</strong>
-                            <span style="font-size: 12px; color: #666;">Status: <span style="color: ${getStatusColor(driver.current_trip_phase || driver.current_status)}; font-weight: bold;">${(driver.current_trip_phase || driver.current_status || 'available').replace('_', ' ')}</span></span><br>
-                            <span style="font-size: 11px; color: #888;">Vehicle: ${driver.vehicle_assigned || 'N/A'}</span><br>
-                            ${driver.last_updated ? `<span style="font-size: 10px; color: #999;">Last update: ${new Date(driver.last_updated.seconds * 1000).toLocaleTimeString()}</span><br>` : ''}
-                            ${driver.trip_eta ? `<span style="font-size: 11px; color: #3b82f6; font-weight: 500;">ETA: ${driver.trip_eta} (${driver.trip_distance})</span>` : ''}
-                        </div>
-                    `;
-
                     const infoWindow = new google.maps.InfoWindow({
-                        content: infoWindowContent()
+                        content: getInfoWindowContent(driver)
                     });
 
                     marker.addListener('click', () => {
-                        infoWindow.setContent(infoWindowContent());
+                        infoWindow.setContent(getInfoWindowContent(allDriversData[driverId]));
                         infoWindow.open(driversMap, marker);
                     });
 
@@ -297,7 +278,46 @@ function initMap() {
         if (activeDriversEl) activeDriversEl.innerText = activeCount;
     });
 
-    // Cleanup "ghost" markers periodically (every 5 mins)
+    function getInfoWindowContent(driver) {
+    const status = driver.current_trip_phase || driver.current_status || 'available';
+    const speedKmh = ((driver.current_speed || 0) * 3.6).toFixed(1);
+    const heading = Math.round(driver.current_heading || 0);
+    
+    return `
+        <div style="color: #333; padding: 8px; min-width: 180px; font-family: 'Inter', sans-serif;">
+            <strong style="display: block; margin-bottom: 8px; font-size: 15px; border-bottom: 1px solid #eee; padding-bottom: 4px;">
+                ${driver.driver_name || 'Driver'}
+            </strong>
+            <div style="margin-bottom: 6px;">
+                <span style="font-size: 12px; color: #666;">Status: </span>
+                <span style="color: ${getStatusColor(status)}; font-weight: 600; font-size: 12px;">${status.replace('_', ' ').toUpperCase()}</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 6px;">
+                <div style="font-size: 11px; color: #888;">
+                    <i class="fas fa-tachometer-alt" style="width: 14px;"></i> ${speedKmh} kmh
+                </div>
+                <div style="font-size: 11px; color: #888;">
+                    <i class="fas fa-compass" style="width: 14px;"></i> ${heading}°
+                </div>
+                <div style="font-size: 11px; color: #888; grid-column: span 2;">
+                    <i class="fas fa-car" style="width: 14px;"></i> ${driver.vehicle_assigned || 'N/A'}
+                </div>
+            </div>
+            ${driver.trip_eta ? `
+                <div style="font-size: 11px; color: #3b82f6; font-weight: 600; background: #eff6ff; padding: 4px; border-radius: 4px; border: 1px solid #dbeafe;">
+                    ETA: ${driver.trip_eta} (${driver.trip_distance})
+                </div>
+            ` : ''}
+            ${driver.last_updated ? `
+                <div style="font-size: 9px; color: #bbb; margin-top: 6px; text-align: right;">
+                    Sync: ${new Date(driver.last_updated.seconds * 1000).toLocaleTimeString()}
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+// Cleanup "ghost" markers periodically (every 5 mins)
     setInterval(() => {
         const now = Date.now();
         const tenMins = 10 * 60 * 1000; // Shorter threshold for active markers
