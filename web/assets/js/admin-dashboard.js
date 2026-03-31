@@ -436,7 +436,7 @@ function renderPendingBookingsWidget(snapshot) {
             quickAssignHtml = `<div class="quick-assign-strip">
                 <span class="quick-label">Instant Assign:</span>
                 ${availableDrivers.map(d => `
-                    <button class="quick-driver-badge" onclick="window.instantDispatch('${id}', '${d.id}', '${d.driver_name}')" title="Assign ${d.driver_name}">
+                    <button class="quick-driver-badge" onclick="window.instantDispatch('${id}', '${d.id}', '${d.driver_name}', this)" title="Assign ${d.driver_name}">
                         🟢 ${d.driver_name.split(' ')[0]}
                     </button>
                 `).join('')}
@@ -465,8 +465,13 @@ function renderPendingBookingsWidget(snapshot) {
 }
 
 
-window.instantDispatch = async function(bookingId, driverId, driverName) {
+window.instantDispatch = async function(bookingId, driverId, driverName, btn) {
     if (!confirm(`Confirm 1-click dispatch to ${driverName}?`)) return;
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span>⏳ ...</span>`;
+    }
 
     const bookingData = pendingBookingsMap.get(bookingId);
     if (!bookingData) return;
@@ -474,10 +479,10 @@ window.instantDispatch = async function(bookingId, driverId, driverName) {
     try {
         console.log(`Instant dispatching ${bookingId} to ${driverId}`);
         
-        // Fetch Driver Details (specifically email)
-        const driverUserDoc = await getDoc(doc(db, "users", driverId));
-        const driverUserData = driverUserDoc.exists() ? driverUserDoc.data() : {};
-        const driverEmail = driverUserData.email || "";
+        // Fetch Driver Details (specifically email) from the 'drivers' collection
+        const driverDoc = await getDoc(doc(db, "drivers", driverId));
+        const driverData = driverDoc.exists() ? driverDoc.data() : {};
+        const driverEmail = driverData.driver_email || "";
 
         // 1. Update booking status
         await updateDoc(doc(db, "bookings", bookingId), {
@@ -660,11 +665,11 @@ document.addEventListener('DOMContentLoaded', () => {
             confirmBtn.innerText = "Dispatching...";
 
             try {
-                // Fetch Driver Details (specifically email and name)
-                const driverUserDoc = await getDoc(doc(db, "users", driverId));
-                const driverUserData = driverUserDoc.exists() ? driverUserDoc.data() : {};
-                const driverEmail = driverUserData.email || "";
-                const driverName = driverUserData.full_name || "Driver";
+                // Fetch Driver Details (specifically email and name) from the 'drivers' collection
+                const driverDoc = await getDoc(doc(db, "drivers", driverId));
+                const driverData = driverDoc.exists() ? driverDoc.data() : {};
+                const driverEmail = driverData.driver_email || "";
+                const driverName = driverData.driver_name || "Driver";
 
                 // 1. Update booking status
                 await updateDoc(doc(db, "bookings", currentDispatchBookingId), {

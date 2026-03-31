@@ -34,6 +34,7 @@ class LocationService : Service() {
 
     private var totalDistanceMetres = 0f
     private var lastLocation: android.location.Location? = null
+    private var driverDocId: String? = null
 
     companion object {
         const val ACTION_LOCATION_UPDATE = "com.prototype.fleetonix.ACTION_LOCATION_UPDATE"
@@ -42,6 +43,7 @@ class LocationService : Service() {
         const val EXTRA_SPEED = "extra_speed"
         const val EXTRA_ACCURACY = "extra_accuracy"
         const val EXTRA_BEARING = "extra_bearing"
+        const val EXTRA_DRIVER_ID = "extra_driver_id"
         const val ACTION_START = "ACTION_START"
         const val ACTION_STOP = "ACTION_STOP"
         
@@ -61,7 +63,7 @@ class LocationService : Service() {
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
                 locationResult.lastLocation?.let { location ->
-                    // Calculate distance since last update
+                    // 1. Calculate distance since last update
                     lastLocation?.let { last ->
                         val distance = last.distanceTo(location)
                         if (location.accuracy < 50) { // Only count if accuracy is decent
@@ -70,6 +72,12 @@ class LocationService : Service() {
                     }
                     lastLocation = location
 
+                    // 2. Push to Firestore for Admin Dashboard (Real-time tracking)
+                    driverDocId?.let { id ->
+                        updateLocationInFirestore(id, location)
+                    }
+
+                    // 3. Broadcast for internal UI (DriverDashboard)
                     val intent = Intent(ACTION_LOCATION_UPDATE).apply {
                         putExtra(EXTRA_LATITUDE, location.latitude)
                         putExtra(EXTRA_LONGITUDE, location.longitude)
@@ -86,6 +94,12 @@ class LocationService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val extraDriverId = intent?.getStringExtra(EXTRA_DRIVER_ID)
+        if (extraDriverId != null) {
+            driverDocId = extraDriverId.lowercase().trim()
+            Log.d("LocationService", "Started tracking for driver: $driverDocId")
+        }
+
         when (intent?.action) {
             ACTION_STOP -> {
                 stopForeground(true)

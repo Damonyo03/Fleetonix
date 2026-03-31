@@ -332,6 +332,32 @@ fun DriverDashboard(
     var lastCompletedScheduleId by remember { mutableStateOf<Int?>(null) }
     var lastCompletedTime by remember { mutableStateOf<Long?>(null) }
 
+    // Logic: 1-hour window for advanced booking acceptance (Global state for UI consumption)
+    val isJobAcceptable = remember(feed?.schedules?.firstOrNull()?.scheduled_date, feed?.schedules?.firstOrNull()?.scheduled_time) {
+        try {
+            val sched = feed?.schedules?.firstOrNull() ?: return@remember true
+            val sDate = sched.scheduled_date ?: return@remember true
+            val sTime = sched.scheduled_time ?: return@remember true
+            
+            val now = LocalDateTime.now()
+            val today = now.toLocalDate()
+            val schedDateArr = sDate.split("-")
+            val targetDate = LocalDate.of(schedDateArr[0].toInt(), schedDateArr[1].toInt(), schedDateArr[2].toInt())
+            
+            if (!targetDate.isEqual(today)) return@remember false
+            
+            val timeParts = sTime.split(":")
+            val schedTime = LocalTime.of(timeParts[0].toInt(), timeParts[1].toInt())
+            val schedDateTime = LocalDateTime.of(today, schedTime)
+            
+            val diffInMinutes = Math.abs(java.time.Duration.between(now, schedDateTime).toMinutes())
+            diffInMinutes <= 60
+        } catch (e: Exception) {
+            Log.e("DriverDashboard", "Error calculating window", e)
+            true // Default to true if parsing fails to avoid locking valid jobs
+        }
+    }
+
     // Routing states
     var activePolylineEncoded by remember { mutableStateOf<String?>(null) }
     var polylinePoints by remember { mutableStateOf<List<LatLng>>(emptyList()) }
@@ -359,7 +385,7 @@ fun DriverDashboard(
 
         val origin = "$currentLatitude,$currentLongitude"
         val destination = when (tripPhase) {
-            "pending", "assigned", "pickup", "return_pickup" -> if (schedule.pickup_location?.latitude != null) "${schedule.pickup_location.latitude},${schedule.pickup_location.longitude}" else null
+            "pending", "assigned", "accepted", "pickup", "return_pickup" -> if (schedule.pickup_location?.latitude != null) "${schedule.pickup_location.latitude},${schedule.pickup_location.longitude}" else null
             "dropoff" -> if (schedule.dropoff_location?.latitude != null) "${schedule.dropoff_location.latitude},${schedule.dropoff_location.longitude}" else null
             else -> null
         }
@@ -1397,6 +1423,7 @@ fun DriverDashboard(
                                             acceptedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
                                             val startTripIntent = Intent(context, LocationService::class.java).apply {
                                                 action = LocationService.ACTION_START_TRIP
+                                                putExtra(LocationService.EXTRA_DRIVER_ID, session.user?.email)
                                             }
                                             context.startService(startTripIntent)
                                             totalDistanceMetres = 0f
@@ -1715,9 +1742,11 @@ fun DriverDashboard(
                                             }
                                         },
                                         modifier = Modifier.fillMaxWidth().height(64.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (isJobAcceptable) AccentBlue else Color.Gray.copy(alpha = 0.5f)
+                                        ),
                                         shape = RoundedCornerShape(16.dp),
-                                        enabled = !isAnyLoading
+                                        enabled = !isAnyLoading && isJobAcceptable
                                     ) {
                                         if (isStartingTrip) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                                         else Text("ACCEPT BOOKING", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -1738,6 +1767,7 @@ fun DriverDashboard(
 
                                                     val startTripIntent = Intent(context, LocationService::class.java).apply {
                                                         action = LocationService.ACTION_START_TRIP
+                                                        putExtra(LocationService.EXTRA_DRIVER_ID, session.user?.email)
                                                     }
                                                     context.startService(startTripIntent)
                                                     totalDistanceMetres = 0f
@@ -1922,6 +1952,14 @@ fun DriverDashboard(
                                     Text("Dropoff: ${nextSchedule?.dropoff_location?.address}", color = TextSecondary)
                                 }
                             }
+                            if (!isJobAcceptable) {
+                                Text(
+                                    "Ready to accept in window (+/- 1hr)",
+                                    color = Color(0xFFFF6B6B),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                            }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -1964,8 +2002,10 @@ fun DriverDashboard(
                                     },
                                     modifier = Modifier.weight(1f).height(64.dp),
                                     shape = RoundedCornerShape(16.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
-                                    enabled = !isStartingTrip
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isJobAcceptable) AccentTeal else Color.Gray.copy(alpha = 0.5f)
+                                    ),
+                                    enabled = !isStartingTrip && isJobAcceptable
                                 ) {
                                     if (isStartingTrip) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                                     else Text("ACCEPT JOB", fontWeight = FontWeight.Bold)
