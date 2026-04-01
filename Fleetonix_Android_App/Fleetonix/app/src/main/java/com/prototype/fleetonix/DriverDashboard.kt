@@ -717,18 +717,18 @@ fun DriverDashboard(
         }
     }
 
-LaunchEffect(session.sessionToken) {
-    isTrackingActive = true
-    if (hasLocationPermission(context)) {
-        val startIntent = Intent(context, LocationService::class.java).apply {
-            action = LocationService.ACTION_START
-            putExtra(LocationService.EXTRA_DRIVER_ID, auth.currentUser?.uid)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(startIntent)
-        } else {
-            context.startService(startIntent)
-        }
+    LaunchedEffect(session.sessionToken) {
+        isTrackingActive = true
+        if (hasLocationPermission(context)) {
+            val startIntent = Intent(context, LocationService::class.java).apply {
+                action = LocationService.ACTION_START
+                putExtra(LocationService.EXTRA_DRIVER_ID, auth.currentUser?.uid)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(startIntent)
+            } else {
+                context.startService(startIntent)
+            }
             // Also push the last known location immediately so admin map updates right away
             try {
                 val loc = LocationServices.getFusedLocationProviderClient(context).lastLocation.await()
