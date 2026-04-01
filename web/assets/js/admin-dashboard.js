@@ -371,9 +371,10 @@ function updateOnlineDriversList() {
     const onlineCount = document.getElementById('onlineCount');
     if (!listContainer) return;
 
-    // Filter and sort: Available first, then others, exclude those with no location for the 'Live' widget if needed
-    // But for the list, we show those who are in our allDriversData
-    const sortedDrivers = Object.values(allDriversData).sort((a, b) => {
+    // Filter out ghost telemetry (Loading Driver...)
+    const validDrivers = Object.values(allDriversData).filter(d => d.driver_name && d.driver_name !== 'Loading Driver...');
+
+    const sortedDrivers = validDrivers.sort((a, b) => {
         const statusA = a.current_status || 'offline';
         const statusB = b.current_status || 'offline';
         
@@ -399,8 +400,8 @@ function updateOnlineDriversList() {
         `;
     }).join('') : '<div style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 0.85em;">No drivers online.</div>';
     
-    // The badge should only count 'available' and 'on_trip' (not offline)
-    const onlineOnlyCount = Object.values(allDriversData).filter(d => d.current_status && d.current_status !== 'offline').length;
+    // The badge should only count 'available' and 'on_trip' (not offline) and must hide ghosts
+    const onlineOnlyCount = validDrivers.filter(d => d.current_status && d.current_status !== 'offline').length;
     if (onlineCount) onlineCount.innerText = onlineOnlyCount;
 }
 

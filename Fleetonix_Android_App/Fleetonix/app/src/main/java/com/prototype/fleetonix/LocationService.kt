@@ -154,7 +154,12 @@ class LocationService : Service() {
         }
 
         when (intent?.action) {
+            ACTION_START -> {
+                updateDriverStatus("available")
+                Log.d("LocationService", "Service started: Driver $driverDocId is now ONLINE")
+            }
             ACTION_STOP -> {
+                updateDriverStatus("offline")
                 stopForeground(true)
                 stopSelf()
                 return START_NOT_STICKY
@@ -175,6 +180,7 @@ class LocationService : Service() {
             ACTION_START_TRIP -> {
                 totalDistanceMetres = 0f
                 lastLocation = null
+                updateDriverStatus("on_trip")
                 Log.d("LocationService", "Trip started, distance reset")
             }
         }
@@ -215,6 +221,7 @@ class LocationService : Service() {
     }
 
     override fun onDestroy() {
+        updateDriverStatus("offline")
         super.onDestroy()
         fusedLocationClient.removeLocationUpdates(locationCallback)
         sensorManager.unregisterListener(sensorListener)
@@ -222,6 +229,19 @@ class LocationService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? {
         return null
+    }
+
+    private fun updateDriverStatus(status: String) {
+        val id = driverDocId ?: return
+        val firestore = FirebaseFirestore.getInstance()
+        firestore.collection("drivers").document(id)
+            .update("current_status", status)
+            .addOnSuccessListener {
+                Log.d("LocationService", "Driver status updated to $status in Firestore.")
+            }
+            .addOnFailureListener { e ->
+                Log.e("LocationService", "Failed to update driver status: ${e.message}")
+            }
     }
 
     private fun createNotificationChannel() {
