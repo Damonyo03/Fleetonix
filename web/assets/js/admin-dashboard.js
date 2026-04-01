@@ -213,12 +213,16 @@ function initMap() {
 
             // Safely merge ONLY location-specific telemetry fields
             const { current_latitude, current_longitude, current_speed, current_heading, last_updated } = driverLoc;
+            const existingStatus = allDriversData[driverId].current_status || 'offline';
+            
             Object.assign(allDriversData[driverId], {
                 current_latitude,
                 current_longitude,
                 current_speed,
                 current_heading,
-                last_updated
+                last_updated,
+                // Promote to 'available' if currently offline but broadcasting location
+                current_status: existingStatus === 'offline' ? 'available' : existingStatus
             });
 
             const driver = allDriversData[driverId];
