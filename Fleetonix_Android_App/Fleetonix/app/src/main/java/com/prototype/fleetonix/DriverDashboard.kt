@@ -273,10 +273,10 @@ fun DriverDashboard(
     // Trigger reactive overlay when a new assignment arrives
     LaunchedEffect(nextSchedule?.scheduleId) {
         // Trigger if we have a new schedule and it is in the pending phase
-        if (nextSchedule?.scheduleId != null && nextSchedule.scheduleId != lastKnownScheduleId && tripPhase == "pending") {
-            Log.d("DriverDashboard", "New task detected: id=${nextSchedule.scheduleId}")
+        if (nextSchedule?.scheduleId != null && nextSchedule?.scheduleId != lastKnownScheduleId && tripPhase == "pending") {
+            Log.d("DriverDashboard", "New task detected: id=${nextSchedule?.scheduleId}")
             showNewTaskOverlay = true
-            lastKnownScheduleId = nextSchedule.scheduleId
+            lastKnownScheduleId = nextSchedule?.scheduleId
         } else if (nextSchedule?.scheduleId == null) {
             lastKnownScheduleId = null
         }
@@ -1399,7 +1399,7 @@ fun DriverDashboard(
                         // Trip buttons have been moved to the Road-Optimized footer.
                             Button(
                                 onClick = {
-                                    val scheduleId = nextSchedule.scheduleId ?: return@Button
+                                    val scheduleId = nextSchedule?.scheduleId ?: return@Button
                                     val token = session.sessionToken ?: return@Button
 
                                     scope.launch {
@@ -1408,7 +1408,7 @@ fun DriverDashboard(
                                             tripActionError = null
                                             tripActionSuccess = null
 
-                                            val docId = nextSchedule.docId ?: throw Exception("Schedule ID missing")
+                                            val docId = nextSchedule?.docId ?: throw Exception("Schedule ID missing")
                                             db.collection("schedules").document(docId).update(
                                                 "status", "accepted",
                                                 "trip_phase", "accepted",
@@ -1452,10 +1452,6 @@ fun DriverDashboard(
                                 }
                             }
                         }
-
-
-
-                        }
                     }
                     
                     // Spacer at the bottom to allow scrolling past the sticky footer
@@ -1474,6 +1470,12 @@ fun DriverDashboard(
                         shadowElevation = 16.dp,
                         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
                     ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -1482,7 +1484,7 @@ fun DriverDashboard(
                                 // Left icon: Call Client
                                 FilledIconButton(
                                     onClick = {
-                                        val phone = nextSchedule.client?.phone ?: nextSchedule.client_phone
+                                        val phone = nextSchedule?.client?.phone ?: nextSchedule?.client_phone
                                         if (!phone.isNullOrBlank()) {
                                             val intent = Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:$phone"))
                                             context.startActivity(intent)
@@ -1498,7 +1500,7 @@ fun DriverDashboard(
                                 // Right info: Trip Info
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = nextSchedule.client?.name ?: "Client Assignment",
+                                        text = nextSchedule?.client?.name ?: "Client Assignment",
                                         color = TextPrimary,
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold
@@ -1528,7 +1530,7 @@ fun DriverDashboard(
                                 phase == "pending" || phase == "assigned" -> {
                                     Button(
                                         onClick = {
-                                            val docId = nextSchedule.docId ?: return@Button
+                                            val docId = nextSchedule?.docId ?: return@Button
                                             scope.launch {
                                                 try {
                                                     isStartingTrip = true
@@ -1575,7 +1577,7 @@ fun DriverDashboard(
                                 phase == "accepted" -> {
                                     Button(
                                         onClick = {
-                                            val docId = nextSchedule.docId ?: return@Button
+                                            val docId = nextSchedule?.docId ?: return@Button
                                             scope.launch {
                                                 try {
                                                     isStartingTrip = true
@@ -1626,7 +1628,7 @@ fun DriverDashboard(
                                 phase == "moving_to_pickup" -> {
                                     Button(
                                         onClick = {
-                                            val docId = nextSchedule.docId ?: return@Button
+                                            val docId = nextSchedule?.docId ?: return@Button
                                             scope.launch {
                                                 try {
                                                     isMarkingPickup = true
@@ -1670,7 +1672,7 @@ fun DriverDashboard(
                                 phase == "picked_up" -> {
                                     Button(
                                         onClick = {
-                                            val docId = nextSchedule.docId ?: return@Button
+                                            val docId = nextSchedule?.docId ?: return@Button
                                             scope.launch {
                                                 try {
                                                     isStartingTrip = true
@@ -1711,7 +1713,7 @@ fun DriverDashboard(
                                 phase == "moving_to_dropoff" -> {
                                     Button(
                                         onClick = {
-                                            val docId = nextSchedule.docId ?: return@Button
+                                            val docId = nextSchedule?.docId ?: return@Button
                                             scope.launch {
                                                 try {
                                                      isMarkingDropoff = true
@@ -1977,6 +1979,7 @@ fun DriverDashboard(
                 onReport = handleVehicleIssueReport,
                 isReporting = isReportingVehicleIssue
             )
+        }
     }
 }
 }
