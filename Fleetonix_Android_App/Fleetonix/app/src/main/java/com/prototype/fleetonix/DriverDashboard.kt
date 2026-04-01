@@ -1397,6 +1397,7 @@ fun DriverDashboard(
 
                         // Quick Actions simplified: Only sync remains here.
                         // Trip buttons have been moved to the Road-Optimized footer.
+                        if (nextSchedule != null && tripPhase == "pending") {
                             Button(
                                 onClick = {
                                     val scheduleId = nextSchedule?.scheduleId ?: return@Button
@@ -1439,7 +1440,7 @@ fun DriverDashboard(
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                                enabled = !isAnyActionLoading
+                                enabled = !isAnyActionLoading && nextSchedule != null
                             ) {
                                 if (isStartingTrip) {
                                     CircularProgressIndicator(
@@ -1453,6 +1454,7 @@ fun DriverDashboard(
                             }
                         }
                     }
+                }
                     
                     // Spacer at the bottom to allow scrolling past the sticky footer
                     Spacer(modifier = Modifier.height(120.dp))
