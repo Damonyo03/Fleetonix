@@ -187,7 +187,7 @@ function initMap() {
     onSnapshot(collection(db, "driver_locations"), (snapshot) => {
         snapshot.docChanges().forEach((change) => {
             const driverLoc = change.doc.data();
-            const driverId = change.doc.id.toLowerCase().trim();
+            const driverId = change.doc.id;
             
             if (change.type === "removed") {
                 // Instead of hiding the marker, we mark it as offline and keep it visible but faded
