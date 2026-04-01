@@ -132,9 +132,8 @@ function initMap() {
             const data = docSnap.data();
             const email = (data.driver_email || "").toLowerCase().trim();
             
-            // The Android app writes to driver_locations using the EMAIL as the document ID.
-            const key = email; 
-            if (!key) return; // Skip if driver has no email
+            // Revert to using the Firestore document ID (Auth UID) as the primary key for synchronization.
+            const key = docSnap.id;
             
             if (!allDriversData[key]) {
                 allDriversData[key] = { id: key };
@@ -202,10 +201,14 @@ function initMap() {
                 return;
             }
 
-            // Sync location to allDriversData ONLY if driver exists (avoids ghost markers)
+            // Resilient lookup: If driver metadata haven't loaded yet, create a placeholder
             if (!allDriversData[driverId]) {
-                // If the driver is not yet loaded in the main drivers metadata list, skip this location update
-                return;
+                console.log(`Location received for unknown driver ID: ${driverId}. Creating placeholder.`);
+                allDriversData[driverId] = { 
+                    id: driverId,
+                    driver_name: 'Loading Driver...',
+                    current_status: 'available' 
+                };
             }
 
             // Safely merge ONLY location-specific telemetry fields

@@ -733,9 +733,10 @@ fun DriverDashboard(
             try {
                 val loc = LocationServices.getFusedLocationProviderClient(context).lastLocation.await()
                 if (loc != null && loc.latitude != 0.0 && loc.longitude != 0.0) {
+                    val uid = auth.currentUser?.uid ?: ""
                     val email = auth.currentUser?.email?.lowercase()?.trim() ?: ""
-                    if (email.isNotEmpty()) {
-                        db.collection("driver_locations").document(email).set(
+                    if (uid.isNotEmpty()) {
+                        db.collection("driver_locations").document(uid).set(
                             mapOf(
                                 "driver_email" to email,
                                 "current_latitude" to loc.latitude,
@@ -747,7 +748,7 @@ fun DriverDashboard(
                                 "last_updated" to com.google.firebase.firestore.FieldValue.serverTimestamp()
                             ),
                             com.google.firebase.firestore.SetOptions.merge()
-                        )
+                        ).await()
                         Log.d("LocationTracking", "Wrote initial last-known location: ${loc.latitude}, ${loc.longitude}")
                     }
                 }
@@ -2136,17 +2137,15 @@ fun DriverDashboard(
                             val currentMileage = session.driver?.currentMileage ?: 0.0
                             val newMileage = currentMileage + (totalDistanceMetres / 1000.0)
                             
-                            val driverEmail = auth.currentUser?.email
-                            if (driverEmail != null) {
-                                val dSnap = db.collection("drivers")
-                                    .whereEqualTo("driver_email", driverEmail.lowercase().trim())
-                                    .get().await()
-                                dSnap.documents.firstOrNull()?.reference?.update(
+                            val uid = auth.currentUser?.uid
+                            if (uid != null) {
+                                db.collection("drivers").document(uid).update(
                                     "current_status", "available",
                                     "current_trip_id", "",
                                     "current_trip_phase", "completed",
-                                    "current_mileage", newMileage
-                                )
+                                    "current_mileage", newMileage,
+                                    "last_updated", com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                ).await()
                             }
                             
                             showTripTicket = false
