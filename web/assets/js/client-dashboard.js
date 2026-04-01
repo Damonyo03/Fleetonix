@@ -87,17 +87,21 @@ function syncDriverTracking() {
 
         activeDriverEmails = newActiveDrivers;
         
-        // Render the Active Trip Card for the most recent trip
+        // If we have an active trip, start listening to the assigned driver's location
         if (snapshot.docs.length > 0) {
-            renderActiveTripOverlay(snapshot.docs[0].data());
+            const scheduleData = snapshot.docs[0].data();
+            const driverId = scheduleData.driver_id;
+            
+            if (driverId) {
+                setupLocationListener(driverId);
+            }
+            renderActiveTripOverlay(scheduleData);
         } else {
             renderActiveTripOverlay(null);
-        }
-
-        // If we have active drivers, start listening to their locations
-        if (activeDriverEmails.size > 0) {
-            setupLocationListener();
-        } else {
+            if (locationUnsubscribe) {
+                locationUnsubscribe();
+                locationUnsubscribe = null;
+            }
             document.getElementById('mapStatus').innerText = "No active trips to track";
         }
     });
@@ -132,111 +136,99 @@ function animateMarkerTo(marker, newPos) {
 }
 
 let locationUnsubscribe = null;
-function setupLocationListener() {
-    if (locationUnsubscribe) return; // Only one listener needed
+let currentTrackedDriverId = null;
 
-    // We listen to the whole collection but filter locally for security/simplicity 
-    // (Ideally we'd use where("id", "in", [...emailList]) but that's limited to 10)
-    locationUnsubscribe = onSnapshot(collection(db, "driver_locations"), (snapshot) => {
-        let trackedCount = 0;
-        
-        snapshot.docChanges().forEach(change => {
-            const email = change.doc.id.toLowerCase().trim();
-            if (!activeDriverEmails.has(email)) return;
+function setupLocationListener(driverId) {
+    if (currentTrackedDriverId === driverId && locationUnsubscribe) return; // Already listening to this driver
 
-            const data = change.doc.data();
-            if (change.type === "removed") {
-                if (markers[email]) { markers[email].setMap(null); delete markers[email]; }
-                return;
+    // Cleanup previous listener if switching drivers
+    if (locationUnsubscribe) {
+        locationUnsubscribe();
+        locationUnsubscribe = null;
+    }
+
+    currentTrackedDriverId = driverId;
+    console.log(`Setting up single-document listener for driver: ${driverId}`);
+
+    const driverDocRef = doc(db, "driver_locations", driverId);
+    locationUnsubscribe = onSnapshot(driverDocRef, (snapshot) => {
+        if (!snapshot.exists()) {
+            console.warn(`No location document found for driver: ${driverId}`);
+            document.getElementById('mapStatus').innerText = "Waiting for driver GPS...";
+            return;
+        }
+
+        const data = snapshot.data();
+        if (data.current_latitude && data.current_longitude) {
+            const pos = { lat: data.current_latitude, lng: data.current_longitude };
+            const speedKmh = ((data.current_speed || 0) * 3.6).toFixed(1);
+            
+            // Marker
+            if (markers[driverId]) {
+                animateMarkerTo(markers[driverId], pos);
+                const phase = data.current_trip_phase || "pickup";
+                const phaseColors = {
+                    'accepted': '#3b82f6',
+                    'pickup': '#8b5cf6',
+                    'dropoff': '#f97316',
+                    'ready_to_complete': '#f97316'
+                };
+                const icon = getVehicleIcon(data.vehicle_type || 'Executive Sedan', phaseColors[phase] || "#3b82f6");
+                markers[driverId].setIcon(icon);
+            } else {
+                const phase = data.current_trip_phase || "pickup";
+                const phaseColors = {
+                    'accepted': '#3b82f6',
+                    'pickup': '#8b5cf6',
+                    'dropoff': '#f97316',
+                    'ready_to_complete': '#f97316'
+                };
+                const phaseLabels = {
+                    'accepted': 'Accepted & Preparing',
+                    'pickup': 'En Route to Pickup',
+                    'dropoff': 'Passenger on Board',
+                    'ready_to_complete': 'Arrived at Destination'
+                };
+
+                markers[driverId] = new google.maps.Marker({
+                    position: pos,
+                    map: clientMap,
+                    icon: getVehicleIcon(data.vehicle_type || 'Executive Sedan', phaseColors[phase] || "#3b82f6"),
+                    title: data.driver_name || "Your Driver"
+                });
+
+                const infoWindow = new google.maps.InfoWindow({
+                    content: `
+                        <div style="color: #333; padding: 5px;">
+                            <strong style="display: block; margin-bottom: 5px;">${data.driver_name || 'Your Driver'}</strong>
+                            <span style="font-size: 12px; color: #666;">Status: <span style="color: ${phaseColors[phase] || '#3b82f6'}; font-weight: bold;">${phaseLabels[phase] || 'In Progress'}</span></span><br>
+                            <span style="font-size: 11px; color: #888;">Vehicle: ${data.vehicle_assigned || 'Fleet Vehicle'}</span><br>
+                            <span style="font-size: 11px; color: #888;">Speed: ${speedKmh} km/h</span>
+                        </div>
+                    `
+                });
+
+                markers[driverId].addListener('click', () => {
+                    infoWindow.open(clientMap, markers[driverId]);
+                });
             }
 
-            if (data.current_latitude && data.current_longitude) {
-                trackedCount++;
-                const pos = { lat: data.current_latitude, lng: data.current_longitude };
-                
-                // Polyline
-                if (data.current_route_polyline) {
-                    const path = google.maps.geometry.encoding.decodePath(data.current_route_polyline);
-                    if (polylines[email]) {
-                        polylines[email].setPath(path);
-                    } else {
-                        polylines[email] = new google.maps.Polyline({
-                            path, map: clientMap, strokeColor: '#3b82f6', strokeWeight: 4
-                        });
-                    }
-                }
-
-                // Marker
-                if (markers[email]) {
-                    animateMarkerTo(markers[email], pos);
-                    // Update icon color if phase changed
-                    const phase = data.current_trip_phase || "pickup";
-                    const phaseColors = {
-                        'accepted': '#3b82f6',
-                        'pickup': '#8b5cf6',
-                        'dropoff': '#f97316',
-                        'ready_to_complete': '#f97316'
-                    };
-                    const icon = getVehicleIcon(data.vehicle_type || 'Executive Sedan', phaseColors[phase] || "#3b82f6");
-                    markers[email].setIcon(icon);
+            // Polyline support
+            if (data.current_route_polyline) {
+                const path = google.maps.geometry.encoding.decodePath(data.current_route_polyline);
+                if (polylines[driverId]) {
+                    polylines[driverId].setPath(path);
                 } else {
-                    const phase = data.current_trip_phase || "pickup";
-                    const phaseColors = {
-                        'accepted': '#3b82f6',
-                        'pickup': '#8b5cf6',
-                        'dropoff': '#f97316',
-                        'ready_to_complete': '#f97316'
-                    };
-                    const phaseLabels = {
-                        'accepted': 'Accepted & Preparing',
-                        'pickup': 'En Route to Pickup',
-                        'dropoff': 'Passenger on Board',
-                        'ready_to_complete': 'Arrived at Destination'
-                    };
-
-                    markers[email] = new google.maps.Marker({
-                        position: pos,
-                        map: clientMap,
-                        icon: getVehicleIcon(data.vehicle_type || 'Executive Sedan', phaseColors[phase] || "#3b82f6"),
-                        title: data.driver_name || "Your Driver"
-                    });
-
-                    const infoWindow = new google.maps.InfoWindow({
-                        content: `
-                            <div style="color: #333; padding: 5px;">
-                                <strong style="display: block; margin-bottom: 5px;">${data.driver_name || 'Your Driver'}</strong>
-                                <span style="font-size: 12px; color: #666;">Status: <span style="color: ${phaseColors[phase] || '#3b82f6'}; font-weight: bold;">${phaseLabels[phase] || 'In Progress'}</span></span><br>
-                                <span style="font-size: 11px; color: #888;">Vehicle: ${data.vehicle_assigned || 'Fleet Vehicle'}</span>
-                            </div>
-                        `
-                    });
-
-                    markers[email].addListener('click', () => {
-                        infoWindow.open(clientMap, markers[email]);
+                    polylines[driverId] = new google.maps.Polyline({
+                        path, map: clientMap, strokeColor: '#3b82f6', strokeWeight: 4
                     });
                 }
             }
-        });
 
-        // Also update the active trip card if any location changes
-        // (This ensures status labels are consistent)
-        const activeTripQuery = query(
-            collection(db, "schedules"),
-            where("client_email", "==", auth.currentUser.email),
-            where("trip_phase", "in", ["accepted", "pickup", "dropoff", "ready_to_complete"]),
-            limit(1)
-        );
-        getDocs(activeTripQuery).then(snap => {
-            if (!snap.empty) {
-                renderActiveTripOverlay(snap.docs[0].data());
+            const statusEl = document.getElementById('mapStatus');
+            if (statusEl) {
+                statusEl.innerText = `Driver tracking active (${speedKmh} km/h)`;
             }
-        });
-
-        const statusEl = document.getElementById('mapStatus');
-        if (statusEl) {
-            statusEl.innerText = trackedCount > 0 
-                ? `Tracking ${trackedCount} active driver(s)` 
-                : "Waiting for driver GPS...";
         }
     });
 }

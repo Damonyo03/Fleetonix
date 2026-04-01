@@ -97,7 +97,7 @@ class LocationService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val extraDriverId = intent?.getStringExtra(EXTRA_DRIVER_ID)
         if (extraDriverId != null) {
-            driverDocId = extraDriverId.lowercase().trim()
+            driverDocId = extraDriverId.trim()
             Log.d("LocationService", "Started tracking for driver: $driverDocId (document ID used for driver_locations)")
         }
 

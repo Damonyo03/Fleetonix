@@ -131,10 +131,8 @@ function initMap() {
         snapshot.docs.forEach(docSnap => {
             const data = docSnap.data();
             const email = (data.driver_email || "").toLowerCase().trim();
-            const id = docSnap.id; // This might be UID or Email depending on how it was created
-            
-            // Use email as the primary key if available to match driver_locations
-            const key = email || id;
+            // Use the Firestore document ID (Auth UID) as the primary key
+            const key = id;
             
             if (!allDriversData[key]) allDriversData[key] = { id: key };
             
@@ -200,11 +198,21 @@ function initMap() {
                 return;
             }
 
-            // Sync location to allDriversData
+            // Sync location to allDriversData ONLY if driver exists (avoids ghost markers)
             if (!allDriversData[driverId]) {
-                allDriversData[driverId] = { id: driverId };
+                // If the driver is not yet loaded in the main drivers metadata list, skip this location update
+                return;
             }
-            Object.assign(allDriversData[driverId], driverLoc);
+
+            // Safely merge ONLY location-specific telemetry fields
+            const { current_latitude, current_longitude, current_speed, current_heading, last_updated } = driverLoc;
+            Object.assign(allDriversData[driverId], {
+                current_latitude,
+                current_longitude,
+                current_speed,
+                current_heading,
+                last_updated
+            });
 
             const driver = allDriversData[driverId];
             if (driver.current_latitude && driver.current_longitude) {
