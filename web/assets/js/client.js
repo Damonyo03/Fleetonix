@@ -52,7 +52,15 @@ onAuthStateChanged(auth, (user) => {
             snapshot.docChanges().forEach(change => {
                 if (change.type === "added") {
                     const data = change.doc.data();
-                    showNotificationToast(data.title, data.message);
+                    
+                    // Time check: Only pop up if it's newer than 1 hour (3,600,000 ms)
+                    const now = Date.now();
+                    const notifTime = data.created_at ? data.created_at.toMillis() : now;
+                    const oneHourInMs = 60 * 60 * 1000;
+
+                    if (now - notifTime <= oneHourInMs && !data.is_read) {
+                        showNotificationToast(data.title, data.message);
+                    }
                 }
             });
 

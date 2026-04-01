@@ -131,10 +131,14 @@ function initMap() {
         snapshot.docs.forEach(docSnap => {
             const data = docSnap.data();
             const email = (data.driver_email || "").toLowerCase().trim();
-            // Use the Firestore document ID (Auth UID) as the primary key
-            const key = id;
             
-            if (!allDriversData[key]) allDriversData[key] = { id: key };
+            // The Android app writes to driver_locations using the EMAIL as the document ID.
+            const key = email; 
+            if (!key) return; // Skip if driver has no email
+            
+            if (!allDriversData[key]) {
+                allDriversData[key] = { id: key };
+            }
             
             // Merge metadata
             Object.assign(allDriversData[key], {

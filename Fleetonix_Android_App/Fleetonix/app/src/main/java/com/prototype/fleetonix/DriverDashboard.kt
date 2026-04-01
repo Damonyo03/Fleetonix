@@ -2118,6 +2118,20 @@ fun DriverDashboard(
                             
                             db.collection("schedules").document(docId).update(tripData as Map<String, Any>).await()
                             
+                            // Save the actual Trip Ticket for the Admin Dashboard
+                            val ticketData = hashMapOf(
+                                "schedule_id" to docId,
+                                "driver_email" to (auth.currentUser?.email ?: ""),
+                                "driver_name" to (session.user?.name ?: "Driver"),
+                                "client_name" to (nextSchedule?.client?.name ?: "Unknown"),
+                                "vehicle_plate" to (session.driver?.plateNumber ?: ""),
+                                "time_of_departure" to (pickedUpAt ?: ""),
+                                "time_of_arrival" to (completedAt ?: ""),
+                                "total_km" to (totalDistanceMetres / 1000.0),
+                                "created_at" to FieldValue.serverTimestamp()
+                            )
+                            db.collection("trip_tickets").add(ticketData).await()
+                            
                             // Update driver back to available and sync to drivers collection
                             val currentMileage = session.driver?.currentMileage ?: 0.0
                             val newMileage = currentMileage + (totalDistanceMetres / 1000.0)
