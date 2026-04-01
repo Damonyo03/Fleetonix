@@ -25,16 +25,33 @@ import com.google.android.gms.location.GeofencingRequest
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.SetOptions
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.net.wifi.WifiManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.net.wifi.WifiInfo
 
 class LocationService : Service() {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var geofencingClient: GeofencingClient
     private lateinit var locationCallback: LocationCallback
+    private lateinit var sensorManager: SensorManager
+    private lateinit var wifiManager: WifiManager
+    private val telematicsProcessor = TelematicsProcessor()
 
     private var totalDistanceMetres = 0f
     private var lastLocation: android.location.Location? = null
     private var driverDocId: String? = null
+    
+    // Telematics State
+    private var currentGForce = 1.0 // Normalized Earth Gravity
+    private var smoothedSpeed = 0.0
+    private var currentWifiSsid: String = "Unknown"
+    private var currentWifiRssi: Int = 0
 
     companion object {
         const val ACTION_LOCATION_UPDATE = "com.prototype.fleetonix.ACTION_LOCATION_UPDATE"
@@ -63,7 +80,11 @@ class LocationService : Service() {
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
                 locationResult.lastLocation?.let { location ->
-                    // 1. Calculate distance since last update
+                    // 1. Telematics Processing (Kalman Filter for Speed Smoothing)
+                    smoothedSpeed = telematicsProcessor.getSmoothedSpeed(location.speed)
+                    updateWifiContext()
+
+                    // 2. Calculate distance since last update
                     lastLocation?.let { last ->
                         val distance = last.distanceTo(location)
                         if (location.accuracy < 50) { // Only count if accuracy is decent
@@ -72,25 +93,56 @@ class LocationService : Service() {
                     }
                     lastLocation = location
 
-                    // 2. Push to Firestore for Admin Dashboard (Real-time tracking)
+                    // 3. Push to Firestore for Admin Dashboard (Real-time tracking)
                     driverDocId?.let { id ->
                         updateLocationInFirestore(id, location)
                         pushToVehicleLogs(id, location)
                     }
 
-                    // 3. Broadcast for internal UI (DriverDashboard)
+                    // 4. Broadcast for internal UI (DriverDashboard)
                     val intent = Intent(ACTION_LOCATION_UPDATE).apply {
                         putExtra(EXTRA_LATITUDE, location.latitude)
                         putExtra(EXTRA_LONGITUDE, location.longitude)
-                        putExtra(EXTRA_SPEED, location.speed)
+                        putExtra(EXTRA_SPEED, smoothedSpeed.toFloat()) // Use smoothed speed
                         putExtra(EXTRA_ACCURACY, location.accuracy)
                         putExtra(EXTRA_BEARING, location.bearing)
                         putExtra(EXTRA_TOTAL_DISTANCE, totalDistanceMetres)
                     }
                     sendBroadcast(intent)
-                    Log.d("LocationService", "Broadcasted location update. Total distance: ${totalDistanceMetres}m")
+                    Log.d("LocationService", "Processed Telematics: Speed=$smoothedSpeed G=$currentGForce Network=$currentWifiSsid")
                 }
             }
+        }
+        
+        setupSensors()
+    }
+
+    private fun setupSensors() {
+        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        
+        val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        accelerometer?.let {
+            sensorManager.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_NORMAL)
+        }
+    }
+
+    private val sensorListener = object : SensorEventListener {
+        override fun onSensorChanged(event: SensorEvent?) {
+            if (event?.sensor?.type == Sensor.TYPE_ACCELEROMETER) {
+                currentGForce = telematicsProcessor.calculateGForce(event.values[0], event.values[1], event.values[2])
+            }
+        }
+        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+    }
+
+    private fun updateWifiContext() {
+        try {
+            val connectionInfo: WifiInfo? = wifiManager.connectionInfo
+            currentWifiSsid = connectionInfo?.ssid?.replace("\"", "") ?: "N/A"
+            currentWifiRssi = connectionInfo?.rssi ?: 0
+        } catch (e: Exception) {
+            currentWifiSsid = "Restricted"
         }
     }
 
@@ -165,6 +217,7 @@ class LocationService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         fusedLocationClient.removeLocationUpdates(locationCallback)
+        sensorManager.unregisterListener(sensorListener)
     }
 
     override fun onBind(intent: Intent?): IBinder? {
@@ -199,15 +252,18 @@ class LocationService : Service() {
         val locationData = hashMapOf(
             "current_latitude" to location.latitude,
             "current_longitude" to location.longitude,
-            "current_speed" to location.speed,
+            "current_speed" to smoothedSpeed,
             "current_heading" to location.bearing,
             "current_accuracy" to location.accuracy,
+            "acceleration_g" to currentGForce,
+            "wifi_ssid" to currentWifiSsid,
+            "wifi_rssi" to currentWifiRssi,
             "last_updated" to FieldValue.serverTimestamp()
         )
 
         driverRef.set(locationData, SetOptions.merge())
             .addOnSuccessListener {
-                Log.d("LocationService", "Successfully updated location in driver_locations.")
+                Log.d("LocationService", "Pushed Enriched Telematics: G=$currentGForce SSID=$currentWifiSsid")
             }
             .addOnFailureListener { e ->
                 Log.e("LocationService", "Error writing to driver_locations", e)
@@ -220,17 +276,20 @@ class LocationService : Service() {
             "driver_id" to driverId,
             "latitude" to location.latitude,
             "longitude" to location.longitude,
-            "speed" to location.speed, // Speed in m/s
-            "speed_kmh" to (location.speed * 3.6), // Calculated KM/H for dashboard
+            "raw_speed" to location.speed,
+            "smoothed_speed" to smoothedSpeed,
+            "speed_kmh" to (smoothedSpeed * 3.6),
             "heading" to location.bearing,
             "accuracy" to location.accuracy,
+            "acceleration_g" to currentGForce,
+            "wifi_ssid" to currentWifiSsid,
             "timestamp" to FieldValue.serverTimestamp()
         )
 
         firestore.collection("vehicle_logs")
             .add(logData)
             .addOnSuccessListener {
-                Log.d("LocationService", "Pushed high-frequency log to vehicle_logs.")
+                Log.d("LocationService", "Archived Telematics Log.")
             }
             .addOnFailureListener { e ->
                 Log.e("LocationService", "Error writing to vehicle_logs", e)
