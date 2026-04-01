@@ -87,7 +87,7 @@ class LocationService : Service() {
                     // 2. Calculate distance since last update
                     lastLocation?.let { last ->
                         val distance = last.distanceTo(location)
-                        if (location.accuracy < 50) { // Only count if accuracy is decent
+                        if (location.accuracy < 150) { // Relaxed to 150m for urban reliability
                             totalDistanceMetres += distance
                         }
                     }

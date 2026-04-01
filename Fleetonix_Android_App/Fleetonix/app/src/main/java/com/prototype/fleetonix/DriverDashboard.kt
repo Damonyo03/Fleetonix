@@ -387,8 +387,10 @@ fun DriverDashboard(
 
         val origin = "$currentLatitude,$currentLongitude"
         val destination = when (tripPhase) {
-            "pending", "assigned", "accepted", "return_pickup" -> if (schedule.pickup_location?.latitude != null) "${schedule.pickup_location.latitude},${schedule.pickup_location.longitude}" else null
-            "pickup", "dropoff" -> if (schedule.dropoff_location?.latitude != null) "${schedule.dropoff_location.latitude},${schedule.dropoff_location.longitude}" else null
+            "pending", "assigned", "accepted", "moving_to_pickup", "return_pickup" -> 
+                if (schedule.pickup_location?.latitude != null) "${schedule.pickup_location.latitude},${schedule.pickup_location.longitude}" else null
+            "picked_up", "moving_to_dropoff", "dropoff" -> 
+                if (schedule.dropoff_location?.latitude != null) "${schedule.dropoff_location.latitude},${schedule.dropoff_location.longitude}" else null
             else -> null
         }
 
@@ -1127,8 +1129,8 @@ fun DriverDashboard(
                         modifier = Modifier.weight(1f)
                     )
                     StatCard(
-                        title = "Stops",
-                        value = "$stopsCount remaining",
+                        title = "Distance",
+                        value = String.format("%.2f KM", totalDistanceMetres / 1000.0),
                         accentColor = AccentBlue,
                         modifier = Modifier.weight(1f)
                     )
@@ -1269,44 +1271,40 @@ fun DriverDashboard(
                             }
                         }
                         
-                        // Action Buttons for Navigation
+                        // Optional Action Buttons for External Navigation
                         Row(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Button(
+                            Text("Fast Navigate (Optional):", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                            
+                            androidx.compose.material3.TextButton(
                                 onClick = { 
-                                    // Open in Waze
                                     try {
                                         val url = "waze://?ll=$currentLatitude,$currentLongitude&navigate=yes"
                                         val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
                                         context.startActivity(intent)
                                     } catch (e: Exception) {
-                                        // Fallback to Google Maps if Waze not installed
                                         val gmmIntentUri = android.net.Uri.parse("google.navigation:q=$currentLatitude,$currentLongitude")
                                         val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
                                         mapIntent.setPackage("com.google.android.apps.maps")
                                         context.startActivity(mapIntent)
                                     }
-                                },
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = AccentOrange)
+                                }
                             ) {
-                                Text("Waze", style = MaterialTheme.typography.bodySmall)
+                                Text("Waze", color = AccentOrange, style = MaterialTheme.typography.bodySmall)
                             }
                             
-                            Button(
+                            androidx.compose.material3.TextButton(
                                 onClick = {
-                                    // Open in Google Maps
                                     val gmmIntentUri = android.net.Uri.parse("google.navigation:q=$currentLatitude,$currentLongitude")
                                     val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri)
                                     mapIntent.setPackage("com.google.android.apps.maps")
                                     context.startActivity(mapIntent)
-                                },
-                                modifier = Modifier.weight(1f),
-                                colors = ButtonDefaults.buttonColors(containerColor = AccentBlue)
+                                }
                             ) {
-                                Text("G-Maps", style = MaterialTheme.typography.bodySmall)
+                                Text("Google Maps", color = AccentBlue, style = MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
@@ -1397,18 +1395,8 @@ fun DriverDashboard(
                             )
                         }
 
-                        // Trip action buttons (same as before)
-                        val startWindowLocked =
-                            nextSchedule != null && tripPhase == "pending" && !isTripCompleted && !isStartWindowOpen
-                        if (startWindowLocked) {
-                            Text(
-                                text = "Start Trip becomes available 1 hour before the pickup schedule.",
-                                color = TextSecondary,
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-
-                        if (nextSchedule != null && canStartTrip) {
+                        // Quick Actions simplified: Only sync remains here.
+                        // Trip buttons have been moved to the Road-Optimized footer.
                             Button(
                                 onClick = {
                                     val scheduleId = nextSchedule.scheduleId ?: return@Button
@@ -1465,205 +1453,8 @@ fun DriverDashboard(
                             }
                         }
 
-                        if (nextSchedule != null && canMarkPickup) {
-                            Button(
-                                onClick = {
-                                    val scheduleId = nextSchedule.scheduleId ?: return@Button
-                                    val token = session.sessionToken ?: return@Button
 
-                                    scope.launch {
-                                        try {
-                                            isMarkingPickup = true
-                                            tripActionError = null
-                                            tripActionSuccess = null
 
-                                            val docId = nextSchedule.docId ?: throw Exception("Schedule ID missing")
-                                            db.collection("schedules").document(docId).update(
-                                                "trip_phase", "dropoff",
-                                                "picked_up_at", FieldValue.serverTimestamp()
-                                            ).await()
-
-                                            pickedUpAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
-                                            
-                                            // Sync to drivers collection for Admin visibility
-                                            val driverEmail = auth.currentUser?.email
-                                            if (driverEmail != null) {
-                                                val dSnap = db.collection("drivers")
-                                                    .whereEqualTo("driver_email", driverEmail.lowercase().trim())
-                                                    .get().await()
-                                                dSnap.documents.firstOrNull()?.reference?.update(
-                                                    "current_status", "dropoff",
-                                                    "current_trip_phase", "dropoff"
-                                                )
-                                            }
-
-                                            tripActionSuccess = "Pickup confirmed! Status synced to Admin Dashboard."
-                                        } catch (e: Exception) {
-                                            tripActionError = "Failed to mark pickup: ${e.message}"
-                                        } finally {
-                                            isMarkingPickup = false
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !isAnyActionLoading,
-                                colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
-                            ) {
-                                if (isMarkingPickup) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(20.dp),
-                                        color = Color.White,
-                                        strokeWidth = 2.dp
-                                    )
-                                } else {
-                                    Text("Pick Up")
-                                }
-                            }
-                        }
-
-                        if (nextSchedule != null && canMarkDropoff) {
-                            Button(
-                                onClick = {
-                                    val scheduleId = nextSchedule.scheduleId ?: return@Button
-                                    val token = session.sessionToken ?: return@Button
-
-                                    scope.launch {
-                                        try {
-                                            isMarkingDropoff = true
-                                            tripActionError = null
-                                            tripActionSuccess = null
-
-                                            val docId = nextSchedule.docId ?: throw Exception("Schedule ID missing")
-                                            val docRef = db.collection("schedules").document(docId)
-                                            val doc = docRef.get().await()
-                                            val returnReq = doc.getBoolean("return_to_pickup") ?: false
-                                            
-                                            val nextPhase = if (returnReq) "return_pickup" else "ready_to_complete"
-                                            docRef.update(
-                                                "trip_phase", nextPhase,
-                                                "dropped_off_at", FieldValue.serverTimestamp()
-                                            ).await()
-
-                                            // Sync to drivers collection
-                                            val driverEmail = auth.currentUser?.email
-                                            if (driverEmail != null) {
-                                                val dSnap = db.collection("drivers")
-                                                    .whereEqualTo("driver_email", driverEmail.lowercase().trim())
-                                                    .get().await()
-                                                dSnap.documents.firstOrNull()?.reference?.update(
-                                                    "current_status", nextPhase,
-                                                    "current_trip_phase", nextPhase
-                                                )
-                                            }
-
-                                            tripActionSuccess = if (returnReq) "Dropoff confirmed! Return required." else "Dropoff confirmed! Ready to complete."
-                                        } catch (e: Exception) {
-                                            tripActionError = "Failed to mark dropoff: ${e.message}"
-                                        } finally {
-                                            isMarkingDropoff = false
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !isAnyActionLoading,
-                                colors = ButtonDefaults.buttonColors(containerColor = AccentOrange)
-                            ) {
-                                if (isMarkingDropoff) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(20.dp),
-                                        color = Color.White,
-                                        strokeWidth = 2.dp
-                                    )
-                                } else {
-                                    Text("Drop Off")
-                                }
-                            }
-                        }
-
-                        if (nextSchedule != null && canMarkReturnPickup && returnToPickup) {
-                            Button(
-                                onClick = {
-                                    val scheduleId = nextSchedule.scheduleId ?: return@Button
-                                    val token = session.sessionToken ?: return@Button
-
-                                    scope.launch {
-                                        try {
-                                            isMarkingReturnPickup = true
-                                            tripActionError = null
-                                            tripActionSuccess = null
-
-                                            val docId = nextSchedule.docId ?: throw Exception("Schedule ID missing")
-                                            db.collection("schedules").document(docId).update(
-                                                "trip_phase", "ready_to_complete",
-                                                "return_picked_up_at", FieldValue.serverTimestamp()
-                                            ).await()
-                                            
-                                            tripActionSuccess = "Return pickup confirmed! Please complete the trip."
-                                        } catch (e: Exception) {
-                                            tripActionError = "Failed to complete return pickup: ${e.message}"
-                                        } finally {
-                                            isMarkingReturnPickup = false
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !isAnyActionLoading,
-                                colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
-                            ) {
-                                if (isMarkingReturnPickup) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(20.dp),
-                                        color = Color.White,
-                                        strokeWidth = 2.dp
-                                    )
-                                } else {
-                                    Text("Pickup")
-                                }
-                            }
-                        }
-
-                        if (nextSchedule != null && canCompleteTrip) {
-                            Button(
-                                onClick = {
-                                    val scheduleId = nextSchedule.scheduleId ?: return@Button
-                                    val token = session.sessionToken ?: return@Button
-
-                                    scope.launch {
-                                        try {
-                                            isCompletingTrip = true
-                                            tripActionError = null
-                                            tripActionSuccess = null
-
-                                            val docId = nextSchedule.docId ?: throw Exception("Schedule ID missing")
-                                            db.collection("schedules").document(docId).update(
-                                                "status", "completed",
-                                                "trip_phase", "completed",
-                                                "completed_at", FieldValue.serverTimestamp()
-                                            ).await()
-                                            
-                                            tripActionSuccess = "Trip completed successfully!"
-                                        } catch (e: Exception) {
-                                            tripActionError = "Failed to complete trip: ${e.message}"
-                                        } finally {
-                                            isCompletingTrip = false
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !isAnyActionLoading,
-                                colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
-                            ) {
-                                if (isCompletingTrip) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(20.dp),
-                                        color = Color.White,
-                                        strokeWidth = 2.dp
-                                    )
-                                } else {
-                                    Text("Complete Trip")
-                                }
-                            }
-                        }
                         }
                     }
                     
@@ -1730,16 +1521,17 @@ fun DriverDashboard(
                             }
                             
                             val isAnyLoading = isStartingTrip || isMarkingPickup || isMarkingDropoff || isMarkingReturnPickup || isCompletingTrip
-                            
+                            val phase = tripPhase ?: "pending"
+
                             when {
-                                canAcceptBooking -> {
+                                // Step 1: ACCEPT
+                                phase == "pending" || phase == "assigned" -> {
                                     Button(
                                         onClick = {
                                             val docId = nextSchedule.docId ?: return@Button
                                             scope.launch {
                                                 try {
                                                     isStartingTrip = true
-                                                    tripActionError = null
                                                     db.collection("schedules").document(docId).update(
                                                         "status", "accepted",
                                                         "trip_phase", "accepted",
@@ -1749,19 +1541,19 @@ fun DriverDashboard(
                                                     acceptedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
                                                     
                                                      // Update driver status
-                                                    val email = auth.currentUser?.email
-                                                    if (email != null) {
-                                                        val driverSnap = db.collection("drivers")
-                                                            .whereEqualTo("driver_email", email)
-                                                            .get().await()
-                                                        driverSnap.documents.firstOrNull()?.reference?.update(
-                                                            "current_status", "on_schedule",
-                                                            "current_trip_id", docId,
-                                                            "current_trip_phase", "accepted",
-                                                            "accepted_at", acceptedAt
-                                                        )
-                                                    }
-                                                    tripActionSuccess = "Booking accepted! Click START TRIP when ready to move."
+                                                     val email = auth.currentUser?.email
+                                                     if (email != null) {
+                                                         val driverSnap = db.collection("drivers")
+                                                             .whereEqualTo("driver_email", email)
+                                                             .get().await()
+                                                         driverSnap.documents.firstOrNull()?.reference?.update(
+                                                             "current_status", "on_schedule",
+                                                             "current_trip_id", docId,
+                                                             "current_trip_phase", "accepted",
+                                                             "accepted_at", acceptedAt
+                                                         )
+                                                     }
+                                                    tripActionSuccess = "Booking accepted! Tap below to start pickup."
                                                 } catch (e: Exception) {
                                                     tripActionError = "Failed: ${e.message}"
                                                 } finally {
@@ -1770,49 +1562,49 @@ fun DriverDashboard(
                                             }
                                         },
                                         modifier = Modifier.fillMaxWidth().height(64.dp),
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = if (isJobAcceptable) AccentBlue else Color.Gray.copy(alpha = 0.5f)
-                                        ),
+                                        colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
                                         shape = RoundedCornerShape(16.dp),
-                                        enabled = !isAnyLoading && isJobAcceptable
+                                        enabled = !isAnyLoading
                                     ) {
                                         if (isStartingTrip) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                                        else Text("ACCEPT BOOKING", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                        else Text("ACCEPT JOB", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                     }
                                 }
-                                canStartTrip -> {
+
+                                // Step 2: START PICKUP ROUTE
+                                phase == "accepted" -> {
                                     Button(
                                         onClick = {
                                             val docId = nextSchedule.docId ?: return@Button
                                             scope.launch {
                                                 try {
                                                     isStartingTrip = true
-                                                    tripActionError = null
                                                     db.collection("schedules").document(docId).update(
-                                                        "trip_phase", "pickup",
+                                                        "trip_phase", "moving_to_pickup",
                                                         "started_at", FieldValue.serverTimestamp()
                                                     ).await()
 
+                                                    // Start high-accuracy tracking
                                                     val startTripIntent = Intent(context, LocationService::class.java).apply {
                                                         action = LocationService.ACTION_START_TRIP
                                                         putExtra(LocationService.EXTRA_DRIVER_ID, session.user?.email)
                                                     }
                                                     context.startService(startTripIntent)
+                                                    
                                                     totalDistanceMetres = 0f
                                                     
                                                     // Sync to drivers collection
-                                                    val driverEmail = auth.currentUser?.email
-                                                    if (driverEmail != null) {
+                                                    val email = auth.currentUser?.email
+                                                    if (email != null) {
                                                         val dSnap = db.collection("drivers")
-                                                            .whereEqualTo("driver_email", driverEmail.lowercase().trim())
+                                                            .whereEqualTo("driver_email", email.lowercase().trim())
                                                             .get().await()
                                                         dSnap.documents.firstOrNull()?.reference?.update(
-                                                            "current_status", "pickup",
-                                                            "current_trip_phase", "pickup"
+                                                            "current_status", "moving_to_pickup",
+                                                            "current_trip_phase", "moving_to_pickup"
                                                         )
                                                     }
-                                                    
-                                                    tripActionSuccess = "Trip started! Use the map for directions to pickup."
+                                                    tripActionSuccess = "Routing to Pickup point..."
                                                 } catch (e: Exception) {
                                                     tripActionError = "Failed: ${e.message}"
                                                 } finally {
@@ -1821,42 +1613,42 @@ fun DriverDashboard(
                                             }
                                         },
                                         modifier = Modifier.fillMaxWidth().height(64.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8B5CF6)), // Purple
+                                        colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
                                         shape = RoundedCornerShape(16.dp),
                                         enabled = !isAnyLoading
                                     ) {
                                         if (isStartingTrip) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                                        else Text("START TRIP (EN ROUTE)", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                        else Text("START PICKUP ROUTE", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                     }
                                 }
-                                canMarkPickup -> {
+
+                                // Step 3: MARK AS PICKED UP
+                                phase == "moving_to_pickup" -> {
                                     Button(
                                         onClick = {
                                             val docId = nextSchedule.docId ?: return@Button
                                             scope.launch {
                                                 try {
                                                     isMarkingPickup = true
-                                                    tripActionError = null
                                                      db.collection("schedules").document(docId).update(
-                                                        "trip_phase", "dropoff",
+                                                        "trip_phase", "picked_up",
                                                         "picked_up_at", FieldValue.serverTimestamp()
                                                     ).await()
 
                                                     pickedUpAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
                                                     
                                                     // Sync to drivers collection
-                                                    val driverEmail = auth.currentUser?.email
-                                                    if (driverEmail != null) {
+                                                    val email = auth.currentUser?.email
+                                                    if (email != null) {
                                                         val dSnap = db.collection("drivers")
-                                                            .whereEqualTo("driver_email", driverEmail.lowercase().trim())
+                                                            .whereEqualTo("driver_email", email.lowercase().trim())
                                                             .get().await()
                                                         dSnap.documents.firstOrNull()?.reference?.update(
-                                                            "current_status", "dropoff",
-                                                            "current_trip_phase", "dropoff"
+                                                            "current_status", "picked_up",
+                                                            "current_trip_phase", "picked_up"
                                                         )
                                                     }
-                                                    
-                                                    tripActionSuccess = "Pickup confirmed! Status synced to Admin Dashboard."
+                                                    tripActionSuccess = "Passenger Picked Up! Ready for dropoff route."
                                                 } catch (e: Exception) {
                                                     tripActionError = "Failed: ${e.message}"
                                                 } finally {
@@ -1870,87 +1662,98 @@ fun DriverDashboard(
                                         enabled = !isAnyLoading
                                     ) {
                                         if (isMarkingPickup) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                                        else Text("CONFIRM PICKUP", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                        else Text("MARK AS PICKED UP", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                     }
                                 }
-                                canMarkDropoff -> {
+
+                                // Step 4: START DROPOFF ROUTE
+                                phase == "picked_up" -> {
+                                    Button(
+                                        onClick = {
+                                            val docId = nextSchedule.docId ?: return@Button
+                                            scope.launch {
+                                                try {
+                                                    isStartingTrip = true
+                                                    db.collection("schedules").document(docId).update(
+                                                        "trip_phase", "moving_to_dropoff"
+                                                    ).await()
+
+                                                    // Sync to drivers collection
+                                                    val email = auth.currentUser?.email
+                                                    if (email != null) {
+                                                        val dSnap = db.collection("drivers")
+                                                            .whereEqualTo("driver_email", email.lowercase().trim())
+                                                            .get().await()
+                                                        dSnap.documents.firstOrNull()?.reference?.update(
+                                                            "current_status", "moving_to_dropoff",
+                                                            "current_trip_phase", "moving_to_dropoff"
+                                                        )
+                                                    }
+                                                    tripActionSuccess = "Routing to Dropoff point..."
+                                                } catch (e: Exception) {
+                                                    tripActionError = "Failed: ${e.message}"
+                                                } finally {
+                                                    isStartingTrip = false
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth().height(64.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
+                                        shape = RoundedCornerShape(16.dp),
+                                        enabled = !isAnyLoading
+                                    ) {
+                                        if (isStartingTrip) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                                        else Text("START DROPOFF ROUTE", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+
+                                // Step 5: MARK AS DROPPED OFF
+                                phase == "moving_to_dropoff" -> {
                                     Button(
                                         onClick = {
                                             val docId = nextSchedule.docId ?: return@Button
                                             scope.launch {
                                                 try {
                                                      isMarkingDropoff = true
-                                                    tripActionError = null
-                                                    val docRef = db.collection("schedules").document(docId)
-                                                    val doc = docRef.get().await()
-                                                    val returnReq = doc.getBoolean("return_to_pickup") ?: false
-                                                    val nextP = if (returnReq) "return_pickup" else "ready_to_complete"
-                                                    
-                                                    docRef.update("trip_phase", nextP, "dropped_off_at", FieldValue.serverTimestamp()).await()
-                                                    
-                                                    
-                                                    // Sync to drivers collection
-                                                    val driverEmail = auth.currentUser?.email
-                                                    if (driverEmail != null) {
-                                                        val dSnap = db.collection("drivers")
-                                                            .whereEqualTo("driver_email", driverEmail.lowercase().trim())
-                                                            .get().await()
-                                                        dSnap.documents.firstOrNull()?.reference?.update(
-                                                            "current_status", nextP,
-                                                            "current_trip_phase", nextP
-                                                        )
-                                                    }
-                                                    
-                                                    tripActionSuccess = if (returnReq) "Dropoff confirmed! Return required." else "Dropoff confirmed! Trip ready to complete."
-                                                } catch (e: Exception) {
-                                                    tripActionError = "Failed: ${e.message}"
-                                                } finally {
-                                                    isMarkingDropoff = false
-                                                }
-                                            }
-                                        },
-                                        modifier = Modifier.fillMaxWidth().height(64.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
-                                        shape = RoundedCornerShape(16.dp),
-                                        enabled = !isAnyLoading
-                                    ) {
-                                        if (isMarkingDropoff) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                                        else Text("CONFIRM DROPOFF", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                    }
+                                                     tripActionError = null
+                                                     val docRef = db.collection("schedules").document(docId)
+                                                     val doc = docRef.get().await()
+                                                     val returnReq = doc.getBoolean("return_to_pickup") ?: false
+                                                     val nextP = if (returnReq) "return_pickup" else "ready_to_complete"
+                                                     
+                                                     docRef.update("trip_phase", nextP, "dropped_off_at", FieldValue.serverTimestamp()).await()
+                                                     
+                                                     // Sync to drivers collection
+                                                     val email = auth.currentUser?.email
+                                                     if (email != null) {
+                                                         val dSnap = db.collection("drivers")
+                                                             .whereEqualTo("driver_email", email.lowercase().trim())
+                                                             .get().await()
+                                                         dSnap.documents.firstOrNull()?.reference?.update(
+                                                             "current_status", nextP,
+                                                             "current_trip_phase", nextP
+                                                         )
+                                                     }
+                                                     tripActionSuccess = if (returnReq) "Arrived! Return required." else "Arrived! Trip ready to complete."
+                                                 } catch (e: Exception) {
+                                                     tripActionError = "Failed: ${e.message}"
+                                                 } finally {
+                                                     isMarkingDropoff = false
+                                                 }
+                                             }
+                                         },
+                                         modifier = Modifier.fillMaxWidth().height(64.dp),
+                                         colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
+                                         shape = RoundedCornerShape(16.dp),
+                                         enabled = !isAnyLoading
+                                     ) {
+                                         if (isMarkingDropoff) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                                         else Text("MARK AS DROPPED OFF", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                     }
                                 }
-                                canMarkReturnPickup && returnToPickup -> {
-                                    Button(
-                                        onClick = {
-                                            val docId = nextSchedule.docId ?: return@Button
-                                            scope.launch {
-                                                try {
-                                                    isMarkingReturnPickup = true
-                                                    tripActionError = null
-                                                     db.collection("schedules").document(docId).update(
-                                                        "trip_phase", "ready_to_complete",
-                                                        "return_picked_up_at", FieldValue.serverTimestamp()
-                                                    ).await()
-                                                    
-                                                    
-                                                    // Sync to driver doc
-                                                    driverDocRef?.update("current_trip_phase", "ready_to_complete")
-                                                } catch (e: Exception) {
-                                                    tripActionError = "Failed: ${e.message}"
-                                                } finally {
-                                                    isMarkingReturnPickup = false
-                                                }
-                                            }
-                                        },
-                                        modifier = Modifier.fillMaxWidth().height(64.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
-                                        shape = RoundedCornerShape(16.dp),
-                                        enabled = !isAnyLoading
-                                    ) {
-                                        if (isMarkingReturnPickup) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                                        else Text("CONFIRM RETURN PICKUP", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                                canCompleteTrip -> {
+
+                                // Step 6: COMPLETE
+                                phase == "dropped_off" || phase == "ready_to_complete" || phase == "return_pickup" -> {
                                     Button(
                                         onClick = {
                                             completedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
@@ -1961,8 +1764,7 @@ fun DriverDashboard(
                                         shape = RoundedCornerShape(16.dp),
                                         enabled = !isAnyLoading
                                     ) {
-                                        if (isCompletingTrip) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                                        else Text("COMPLETE TRIP", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                        Text("COMPLETE TRIP & VIEW TICKET", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
