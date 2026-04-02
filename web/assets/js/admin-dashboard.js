@@ -212,7 +212,7 @@ function initMap() {
             }
 
             // Safely merge ONLY location-specific telemetry fields
-            const { current_latitude, current_longitude, current_speed, current_heading, last_updated } = driverLoc;
+            const { current_latitude, current_longitude, current_speed, current_heading, last_updated, wifi_ssid } = driverLoc;
             const existingStatus = allDriversData[driverId].current_status || 'offline';
             
             Object.assign(allDriversData[driverId], {
@@ -220,6 +220,7 @@ function initMap() {
                 current_longitude,
                 current_speed,
                 current_heading,
+                wifi_ssid,
                 last_updated,
                 // Promote to 'available' if currently offline but broadcasting location
                 current_status: existingStatus === 'offline' ? 'available' : existingStatus
@@ -318,8 +319,11 @@ function initMap() {
                 <div style="font-size: 11px; color: #888;">
                     <i class="fas fa-compass" style="width: 14px;"></i> ${heading}°
                 </div>
-                <div style="font-size: 11px; color: #888; grid-column: span 2;">
+                <div style="font-size: 11px; color: #888;">
                     <i class="fas fa-car" style="width: 14px;"></i> ${driver.vehicle_assigned || 'N/A'}
+                </div>
+                <div style="font-size: 11px; color: #888;" title="Network">
+                    <i class="fas fa-wifi" style="width: 14px;"></i> ${driver.wifi_ssid || 'No Data'}
                 </div>
             </div>
             ${driver.trip_eta ? `

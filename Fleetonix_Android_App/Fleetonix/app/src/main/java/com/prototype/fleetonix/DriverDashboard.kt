@@ -310,6 +310,7 @@ fun DriverDashboard(
 
     // INITIAL LOCATION LOGIC: Get last known location immediately
     LaunchedEffect(Unit) {
+        PresenceManager.updateStatus(true)
         if (hasLocationPermission(context)) {
             try {
                 val locationClient = LocationServices.getFusedLocationProviderClient(context)
@@ -373,17 +374,23 @@ fun DriverDashboard(
         position = CameraPosition.fromLatLngZoom(driverPos, 15f)
     }
 
-    // Automated Routing logic
-    LaunchedEffect(tripPhase, currentLatitude, currentLongitude, nextSchedule?.scheduleId) {
+    // Automated Routing logic - Only fires when phase or schedule changes to save API calls
+    LaunchedEffect(tripPhase, nextSchedule?.scheduleId) {
         val schedule = nextSchedule ?: return@LaunchedEffect
         
         // Log the triggers
-        Log.d("Routing", "Triggered: phase=$tripPhase, loc=$currentLatitude,$currentLongitude, scheduleId=${schedule.scheduleId}")
+        Log.d("Routing", "Triggered: phase=$tripPhase, scheduleId=${schedule.scheduleId}")
 
         if (currentLatitude == 0.0 || currentLongitude == 0.0) {
             Log.w("Routing", "Waiting for valid GPS coordinates...")
-            return@LaunchedEffect
+            var attempts = 0
+            while ((currentLatitude == 0.0 || currentLongitude == 0.0) && attempts < 15) {
+                kotlinx.coroutines.delay(1000)
+                attempts++
+            }
         }
+
+        if (currentLatitude == 0.0 || currentLongitude == 0.0) return@LaunchedEffect
 
         val origin = "$currentLatitude,$currentLongitude"
         val destination = when (tripPhase) {
@@ -661,6 +668,31 @@ fun DriverDashboard(
                         currentAccuracy = accuracy
                         currentHeading = bearing
                         totalDistanceMetres = totalDist
+
+                        // TNVS Dynamic Route Trimming & ETA Calculation
+                        if (polylinePoints.isNotEmpty()) {
+                            val driverPosVec = LatLng(lat, lng)
+                            val trimmedPoly = GoogleMapsService.trimPolyline(driverPosVec, polylinePoints)
+                            // Only force a compose recomp object change if size shrunk
+                            if (trimmedPoly.size < polylinePoints.size) {
+                                polylinePoints = trimmedPoly
+                            }
+
+                            val remainDistMeters = GoogleMapsService.calculatePolylineDistance(polylinePoints)
+                            tripDistance = if (remainDistMeters > 1000f) {
+                                "%.1f km".format(remainDistMeters / 1000f)
+                            } else {
+                                "%.0f m".format(remainDistMeters)
+                            }
+
+                            // Calculate ETA (speed is in m/s)
+                            val calcSpeed = if (speed > 1f) speed else 8.33f // fallback 30km/h
+                            val etaSecs = (remainDistMeters / calcSpeed).toLong()
+
+                            val hours = etaSecs / 3600
+                            val mins = (etaSecs % 3600) / 60
+                            tripETA = if (hours > 0) "${hours} hr ${mins} min" else "${mins} min"
+                        }
 
                         // Sync to Firestore if docRef is ready
                         scope.launch {
@@ -1143,24 +1175,25 @@ fun DriverDashboard(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column {
-                        // GPS Stats Row
+                        // GPS Stats & Speedometer Row
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Speed", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                                Text("${"%.1f".format(currentSpeed * 3.6)} km/h", color = TextPrimary, fontWeight = FontWeight.Bold)
-                            }
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Accuracy", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                                Text("${"%.1f".format(currentAccuracy)}m", color = TextPrimary, fontWeight = FontWeight.Bold)
-                            }
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text("Position", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                                Text("${"%.4f".format(currentLatitude)}, ${"%.4f".format(currentLongitude)}", color = TextPrimary, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                            SpeedometerWidget(speedKmH = currentSpeed * 3.6f)
+                            
+                            Column(modifier = Modifier.weight(1f).padding(start = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (tripETA.isNotEmpty()) {
+                                    Text("ETA: $tripETA", color = AccentTeal, fontWeight = FontWeight.Bold)
+                                    Text("Remaining: $tripDistance", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                                } else {
+                                    Text("ETA: --", color = AccentTeal, fontWeight = FontWeight.Bold)
+                                }
+                                Text("Acc: ${"%.1f".format(currentAccuracy)}m", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                                Text("Pos: ${"%.4f".format(currentLatitude)}, ${"%.4f".format(currentLongitude)}", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
                             }
                         }
 
@@ -1985,4 +2018,72 @@ fun DriverDashboard(
     }
 }
 }
+}
+
+@Composable
+fun SpeedometerWidget(speedKmH: Float, modifier: Modifier = Modifier) {
+    val maxSpeed = 140f
+    val sweepAngle = 240f
+    val startAngle = 150f
+    
+    val currentSpeedClamped = speedKmH.coerceIn(0f, maxSpeed)
+    val progress = currentSpeedClamped / maxSpeed
+    val progressAngle = progress * sweepAngle
+    
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier.padding(8.dp)
+    ) {
+        Box(
+            modifier = Modifier.size(120.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                val strokeWidth = 10.dp.toPx()
+                // Background arc
+                drawArc(
+                    color = Color.DarkGray,
+                    startAngle = startAngle,
+                    sweepAngle = sweepAngle,
+                    useCenter = false,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = strokeWidth,
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round
+                    )
+                )
+                
+                // Foreground arc
+                val gaugeColor = when {
+                    speedKmH < 60f -> Color(0xFF10B981) // Green
+                    speedKmH < 100f -> Color(0xFFF59E0B) // Amber
+                    else -> Color(0xFFEF4444) // Red
+                }
+                
+                drawArc(
+                    color = gaugeColor,
+                    startAngle = startAngle,
+                    sweepAngle = progressAngle,
+                    useCenter = false,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = strokeWidth,
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round
+                    )
+                )
+            }
+            // Speed text inside gauge
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "%.0f".format(currentSpeedClamped),
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.headlineLarge
+                )
+                Text(
+                    text = "KM/H",
+                    color = Color.LightGray,
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+        }
+    }
 }

@@ -85,4 +85,59 @@ object GoogleMapsService {
         }
         return poly
     }
+
+    /**
+     * Calculates total distance of a polyline in meters
+     */
+    fun calculatePolylineDistance(polyline: List<LatLng>): Float {
+        var distance = 0f
+        if (polyline.size < 2) return 0f
+        
+        val results = FloatArray(1)
+        for (i in 0 until polyline.size - 1) {
+            val p1 = polyline[i]
+            val p2 = polyline[i + 1]
+            android.location.Location.distanceBetween(
+                p1.latitude, p1.longitude,
+                p2.latitude, p2.longitude,
+                results
+            )
+            distance += results[0]
+        }
+        return distance
+    }
+
+    /**
+     * Trims a polyline by finding the closest point to the driver's location
+     * and dropping all points strictly before it.
+     */
+    fun trimPolyline(driverPos: LatLng, polyline: List<LatLng>): List<LatLng> {
+        if (polyline.isEmpty()) return polyline
+        
+        var minDistance = Float.MAX_VALUE
+        var closestIdx = 0
+        
+        val results = FloatArray(1)
+        
+        for (i in polyline.indices) {
+            val p = polyline[i]
+            android.location.Location.distanceBetween(
+                driverPos.latitude, driverPos.longitude,
+                p.latitude, p.longitude,
+                results
+            )
+            
+            if (results[0] < minDistance) {
+                minDistance = results[0]
+                closestIdx = i
+            }
+        }
+        
+        // If driver is far off route (e.g. > 500 meters), don't aggressively trim
+        if (minDistance > 500f) {
+            return polyline
+        }
+
+        return polyline.subList(closestIdx, polyline.size)
+    }
 }

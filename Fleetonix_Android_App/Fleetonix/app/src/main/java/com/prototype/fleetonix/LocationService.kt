@@ -138,9 +138,25 @@ class LocationService : Service() {
 
     private fun updateWifiContext() {
         try {
-            val connectionInfo: WifiInfo? = wifiManager.connectionInfo
-            currentWifiSsid = connectionInfo?.ssid?.replace("\"", "") ?: "N/A"
-            currentWifiRssi = connectionInfo?.rssi ?: 0
+            val connectivityManager = applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+            val network = connectivityManager.activeNetwork
+            val capabilities = connectivityManager.getNetworkCapabilities(network)
+            
+            if (capabilities != null) {
+                if (capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR)) {
+                    currentWifiSsid = "Mobile Data"
+                    currentWifiRssi = -50 // Placeholder for good signal
+                    return
+                } else if (capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)) {
+                    val connectionInfo = wifiManager.connectionInfo
+                    val ssid = connectionInfo?.ssid?.replace("\"", "")
+                    currentWifiSsid = if (ssid == null || ssid == "<unknown ssid>") "Connected" else ssid
+                    currentWifiRssi = connectionInfo?.rssi ?: 0
+                    return
+                }
+            }
+            currentWifiSsid = "Offline"
+            currentWifiRssi = 0
         } catch (e: Exception) {
             currentWifiSsid = "Restricted"
         }
@@ -155,11 +171,11 @@ class LocationService : Service() {
 
         when (intent?.action) {
             ACTION_START -> {
-                updateDriverStatus("available")
+                PresenceManager.updateStatus(true)
                 Log.d("LocationService", "Service started: Driver $driverDocId is now ONLINE")
             }
             ACTION_STOP -> {
-                updateDriverStatus("offline")
+                PresenceManager.updateStatus(false)
                 stopForeground(true)
                 stopSelf()
                 return START_NOT_STICKY
@@ -221,10 +237,17 @@ class LocationService : Service() {
     }
 
     override fun onDestroy() {
-        updateDriverStatus("offline")
+        PresenceManager.updateStatus(false)
         super.onDestroy()
         fusedLocationClient.removeLocationUpdates(locationCallback)
         sensorManager.unregisterListener(sensorListener)
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        PresenceManager.updateStatus(false)
+        Log.d("LocationService", "App swiped away, status set to offline")
+        stopSelf()
     }
 
     override fun onBind(intent: Intent?): IBinder? {
