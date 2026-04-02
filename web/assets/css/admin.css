@@ -1319,3 +1319,27 @@
 .status-dot.dropoff { background: #f97316; }
 .status-dot.offline { background: #6b7280; }
 .status-badge.info { background: rgba(107, 114, 128, 0.1); color: #6b7280; border: 1px solid rgba(107, 114, 128, 0.2); }
+/* Status Badges */
+.status-badge {
+    display: inline-block;
+    padding: 0.25em 0.6em;
+    font-size: 0.85em;
+    font-weight: 600;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: 0.375rem;
+    text-transform: capitalize;
+}
+
+.status-pending { background-color: #fef08a !important; color: #854d0e !important; }
+.status-scheduled, .status-accepted, .status-on_schedule { background-color: #bfdbfe !important; color: #1e40af !important; }
+.status-in_progress, .status-pickup, .status-dropoff, .status-return_pickup { background-color: #e9d5ff !important; color: #6b21a8 !important; }
+.status-completed { background-color: #bbf7d0 !important; color: #166534 !important; }
+.status-cancelled { background-color: #fecaca !important; color: #991b1b !important; }
+.status-badge.pending, .pending { background-color: #fef08a !important; color: #854d0e !important; }
+.status-badge.scheduled, .status-badge.accepted, .status-badge.on_schedule, .scheduled, .accepted, .on_schedule { background-color: #bfdbfe !important; color: #1e40af !important; }
+.status-badge.in_progress, .status-badge.pickup, .status-badge.dropoff, .status-badge.return_pickup, .in_progress, .pickup, .dropoff, .return_pickup { background-color: #e9d5ff !important; color: #6b21a8 !important; }
+.status-badge.completed, .completed { background-color: #bbf7d0 !important; color: #166534 !important; }
+.status-badge.cancelled, .cancelled { background-color: #fecaca !important; color: #991b1b !important; }

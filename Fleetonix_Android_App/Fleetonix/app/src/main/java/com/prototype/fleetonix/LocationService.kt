@@ -101,12 +101,14 @@ class LocationService : Service() {
 
                     // 4. Broadcast for internal UI (DriverDashboard)
                     val intent = Intent(ACTION_LOCATION_UPDATE).apply {
+                        setPackage(packageName) // REQUIRED for RECEIVER_NOT_EXPORTED
                         putExtra(EXTRA_LATITUDE, location.latitude)
                         putExtra(EXTRA_LONGITUDE, location.longitude)
                         putExtra(EXTRA_SPEED, smoothedSpeed.toFloat()) // Use smoothed speed
                         putExtra(EXTRA_ACCURACY, location.accuracy)
                         putExtra(EXTRA_BEARING, location.bearing)
                         putExtra(EXTRA_TOTAL_DISTANCE, totalDistanceMetres)
+                        putExtra("wifi_ssid", currentWifiSsid)
                     }
                     sendBroadcast(intent)
                     Log.d("LocationService", "Processed Telematics: Speed=$smoothedSpeed G=$currentGForce Network=$currentWifiSsid")
