@@ -140,6 +140,7 @@ object GoogleMapsService {
 
         return polyline.subList(closestIdx, polyline.size)
     }
+<<<<<<< HEAD
     /**
      * Calculates distance between two points in meters.
      */
@@ -152,6 +153,8 @@ object GoogleMapsService {
         )
         return results[0]
     }
+=======
+>>>>>>> 026b65d13820c178b2bd8023992a4e4e03c529e5
 
     /**
      * Encodes a list of LatLng points into a polyline string.
@@ -161,9 +164,15 @@ object GoogleMapsService {
         var lastLat = 0
         var lastLng = 0
 
+<<<<<<< HEAD
         for (p in points) {
             val lat = (p.latitude * 1E5).toInt()
             val lng = (p.longitude * 1E5).toInt()
+=======
+        for (point in points) {
+            val lat = Math.round(point.latitude * 1E5).toInt()
+            val lng = Math.round(point.longitude * 1E5).toInt()
+>>>>>>> 026b65d13820c178b2bd8023992a4e4e03c529e5
 
             encodeValue(lat - lastLat, encoded)
             encodeValue(lng - lastLng, encoded)

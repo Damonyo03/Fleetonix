@@ -156,6 +156,12 @@ function renderTickets(tickets) {
                     <i class="fas fa-user-tie"></i> Client: ${ticket.client_name || '—'} &nbsp;
                     ${ticket.schedule_date ? `· <i class="fas fa-calendar"></i> ${ticket.schedule_date} ${ticket.schedule_time || ''}` : ''}
                 </div>
+
+                ${ticket.route_polyline ? `
+                    <button class="btn-view-route" onclick="viewTripRoute('${ticket.id}', '${ticket.route_polyline}', '${ticket.driver_name}')">
+                        <i class="fas fa-map-marked-alt"></i> View Traveled Route Map
+                    </button>
+                ` : ''}
             </div>
         `;
     }).join('');
@@ -249,3 +255,81 @@ window.exportTripTickets = function() {
     const dateStr = new Date().toISOString().split('T')[0];
     exportToExcel(exportData, `Fleetonix_Trip_Report_${dateStr}.xlsx`, 'Completed Trips');
 };
+
+// Route Map Modal Management
+let routeMap = null;
+let currentPolyline = null;
+
+window.viewTripRoute = function(id, polyline, driverName) {
+    const modal = document.getElementById('routeModal');
+    if (!modal) return;
+    
+    modal.style.display = 'flex';
+    
+    // Initialize map if not already done
+    if (!routeMap) {
+        routeMap = new google.maps.Map(document.getElementById('routeMap'), {
+            zoom: 13,
+            center: { lat: 0, lng: 0 },
+            styles: [
+                { "elementType": "geometry", "stylers": [{ "color": "#242f3e" }] },
+                { "elementType": "labels.text.stroke", "stylers": [{ "color": "#242f3e" }] },
+                { "elementType": "labels.text.fill", "stylers": [{ "color": "#746855" }] },
+                { "featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{ "color": "#d59563" }] },
+                { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": "#d59563" }] },
+                { "featureType": "poi.park", "elementType": "geometry", "stylers": [{ "color": "#263c3f" }] },
+                { "featureType": "poi.park", "elementType": "labels.text.fill", "stylers": [{ "color": "#6b9a76" }] },
+                { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#38414e" }] },
+                { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#212a37" }] },
+                { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{ "color": "#9ca5b3" }] },
+                { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#746855" }] },
+                { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#1f2835" }] },
+                { "featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{ "color": "#f3d19c" }] },
+                { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#17263c" }] },
+                { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#515c6d" }] },
+                { "featureType": "water", "elementType": "labels.text.stroke", "stylers": [{ "color": "#17263c" }] }
+            ]
+        });
+    }
+
+    // Clear existing polyline
+    if (currentPolyline) {
+        currentPolyline.setMap(null);
+    }
+
+    try {
+        const decodedPath = google.maps.geometry.encoding.decodePath(polyline);
+        
+        currentPolyline = new google.maps.Polyline({
+            path: decodedPath,
+            geodesic: true,
+            strokeColor: '#14b8a6',
+            strokeOpacity: 1.0,
+            strokeWeight: 5,
+            map: routeMap
+        });
+
+        // Fit bounds
+        const bounds = new google.maps.LatLngBounds();
+        decodedPath.forEach(p => bounds.extend(p));
+        routeMap.fitBounds(bounds);
+    } catch (e) {
+        console.error("Error decoding polyline:", e);
+    }
+};
+
+// Close modal logic
+document.addEventListener('DOMContentLoaded', () => {
+    const routeModal = document.getElementById('routeModal');
+    const closeBtn = document.getElementById('closeRouteModal');
+    const closeBtnFooter = document.getElementById('closeRouteModalBtn');
+
+    if (closeBtn) closeBtn.onclick = () => routeModal.style.display = 'none';
+    if (closeBtnFooter) closeBtnFooter.onclick = () => routeModal.style.display = 'none';
+    
+    window.onclick = (event) => {
+        if (event.target == routeModal) {
+            routeModal.style.display = 'none';
+        }
+    };
+});
