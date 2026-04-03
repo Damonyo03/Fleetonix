@@ -4,13 +4,18 @@ import android.util.Patterns
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -18,10 +23,14 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
@@ -56,6 +65,7 @@ fun RegisterScreen(
     var email by rememberSaveable { mutableStateOf("") }
     var phone by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
+    var selectedRole by rememberSaveable { mutableStateOf("driver") }
     
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
     var isLoading by rememberSaveable { mutableStateOf(false) }
@@ -94,7 +104,8 @@ fun RegisterScreen(
                     val userData = UserRegistrationData(
                         full_name = trimmedFullName,
                         password = password,
-                        phone = trimmedPhone.ifBlank { null }
+                        phone = trimmedPhone.ifBlank { null },
+                        role = selectedRole
                     )
                     onOTPSent(userData, trimmedEmail)
                 } else {
@@ -109,29 +120,39 @@ fun RegisterScreen(
         }
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Midnight)
-            .verticalScroll(scrollState)
-            .padding(24.dp),
-        verticalArrangement = Arrangement.SpaceBetween
+            .statusBarsPadding()
+            .navigationBarsPadding(),
+        contentAlignment = Alignment.Center
     ) {
         Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier
+                .widthIn(max = 500.dp)
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .padding(24.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(24.dp))
-            Image(
-                painter = painterResource(id = R.drawable.logo),
-                contentDescription = "Fleetonix logo",
-                modifier = Modifier.size(100.dp)
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Text("Create an Account", color = TextPrimary, style = MaterialTheme.typography.titleLarge)
-            Text(
-                "Register to start driving with Fleetonix",
-                color = TextSecondary,
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Spacer(modifier = Modifier.height(24.dp))
+                Image(
+                    painter = painterResource(id = R.drawable.logo),
+                    contentDescription = "Fleetonix logo",
+                    modifier = Modifier.size(100.dp)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text("Create an Account", color = TextPrimary, style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "Register to start driving with Fleetonix",
+                    color = TextSecondary,
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center
             )
@@ -164,6 +185,47 @@ fun RegisterScreen(
                 colors = textFieldColors()
             )
 
+            Text(
+                text = "I am registering as a:",
+                color = TextSecondary,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Start
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { selectedRole = "driver" }
+                ) {
+                    RadioButton(
+                        selected = selectedRole == "driver",
+                        onClick = { selectedRole = "driver" },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = AccentTeal,
+                            unselectedColor = TextSecondary
+                        )
+                    )
+                    Text("Driver", color = TextPrimary)
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { selectedRole = "client" }
+                ) {
+                    RadioButton(
+                        selected = selectedRole == "client",
+                        onClick = { selectedRole = "client" },
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = AccentTeal,
+                            unselectedColor = TextSecondary
+                        )
+                    )
+                    Text("Client", color = TextPrimary)
+                }
+            }
+
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
@@ -194,28 +256,34 @@ fun RegisterScreen(
             }
         }
 
-        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Button(
-                onClick = { attemptSendOTP() },
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium,
-                enabled = !isLoading
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 24.dp)
             ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        color = Color.White,
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Text("Next: Verify Email")
+                Button(
+                    onClick = { attemptSendOTP() },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    enabled = !isLoading
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = Color.White,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Next: Verify Email")
+                    }
                 }
-            }
-            TextButton(
-                onClick = onBackToLogin,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Already have an account? Log in", color = AccentTeal)
+                TextButton(
+                    onClick = onBackToLogin,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Already have an account? Log in", color = AccentTeal)
+                }
             }
         }
     }

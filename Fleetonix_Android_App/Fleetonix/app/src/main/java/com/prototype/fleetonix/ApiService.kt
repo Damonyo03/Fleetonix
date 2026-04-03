@@ -72,7 +72,8 @@ data class UserRegistrationData(
     val full_name: String,
     val password: String,
     val phone: String? = null,
-    val company_name: String? = null
+    val company_name: String? = null,
+    val role: String
 )
 
 data class CompleteRegistrationRequest(

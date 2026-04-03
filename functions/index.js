@@ -22,8 +22,8 @@ admin.initializeApp();
 const mailTransport = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: "fleetoni.noreply@gmail.com",
-    pass: "uhau gdxs aycu rjxl",
+    user: "fleetonix.noreply@gmail.com",
+    pass: "uhaugdxsaycurjxl",
   },
 });
 
@@ -85,11 +85,7 @@ const LOCATIONIQ_TOKEN = "pk.0b57c3a80ea3c7893de95270b2a3ad50";
  * Replaces legacy PHP api/address_search.php
  */
 exports.addressSearch = onRequest({ cors: true }, async (req, res) => {
-  // Enable CORS
-  res.set("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") {
-    res.set("Access-Control-Allow-Methods", "GET");
-    res.set("Access-Control-Allow-Headers", "Content-Type");
     res.status(204).send("");
     return;
   }
@@ -168,10 +164,7 @@ exports.addressSearch = onRequest({ cors: true }, async (req, res) => {
  * Send Password Reset OTP
  */
 exports.sendPasswordResetOTP = onRequest({ cors: true }, async (req, res) => {
-  res.set("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") {
-    res.set("Access-Control-Allow-Methods", "POST");
-    res.set("Access-Control-Allow-Headers", "Content-Type");
     res.status(204).send("");
     return;
   }
@@ -196,7 +189,7 @@ exports.sendPasswordResetOTP = onRequest({ cors: true }, async (req, res) => {
 
     // Send Email via Nodemailer
     const mailOptions = {
-      from: '"Fleetonix System" <fleetoni.noreply@gmail.com>',
+      from: '"Fleetonix System" <fleetonix.noreply@gmail.com>',
       to: email,
       subject: "Verification Code: " + otp,
       html: getOTPHtmlTemplate(otp, email),
@@ -216,10 +209,7 @@ exports.sendPasswordResetOTP = onRequest({ cors: true }, async (req, res) => {
  * Reset Password with OTP
  */
 exports.resetPasswordWithOTP = onRequest({ cors: true }, async (req, res) => {
-  res.set("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") {
-    res.set("Access-Control-Allow-Methods", "POST");
-    res.set("Access-Control-Allow-Headers", "Content-Type");
     res.status(204).send("");
     return;
   }
@@ -267,7 +257,6 @@ exports.resetPasswordWithOTP = onRequest({ cors: true }, async (req, res) => {
  * Verify Verification Code (General use)
  */
 exports.verifyOTP = onRequest({ cors: true }, async (req, res) => {
-  res.set("Access-Control-Allow-Origin", "*");
   const {userId, otpCode} = req.body;
   if (!userId || !otpCode) {
     res.json({success: false, message: "Missing fields"});
@@ -290,11 +279,6 @@ exports.verifyOTP = onRequest({ cors: true }, async (req, res) => {
  * Safely creates a new Auth user and Firestore document without logging out the admin.
  */
 exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
-  // CORS configuration
-  res.set("Access-Control-Allow-Origin", "*");
-  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.set("Access-Control-Allow-Headers", "Content-Type");
-
   if (req.method === "OPTIONS") {
     res.status(204).send("");
     return;
@@ -404,10 +388,7 @@ exports.onScheduleUpdate = onDocumentUpdated("schedules/{docId}", async (event) 
  * Securely deletes transaction data and returns a backup
  */
 exports.adminClearData = onRequest({ cors: true }, async (req, res) => {
-  res.set("Access-Control-Allow-Origin", "*");
   if (req.method === "OPTIONS") {
-    res.set("Access-Control-Allow-Methods", "POST");
-    res.set("Access-Control-Allow-Headers", "Content-Type");
     res.status(204).send("");
     return;
   }
@@ -452,10 +433,8 @@ exports.adminClearData = onRequest({ cors: true }, async (req, res) => {
  * Send Registration OTP (CORS enabled)
  */
 exports.sendRegistrationOTP = onRequest({ cors: true }, async (req, res) => {
-  res.set("Access-Control-Allow-Origin", "*");
-  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.set("Access-Control-Allow-Headers", "Content-Type");
-
+  logger.info("sendRegistrationOTP called with Nodemailer config v2");
+  
   if (req.method === "OPTIONS") {
     res.status(204).send("");
     return;
@@ -487,7 +466,7 @@ exports.sendRegistrationOTP = onRequest({ cors: true }, async (req, res) => {
 
     if (email) {
       const mailOptions = {
-        from: '"Fleetonix Verification" <fleetoni.noreply@gmail.com>',
+        from: '"Fleetonix Verification" <fleetonix.noreply@gmail.com>',
         to: email,
         subject: "Verification Code: " + otp,
         html: getOTPHtmlTemplate(otp, email, true),
@@ -508,10 +487,8 @@ exports.sendRegistrationOTP = onRequest({ cors: true }, async (req, res) => {
  * Complete Registration after OTP verification
  */
 exports.completeRegistration = onRequest({ cors: true }, async (req, res) => {
-  res.set("Access-Control-Allow-Origin", "*");
-  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.set("Access-Control-Allow-Headers", "Content-Type");
-
+  logger.info("completeRegistration called with Nodemailer config v2");
+  
   if (req.method === "OPTIONS") {
     res.status(204).send("");
     return;
@@ -544,15 +521,27 @@ exports.completeRegistration = onRequest({ cors: true }, async (req, res) => {
       displayName: userData.full_name,
     });
 
+    const role = (userData.role && userData.role.toLowerCase() === "driver") ? "driver" : "client";
+
     await admin.firestore().collection("users").doc(userRecord.uid).set({
       full_name: userData.full_name,
       email: email,
       phone: phone || userData.phone,
       company_name: userData.company_name,
-      user_type: "client",
+      user_type: role,
       status: "active",
       created_at: admin.firestore.FieldValue.serverTimestamp(),
     });
+
+    if (role === "driver") {
+      await admin.firestore().collection("drivers").doc(email.toLowerCase().trim()).set({
+        driver_name: userData.full_name,
+        driver_email: email.toLowerCase().trim(),
+        current_status: "offline",
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
 
     await admin.firestore().collection("registration_otps").doc(target).delete();
     res.json({ success: true, message: "Account created successfully!", uid: userRecord.uid });
