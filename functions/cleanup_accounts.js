@@ -14,9 +14,7 @@ const auth = admin.auth();
 const emailsToKeep = [
   'aisenaldersonquia05@gmail.com',
   'aisenaldersonquia@gmail.com',
-  'perezralph15@gmail.com',
-  'aisen@gmail.com',
-  'nrxlegit@gmail.com'
+  'perezralph15@gmail.com'
 ];
 
 async function cleanup() {
@@ -58,8 +56,34 @@ async function cleanup() {
           await doc.ref.delete();
           console.log(`  - Deleted from 'clients' collection`);
         }
+
+        // Delete from Firestore 'driver_locations' (real-time map markers)
+        // Check both UID and email as document IDs due to different app versions
+        const locByUid = await db.collection('driver_locations').doc(userRecord.uid).get();
+        if (locByUid.exists) {
+          await db.collection('driver_locations').doc(userRecord.uid).delete();
+          console.log(`  - Deleted from 'driver_locations' (ID: ${userRecord.uid})`);
+        }
+        
+        const locByEmail = await db.collection('driver_locations').doc(userRecord.email).get();
+        if (locByEmail.exists) {
+          await db.collection('driver_locations').doc(userRecord.email).delete();
+          console.log(`  - Deleted from 'driver_locations' (ID: ${userRecord.email})`);
+        }
       } catch (err) {
         console.error(`  ! Error deleting user ${userRecord.email}:`, err.message);
+      }
+    }
+
+    // FORCE CLEANUP OF STALE LOCATIONS (in case users were already deleted from Auth)
+    console.log("Cleaning up orphaned driver_locations...");
+    const locations = await db.collection('driver_locations').get();
+    for (const doc of locations.docs) {
+      const data = doc.data();
+      const email = data.driver_email || doc.id; // Some use email as ID, some use UID
+      if (!emailsToKeep.includes(email)) {
+        console.log(`Deleting stale location marker: ${doc.id}`);
+        await doc.ref.delete();
       }
     }
 

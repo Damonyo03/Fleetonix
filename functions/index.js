@@ -453,8 +453,9 @@ exports.sendRegistrationOTP = onRequest({ cors: true }, async (req, res) => {
     return;
   }
 
-  const { email, phone } = req.body;
+  const { email, phone } = req.body || {};
   if (!email && !phone) {
+    logger.warn("sendRegistrationOTP called with missing email AND phone.");
     res.status(400).json({ success: false, message: "Email or Phone is required" });
     return;
   }
@@ -465,10 +466,15 @@ exports.sendRegistrationOTP = onRequest({ cors: true }, async (req, res) => {
   try {
     if (email) {
       try {
-        await admin.auth().getUserByEmail(email);
-        res.status(400).json({ success: false, message: "This email is already registered." });
-        return;
-      } catch (e) { }
+        const userExists = await admin.auth().getUserByEmail(email.toLowerCase().trim());
+        if (userExists) {
+          logger.warn(`User ${email} already exists in Auth.`);
+          res.status(400).json({ success: false, message: "This email is already registered." });
+          return;
+        }
+      } catch (authError) {
+        // User doesn't exist in Auth, which is good for registration
+      }
     }
 
     await admin.firestore().collection("registration_otps").doc(target).set({
@@ -507,9 +513,18 @@ exports.completeRegistration = onRequest({ cors: true }, async (req, res) => {
     return;
   }
 
-  const { email, phone, otp, userData } = req.body;
+  const { email, phone, otp, userData } = req.body || {};
+  
   if ((!email && !phone) || !otp || !userData) {
-    res.status(400).json({ success: false, message: "Missing required fields" });
+    logger.warn(`completeRegistration missing fields: email=${email}, otp=${otp}, userData=${!!userData}`);
+    res.status(400).json({ success: false, message: "Missing required fields: email/phone, otp, and userData are required." });
+    return;
+  }
+
+  // Deep validation of userData
+  if (!userData.password || !userData.full_name) {
+    logger.warn(`completeRegistration: userData missing password or full_name`);
+    res.status(400).json({ success: false, message: "userData must contain password and full_name." });
     return;
   }
 
@@ -528,23 +543,35 @@ exports.completeRegistration = onRequest({ cors: true }, async (req, res) => {
       return;
     }
 
-    const userRecord = await admin.auth().createUser({
-      email: email,
-      password: userData.password,
-      displayName: userData.full_name,
-    });
+    // 1. Create Auth User with error handling for existing users
+    let userRecord;
+    try {
+      userRecord = await admin.auth().createUser({
+        email: email.toLowerCase().trim(),
+        password: userData.password,
+        displayName: userData.full_name,
+      });
+      logger.info(`Auth user created for: ${email}`);
+    } catch (authError) {
+      if (authError.code === 'auth/email-already-exists') {
+        res.status(400).json({ success: false, message: "This email is already registered." });
+        return;
+      }
+      throw authError; // Rethrow other errors to be caught by the outer catch
+    }
 
     const role = (userData.role && userData.role.toLowerCase() === "driver") ? "driver" : "client";
 
     await admin.firestore().collection("users").doc(userRecord.uid).set({
       full_name: userData.full_name,
-      email: email,
-      phone: phone || userData.phone,
-      company_name: userData.company_name,
+      email: email.toLowerCase().trim(),
+      phone: phone || userData.phone || "",
+      company_name: userData.company_name || "",
       user_type: role,
       status: "active",
       created_at: admin.firestore.FieldValue.serverTimestamp(),
     });
+    logger.info(`Firestore user doc created for: ${userRecord.uid}`);
 
     if (role === "driver") {
       await admin.firestore().collection("drivers").doc(email.toLowerCase().trim()).set({
