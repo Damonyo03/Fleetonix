@@ -140,4 +140,35 @@ object GoogleMapsService {
 
         return polyline.subList(closestIdx, polyline.size)
     }
+
+    /**
+     * Encodes a list of LatLng points into a polyline string.
+     */
+    fun encodePolyline(points: List<LatLng>): String {
+        val encoded = StringBuilder()
+        var lastLat = 0
+        var lastLng = 0
+
+        for (point in points) {
+            val lat = Math.round(point.latitude * 1E5).toInt()
+            val lng = Math.round(point.longitude * 1E5).toInt()
+
+            encodeValue(lat - lastLat, encoded)
+            encodeValue(lng - lastLng, encoded)
+
+            lastLat = lat
+            lastLng = lng
+        }
+        return encoded.toString()
+    }
+
+    private fun encodeValue(v: Int, encoded: StringBuilder) {
+        var value = v
+        value = if (value < 0) (value shl 1).inv() else value shl 1
+        while (value >= 0x20) {
+            encoded.append(((0x20 or (value and 0x1f)) + 63).toChar())
+            value = value shr 5
+        }
+        encoded.append((value + 63).toChar())
+    }
 }

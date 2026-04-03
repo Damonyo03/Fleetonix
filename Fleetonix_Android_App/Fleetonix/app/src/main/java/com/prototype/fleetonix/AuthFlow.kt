@@ -70,6 +70,8 @@ fun AuthFlow() {
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
 
+    var showHistory by remember { mutableStateOf(false) }
+
     // Lifecycle-aware Presence Management
     // Ensures status is ONLY 'active' when app is in foreground
     DisposableEffect(lifecycleOwner, currentUser) {
@@ -234,6 +236,7 @@ fun AuthFlow() {
         userRole == null -> "loading_role"
         userRole != "driver" -> "unauthorized"
         userRole == "driver" && !isDriverVerified -> "verify_otp"
+        showHistory -> "history"
         else -> "dashboard"
     }
     
@@ -401,6 +404,9 @@ fun AuthFlow() {
                         onRefresh = { 
                             refreshTrigger++
                         },
+                        onViewHistory = {
+                            showHistory = true
+                        },
                         onLogout = {
                             PresenceManager.updateStatus(false)
                             auth.signOut()
@@ -409,6 +415,9 @@ fun AuthFlow() {
                         }
                     )
                 }
+            }
+            "history" -> {
+                TripHistoryScreen(onBack = { showHistory = false })
             }
         }
     }

@@ -65,6 +65,7 @@ fun TripTicketDialog(
     timeOfDeparture: String,
     timeOfArrival: String,
     totalKm: Double,
+    routePoints: List<LatLng>,
     isSubmitting: Boolean,
     onConfirm: () -> Unit
 ) {
@@ -102,6 +103,63 @@ fun TripTicketDialog(
                         Text("${"%.2f".format(totalKm)} KM", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = AccentTeal)
                     }
                 }
+
+                // Route Map Visualization
+                if (routePoints.isNotEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .border(1.dp, Midnight, RoundedCornerShape(12.dp))
+                    ) {
+                        val cameraPositionState = rememberCameraPositionState {
+                            val center = if (routePoints.isNotEmpty()) routePoints[routePoints.size / 2] else LatLng(0.0, 0.0)
+                            position = CameraPosition.fromLatLngZoom(center, 13f)
+                        }
+                        
+                        // Auto-zoom to fit the route
+                        LaunchedEffect(routePoints) {
+                            if (routePoints.size >= 2) {
+                                val boundsBuilder = LatLngBounds.builder()
+                                routePoints.forEach { boundsBuilder.include(it) }
+                                cameraPositionState.animate(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 50))
+                            }
+                        }
+
+                        GoogleMap(
+                            modifier = Modifier.fillMaxSize(),
+                            cameraPositionState = cameraPositionState,
+                            uiSettings = MapUiSettings(
+                                zoomControlsEnabled = false,
+                                scrollGesturesEnabled = true,
+                                zoomGesturesEnabled = true
+                            ),
+                            properties = MapProperties(
+                                mapStyleOptions = MapStyleOptions(MapStyles.MIDNIGHT)
+                            )
+                        ) {
+                            Polyline(
+                                points = routePoints,
+                                color = AccentTeal,
+                                width = 8f,
+                                jointType = JointType.ROUND
+                            )
+                            
+                            // Start and End Markers
+                            Marker(
+                                state = MarkerState(position = routePoints.first()),
+                                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE),
+                                title = "Departure"
+                            )
+                            Marker(
+                                state = MarkerState(position = routePoints.last()),
+                                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN),
+                                title = "Arrival"
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {
@@ -135,6 +193,7 @@ fun DriverDashboard(
     isFeedLoading: Boolean,
     feedError: String?,
     onRefresh: () -> Unit,
+    onViewHistory: () -> Unit,
     onLogout: () -> Unit
 ) {
     Log.d("DriverDashboard", "Dashboard recomposed. Schedules count: ${feed?.schedules?.size ?: 0} (Loading: $isFeedLoading)")
@@ -258,6 +317,9 @@ fun DriverDashboard(
     var isMarkingDropoff by remember { mutableStateOf(false) }
     var isMarkingReturnPickup by remember { mutableStateOf(false) }
     var isCompletingTrip by remember { mutableStateOf(false) }
+    
+    // Traveled Route accumulation
+    val actualRoutePoints = remember { mutableStateListOf<LatLng>() }
 
     // Trip Ticket states
     var totalDistanceMetres by remember { mutableStateOf(0f) }
@@ -265,6 +327,7 @@ fun DriverDashboard(
     var pickedUpAt by remember { mutableStateOf<String?>(null) }
     var completedAt by remember { mutableStateOf<String?>(null) }
     var showTripTicket by remember { mutableStateOf(false) }
+    var targetTripId by remember { mutableStateOf<String?>(null) }
 
     // New Task Popup states
     var lastKnownScheduleId by remember { mutableStateOf<Int?>(null) }
@@ -661,13 +724,18 @@ fun DriverDashboard(
 
                     Log.d("LocationTracking", "Received: $lat, $lng (Acc: $accuracy, Dist: $totalDist)")
 
-                    if (lat != 0.0 && lng != 0.0) {
-                        currentLatitude = lat
-                        currentLongitude = lng
-                        currentSpeed = speed
                         currentAccuracy = accuracy
                         currentHeading = bearing
                         totalDistanceMetres = totalDist
+                        
+                        // Accumulate Actual Route Points during job movement
+                        if (lat != 0.0 && lng != 0.0 && (tripPhase == "moving_to_pickup" || tripPhase == "moving_to_dropoff" || tripPhase == "return_pickup")) {
+                            val newPoint = LatLng(lat, lng)
+                            if (actualRoutePoints.isEmpty() || 
+                                GoogleMapsService.calculatePolylineDistance(listOf(actualRoutePoints.last(), newPoint)) > 10f) {
+                                actualRoutePoints.add(newPoint)
+                            }
+                        }
 
                         // TNVS Dynamic Route Trimming & ETA Calculation
                         if (polylinePoints.isNotEmpty()) {
@@ -1020,6 +1088,34 @@ fun DriverDashboard(
                                 Spacer(modifier = Modifier.padding(horizontal = 8.dp))
                                 Text(
                                     text = "Driver's Profile",
+                                    color = TextPrimary,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        }
+
+                        // My Trip History option - left aligned
+                        TextButton(
+                            onClick = {
+                                scope.launch { drawerState.close() }
+                                onViewHistory()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.Start,
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.DateRange,
+                                    contentDescription = "History",
+                                    tint = TextPrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.padding(horizontal = 8.dp))
+                                Text(
+                                    text = "My Trip History",
                                     color = TextPrimary,
                                     style = MaterialTheme.typography.bodyLarge
                                 )
@@ -1591,6 +1687,7 @@ fun DriverDashboard(
                                                          )
                                                      }
                                                     tripActionSuccess = "Booking accepted! Tap below to start pickup."
+                                                    actualRoutePoints.clear() // Ready for new trip
                                                 } catch (e: Exception) {
                                                     tripActionError = "Failed: ${e.message}"
                                                 } finally {
@@ -1629,6 +1726,7 @@ fun DriverDashboard(
                                                     context.startService(startTripIntent)
                                                     
                                                     totalDistanceMetres = 0f
+                                                    actualRoutePoints.clear()
                                                     
                                                     // Sync to drivers collection
                                                     val email = auth.currentUser?.email
@@ -1794,6 +1892,7 @@ fun DriverDashboard(
                                     Button(
                                         onClick = {
                                             completedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+                                            targetTripId = nextSchedule?.docId
                                             showTripTicket = true
                                         },
                                         modifier = Modifier.fillMaxWidth().height(64.dp),
@@ -1935,9 +2034,10 @@ fun DriverDashboard(
                 timeOfDeparture = pickedUpAt ?: "--:--",
                 timeOfArrival = completedAt ?: "--:--",
                 totalKm = totalDistanceMetres / 1000.0,
+                routePoints = actualRoutePoints.toList(),
                 isSubmitting = isCompletingTrip,
                 onConfirm = {
-                    val docId = nextSchedule?.docId ?: return@TripTicketDialog
+                    val docId = targetTripId ?: return@TripTicketDialog
                     scope.launch {
                         try {
                             isCompletingTrip = true
@@ -1953,7 +2053,8 @@ fun DriverDashboard(
                                 "time_of_arrival" to (completedAt ?: ""),
                                 "total_km_travelled" to (totalDistanceMetres / 1000.0),
                                 "vehicle_type" to (session.driver?.vehicleAssigned ?: ""),
-                                "plate_number" to (session.driver?.plateNumber ?: "")
+                                "plate_number" to (session.driver?.plateNumber ?: ""),
+                                "route_polyline" to GoogleMapsService.encodePolyline(actualRoutePoints)
                             )
                             
                             db.collection("schedules").document(docId).update(tripData as Map<String, Any>).await()
@@ -1965,9 +2066,12 @@ fun DriverDashboard(
                                 "driver_name" to (session.user?.name ?: "Driver"),
                                 "client_name" to (nextSchedule?.client?.name ?: "Unknown"),
                                 "vehicle_plate" to (session.driver?.plateNumber ?: ""),
+                                "pickup_location" to (nextSchedule?.pickup_location?.address ?: "Unknown"),
+                                "dropoff_location" to (nextSchedule?.dropoff_location?.address ?: "Unknown"),
                                 "time_of_departure" to (pickedUpAt ?: ""),
                                 "time_of_arrival" to (completedAt ?: ""),
                                 "total_km" to (totalDistanceMetres / 1000.0),
+                                "route_polyline" to GoogleMapsService.encodePolyline(actualRoutePoints),
                                 "created_at" to FieldValue.serverTimestamp()
                             )
                             db.collection("trip_tickets").add(ticketData).await()

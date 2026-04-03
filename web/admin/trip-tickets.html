@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- SheetJS for Excel Export -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <!-- Google Maps JS -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBWal4kXhImWNvJL2jV4LG0FvftdN2J9DQ&libraries=geometry"></script>
     <style>
         .ticket-card {
             background: var(--card-bg);
@@ -122,13 +124,69 @@
             color: var(--text-muted);
             margin-top: 4px;
         }
-        #ticketsList { min-height: 200px; }
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: var(--text-muted);
-        }
         .empty-state i { font-size: 3em; margin-bottom: 12px; display: block; }
+
+        /* Route Modal Styles */
+        .route-modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.85);
+            backdrop-filter: blur(5px);
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-content {
+            background: var(--bg-secondary);
+            width: 90%;
+            max-width: 800px;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            border: 1px solid var(--border-color);
+        }
+        .modal-header {
+            padding: 16px 20px;
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-title { font-weight: 700; color: var(--text-primary); }
+        .close-modal { cursor: pointer; color: var(--text-muted); font-size: 1.5em; }
+        .close-modal:hover { color: var(--accent-red); }
+        #routeMap { width: 100%; height: 450px; background: #222; }
+        .modal-footer {
+            padding: 14px 20px;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+        .btn-view-route {
+            background: rgba(20, 184, 166, 0.1);
+            color: var(--accent-teal);
+            border: 1px solid var(--accent-teal);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.85em;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 10px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-view-route:hover {
+            background: var(--accent-teal);
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -230,6 +288,23 @@
 
     <!-- Modal Placeholder -->
     <div id="modalContainer"></div>
+
+    <!-- Route Map Modal -->
+    <div id="routeModal" class="route-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title"><i class="fas fa-map-marked-alt"></i> Trip Route History</div>
+                <span class="close-modal" id="closeRouteModal">&times;</span>
+            </div>
+            <div id="routeMap"></div>
+            <div class="modal-footer">
+                <div style="font-size: 0.85em; color: var(--text-muted);">
+                    <i class="fas fa-info-circle"></i> Actual traveled path as recorded by the driver's device.
+                </div>
+                <button class="btn btn-secondary" id="closeRouteModalBtn">Close</button>
+            </div>
+        </div>
+    </div>
 
     <script type="module" src="../assets/js/admin.js"></script>
     <script type="module" src="../assets/js/admin-trip-tickets.js"></script>
