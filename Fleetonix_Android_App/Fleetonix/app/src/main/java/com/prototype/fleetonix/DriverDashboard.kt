@@ -22,6 +22,7 @@ import androidx.compose.ui.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -146,6 +147,7 @@ fun DriverDashboard(
     val scope = rememberCoroutineScope()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var showProfile by remember { mutableStateOf(false) }
+    var showTripHistory by remember { mutableStateOf(false) }
 
     // Accident report states
     var showAccidentDialog by remember { mutableStateOf(false) }
@@ -261,6 +263,7 @@ fun DriverDashboard(
 
     // Trip Ticket states
     var totalDistanceMetres by remember { mutableStateOf(0f) }
+    var actualRoutePoints = remember { mutableStateListOf<LatLng>() }
     var acceptedAt by remember { mutableStateOf<String?>(null) }
     var pickedUpAt by remember { mutableStateOf<String?>(null) }
     var completedAt by remember { mutableStateOf<String?>(null) }
@@ -669,6 +672,14 @@ fun DriverDashboard(
                         currentHeading = bearing
                         totalDistanceMetres = totalDist
 
+                        // Capture route points for Trip Ticket
+                        if (tripPhase == "moving_to_pickup" || tripPhase == "picked_up" || tripPhase == "moving_to_dropoff" || tripPhase == "return_pickup") {
+                            val newPoint = LatLng(lat, lng)
+                            if (actualRoutePoints.isEmpty() || GoogleMapsService.calculateDistance(actualRoutePoints.last(), newPoint) > 10.0) {
+                                actualRoutePoints.add(newPoint)
+                            }
+                        }
+
                         // TNVS Dynamic Route Trimming & ETA Calculation
                         if (polylinePoints.isNotEmpty()) {
                             val driverPosVec = LatLng(lat, lng)
@@ -837,11 +848,6 @@ fun DriverDashboard(
         }
     }
 
-    // Show profile screen if requested
-    if (showProfile) {
-        DriverProfile(session = session, onBack = { showProfile = false })
-        return
-    }
 
     // GPS blocking overlay - shows when GPS is disabled
     if (showGpsBlockingOverlay) {
@@ -1020,6 +1026,34 @@ fun DriverDashboard(
                                 Spacer(modifier = Modifier.padding(horizontal = 8.dp))
                                 Text(
                                     text = "Driver's Profile",
+                                    color = TextPrimary,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        }
+
+                        // Trip Tickets History option
+                        TextButton(
+                            onClick = {
+                                scope.launch { drawerState.close() }
+                                showTripHistory = true
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.Start,
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.History,
+                                    contentDescription = "Trip Tickets",
+                                    tint = TextPrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.padding(horizontal = 8.dp))
+                                Text(
+                                    text = "Trip Tickets",
                                     color = TextPrimary,
                                     style = MaterialTheme.typography.bodyLarge
                                 )
@@ -1248,7 +1282,7 @@ fun DriverDashboard(
                             GoogleMap(
                                 modifier = Modifier.fillMaxSize(),
                                 cameraPositionState = cameraPositionState,
-                                properties = mapProperties,
+                                properties = mapProperties.copy(mapStyleOptions = MapStyleOptions(MapStyles.AUBERGINE)),
                                 uiSettings = mapUiSettings
                             ) {
                                 Marker(
@@ -1958,7 +1992,14 @@ fun DriverDashboard(
                             
                             db.collection("schedules").document(docId).update(tripData as Map<String, Any>).await()
                             
-                            // Save the actual Trip Ticket for the Admin Dashboard
+                            // Encode the actual route points traveled
+                            val routePolyline = if (actualRoutePoints.isNotEmpty()) {
+                                GoogleMapsService.encodePolyline(actualRoutePoints.toList())
+                            } else {
+                                ""
+                            }
+
+                            // Save the actual Trip Ticket for the Admin Dashboard and History
                             val ticketData = hashMapOf(
                                 "schedule_id" to docId,
                                 "driver_email" to (auth.currentUser?.email ?: ""),
@@ -1968,6 +2009,7 @@ fun DriverDashboard(
                                 "time_of_departure" to (pickedUpAt ?: ""),
                                 "time_of_arrival" to (completedAt ?: ""),
                                 "total_km" to (totalDistanceMetres / 1000.0),
+                                "route_polyline" to routePolyline,
                                 "created_at" to FieldValue.serverTimestamp()
                             )
                             db.collection("trip_tickets").add(ticketData).await()
@@ -2015,9 +2057,20 @@ fun DriverDashboard(
                 isReporting = isReportingVehicleIssue
             )
         }
+        }
     }
-}
-}
+
+    // Navigation Overlays
+    if (showProfile) {
+            BackHandler { showProfile = false }
+            DriverProfile(session = session, onBack = { showProfile = false })
+        }
+        
+        if (showTripHistory) {
+            BackHandler { showTripHistory = false }
+            TripHistoryScreen(onBack = { showTripHistory = false })
+        }
+    }
 }
 
 @Composable
