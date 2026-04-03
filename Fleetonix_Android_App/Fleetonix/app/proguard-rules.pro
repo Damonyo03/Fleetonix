@@ -19,3 +19,12 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Retrofit, Gson and API Models
+-keep class com.prototype.fleetonix.** { *; }
+-keepattributes Signature
+-keepattributes *Annotation*
+-keep class com.google.gson.** { *; }
+-keep class retrofit2.** { *; }
+-dontwarn retrofit2.**
+-keep class com.google.firebase.** { *; }

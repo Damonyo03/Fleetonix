@@ -86,7 +86,9 @@ fun OTPVerifyScreen(
                 isLoading = true
                 errorMessage = null
 
-                android.util.Log.d("OTPVerifyScreen", "Verifying OTP via Firestore for userId=$userId, otpCode=$trimmedOtp")
+                if (BuildConfig.DEBUG) {
+                    android.util.Log.d("OTPVerifyScreen", "Verifying OTP via Firestore for userId=$userId, otpCode=$trimmedOtp")
+                }
 
                 val otpDoc = db.collection("otp_codes").document(userId).get().await()
                 
@@ -101,7 +103,9 @@ fun OTPVerifyScreen(
                 if (storedOtp == trimmedOtp) {
                     if (expiresAt != null && expiresAt.toDate().after(java.util.Date())) {
                         // Success!
-                        android.util.Log.d("OTPVerifyScreen", "OTP verified successfully via Firestore")
+                        if (BuildConfig.DEBUG) {
+                            android.util.Log.d("OTPVerifyScreen", "OTP verified successfully via Firestore")
+                        }
                         
                         // Delete OTP after success
                         db.collection("otp_codes").document(userId).delete()

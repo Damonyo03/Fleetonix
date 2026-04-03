@@ -14,7 +14,11 @@ const val BASE_URL = "https://us-central1-fleetonix-14be4.cloudfunctions.net/"
 
 object FleetonixApi {
     private val logging = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY
+        level = if (BuildConfig.DEBUG) {
+            HttpLoggingInterceptor.Level.BODY
+        } else {
+            HttpLoggingInterceptor.Level.NONE
+        }
     }
 
     private val client = OkHttpClient.Builder()

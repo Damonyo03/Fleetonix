@@ -14,3 +14,4 @@ captures/
 *.apk
 *.output.txt
 *.log
+FLEETONIX_SECRETS_BACKUP.txt

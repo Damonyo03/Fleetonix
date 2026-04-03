@@ -111,7 +111,9 @@ class LocationService : Service() {
                         putExtra("wifi_ssid", currentWifiSsid)
                     }
                     sendBroadcast(intent)
-                    Log.d("LocationService", "Processed Telematics: Speed=$smoothedSpeed G=$currentGForce Network=$currentWifiSsid")
+                    if (BuildConfig.DEBUG) {
+                        Log.d("LocationService", "Processed Telematics: Speed=$smoothedSpeed G=$currentGForce Network=$currentWifiSsid")
+                    }
                 }
             }
         }
@@ -308,7 +310,9 @@ class LocationService : Service() {
 
         driverRef.set(locationData, SetOptions.merge())
             .addOnSuccessListener {
-                Log.d("LocationService", "Pushed Enriched Telematics: G=$currentGForce SSID=$currentWifiSsid")
+                if (BuildConfig.DEBUG) {
+                    Log.d("LocationService", "Pushed Enriched Telematics: G=$currentGForce SSID=$currentWifiSsid")
+                }
             }
             .addOnFailureListener { e ->
                 Log.e("LocationService", "Error writing to driver_locations", e)
@@ -334,7 +338,9 @@ class LocationService : Service() {
         firestore.collection("vehicle_logs")
             .add(logData)
             .addOnSuccessListener {
-                Log.d("LocationService", "Archived Telematics Log.")
+                if (BuildConfig.DEBUG) {
+                    Log.d("LocationService", "Archived Telematics Log.")
+                }
             }
             .addOnFailureListener { e ->
                 Log.e("LocationService", "Error writing to vehicle_logs", e)

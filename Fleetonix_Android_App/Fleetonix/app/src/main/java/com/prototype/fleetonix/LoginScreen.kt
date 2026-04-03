@@ -108,7 +108,9 @@ fun LoginScreen(
                         )
                         db.collection("otp_codes").document(user.uid).set(otpData).await()
                         
-                        Log.d("LoginScreen", "Generated OTP for ${user.email}: $otp")
+                        if (BuildConfig.DEBUG) {
+                            Log.d("LoginScreen", "Generated OTP for ${user.email}: $otp")
+                        }
                         // In a real app, a Cloud Function would trigger an email send here
                     }
                 }

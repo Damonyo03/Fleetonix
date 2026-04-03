@@ -127,7 +127,9 @@ fun AuthFlow() {
         feedError = null
 
         val email = user.email?.lowercase()?.trim()
-        Log.d("AuthFlow", "Subscribing to schedules for: $email (refresh: $refreshTrigger)")
+        if (BuildConfig.DEBUG) {
+            Log.d("AuthFlow", "Subscribing to schedules for: $email (refresh: $refreshTrigger)")
+        }
 
         val listener = db.collection("schedules")
             .whereEqualTo("driver_email", email)
