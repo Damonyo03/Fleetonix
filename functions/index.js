@@ -214,8 +214,10 @@ exports.resetPasswordWithOTP = onRequest({ cors: true }, async (req, res) => {
     return;
   }
 
-  const {userId, otp, newPassword} = req.body;
-  if (!userId || !otp || !newPassword) {
+  const {userId, otp, newPassword, password} = req.body || {};
+  const targetPassword = newPassword || password;
+  
+  if (!userId || !otp || !targetPassword) {
     res.status(400).json({success: false, message: "Missing required fields"});
     return;
   }
@@ -240,7 +242,7 @@ exports.resetPasswordWithOTP = onRequest({ cors: true }, async (req, res) => {
 
     // Update password via Auth
     await admin.auth().updateUser(userId, {
-      password: newPassword,
+      password: targetPassword,
     });
 
     // Delete OTP document (safety)
@@ -257,20 +259,31 @@ exports.resetPasswordWithOTP = onRequest({ cors: true }, async (req, res) => {
  * Verify Verification Code (General use)
  */
 exports.verifyOTP = onRequest({ cors: true }, async (req, res) => {
-  const {userId, otpCode} = req.body;
-  if (!userId || !otpCode) {
-    res.json({success: false, message: "Missing fields"});
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
     return;
   }
+
+  const {userId, otpCode} = req.body || {};
+  
+  if (!userId || !otpCode) {
+    logger.warn(`VerifyOTP called with missing fields: userId=${userId}, otpCode=${otpCode}`);
+    res.status(200).json({success: false, message: "Missing userId or otpCode"});
+    return;
+  }
+
   try {
     const doc = await admin.firestore().collection("otps").doc(userId).get();
     if (doc.exists && doc.data().otp === otpCode) {
+      logger.info(`OTP successfully verified for user: ${userId}`);
       res.json({success: true, message: "OTP verified"});
     } else {
+      logger.warn(`Invalid OTP attempt for user: ${userId}`);
       res.json({success: false, message: "Invalid OTP"});
     }
   } catch (e) {
-    res.json({success: false, message: e.message});
+    logger.error(`Error in verifyOTP for user ${userId}:`, e);
+    res.status(500).json({success: false, message: "Internal Server Error: " + e.message});
   }
 });
 

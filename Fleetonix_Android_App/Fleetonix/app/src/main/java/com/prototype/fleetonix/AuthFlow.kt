@@ -33,6 +33,9 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -54,8 +57,10 @@ fun AuthFlow() {
     var feedError by remember { mutableStateOf<String?>(null) }
     
     var showForgotPassword by remember { mutableStateOf(false) }
+    var showForgotPasswordOTP by remember { mutableStateOf(false) }
     var showResetPassword by remember { mutableStateOf(false) }
     var otpData by remember { mutableStateOf<ForgotPasswordData?>(null) }
+    var verifiedOtpCode by remember { mutableStateOf("") }
     
     var showRegister by rememberSaveable { mutableStateOf(false) }
     var showRegisterOTP by rememberSaveable { mutableStateOf(false) }
@@ -63,6 +68,29 @@ fun AuthFlow() {
     var pendingRegistrationEmail by rememberSaveable { mutableStateOf<String?>(null) }
     
     val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    // Lifecycle-aware Presence Management
+    // Ensures status is ONLY 'active' when app is in foreground
+    DisposableEffect(lifecycleOwner, currentUser) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (currentUser != null) {
+                when (event) {
+                    Lifecycle.Event.ON_START -> {
+                        PresenceManager.updateStatus(true)
+                    }
+                    Lifecycle.Event.ON_STOP -> {
+                        PresenceManager.updateStatus(false)
+                    }
+                    else -> {}
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     // Listen to Auth State
     LaunchedEffect(Unit) {
@@ -202,6 +230,7 @@ fun AuthFlow() {
             if (showRegisterOTP) "register_otp"
             else if (showRegister) "register"
             else if (showResetPassword) "reset_password"
+            else if (showForgotPasswordOTP) "forgot_password_otp"
             else if (showForgotPassword) "forgot_password"
             else "login"
         }
@@ -299,19 +328,37 @@ fun AuthFlow() {
             "forgot_password" -> ForgotPasswordScreen(
                 onOTPSent = { data ->
                     otpData = data
-                    showResetPassword = true
+                    showForgotPasswordOTP = true
                     showForgotPassword = false
                 },
                 onBack = {
                     showForgotPassword = false
                 }
             )
+            "forgot_password_otp" -> {
+                val data = otpData
+                if (data != null) {
+                    ForgotPasswordOTPVerifyScreen(
+                        userId = data.userId ?: "",
+                        userEmail = data.email ?: "",
+                        onVerified = { otp ->
+                            verifiedOtpCode = otp
+                            showResetPassword = true
+                            showForgotPasswordOTP = false
+                        },
+                        onBack = {
+                            showForgotPasswordOTP = false
+                            showForgotPassword = true
+                        }
+                    )
+                }
+            }
             "reset_password" -> {
                 val data = otpData
                 if (data != null) {
                     ResetPasswordScreen(
                         userId = data.userId ?: "",
-                        otpCode = data.otp ?: "",
+                        otpCode = verifiedOtpCode,
                         userEmail = data.email ?: "",
                         onPasswordReset = {
                             showResetPassword = false

@@ -52,7 +52,7 @@ import kotlinx.coroutines.launch
 fun ForgotPasswordOTPVerifyScreen(
     userId: String,
     userEmail: String,
-    onVerified: () -> Unit,
+    onVerified: (String) -> Unit,
     onBack: () -> Unit
 ) {
     var otpCode by rememberSaveable { mutableStateOf("") }
@@ -95,7 +95,7 @@ fun ForgotPasswordOTPVerifyScreen(
                 )
 
                 if (response.success) {
-                    onVerified()
+                    onVerified(trimmedOtp)
                 } else {
                     errorMessage = response.message.ifBlank { "Invalid OTP code" }
                 }

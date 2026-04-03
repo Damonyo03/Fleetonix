@@ -10,7 +10,7 @@ import retrofit2.http.POST
 import retrofit2.http.Query
 import java.util.concurrent.TimeUnit
 
-const val BASE_URL = "https://us-central1-fleetonix-14be4.cloudfunctions.net/"
+const val BASE_URL = "https://us-central1-appfleetonix.cloudfunctions.net/"
 
 object FleetonixApi {
     private val logging = HttpLoggingInterceptor().apply {
@@ -41,7 +41,7 @@ interface DriverApi {
     @POST("sendPasswordResetOTP")
     suspend fun forgotPassword(@Body request: ForgotPasswordRequest): ForgotPasswordResponse
 
-    @POST("verifyPasswordResetOTP")
+    @POST("verifyOTP")
     suspend fun verifyForgotPasswordOTP(@Body request: DriverOTPVerifyRequest): DriverOTPResponse
 
     @POST("resetPasswordWithOTP")
