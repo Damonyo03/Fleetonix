@@ -79,9 +79,6 @@ fun AuthFlow() {
                     Lifecycle.Event.ON_START -> {
                         PresenceManager.updateStatus(true)
                     }
-                    Lifecycle.Event.ON_STOP -> {
-                        PresenceManager.updateStatus(false)
-                    }
                     else -> {}
                 }
             }
