@@ -56,4 +56,29 @@ interface DriverApi {
         @Query("session_token") sessionToken: String? = null,
         @Body request: VehicleIssueRequest
     ): VehicleIssueResponse
+
+    @POST("sendRegistrationOTP")
+    suspend fun sendRegistrationOTP(@Body request: RegistrationOTPRequest): RegistrationOTPResponse
+
+    @POST("completeRegistration")
+    suspend fun completeRegistration(@Body request: CompleteRegistrationRequest): CompleteRegistrationResponse
 }
+
+// Registration Models
+data class RegistrationOTPRequest(val email: String)
+data class RegistrationOTPResponse(val success: Boolean, val message: String? = null)
+
+data class UserRegistrationData(
+    val full_name: String,
+    val password: String,
+    val phone: String? = null,
+    val company_name: String? = null
+)
+
+data class CompleteRegistrationRequest(
+    val email: String,
+    val otp: String,
+    val userData: UserRegistrationData
+)
+
+data class CompleteRegistrationResponse(val success: Boolean, val message: String? = null)

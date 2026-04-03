@@ -1,0 +1,32 @@
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:processDebugGoogleServices UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+
+> Task :app:compileDebugKotlin
+w: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/fleetonix/DriverDashboard.kt:84:17 'fun Divider(modifier: Modifier = ..., thickness: Dp = ..., color: Color = ...): Unit' is deprecated. Renamed to HorizontalDivider.
+w: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/fleetonix/DriverDashboard.kt:1443:66 Condition is always 'true'.
+w: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/fleetonix/DriverProfile.kt:60:49 'val Icons.Filled.ArrowBack: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.ArrowBack.
+w: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/fleetonix/DriverProfile.kt:96:106 'fun String.capitalize(): String' is deprecated. Use replaceFirstChar instead.
+w: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/fleetonix/GoogleMapsService.kt:66:38 'fun toInt(): Int' is deprecated. Conversion of Char to Number is deprecated. Use Char.code property instead.
+w: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/fleetonix/GoogleMapsService.kt:76:38 'fun toInt(): Int' is deprecated. Conversion of Char to Number is deprecated. Use Char.code property instead.
+w: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/fleetonix/LocationGate.kt:46:26 'val LocalLifecycleOwner: ProvidableCompositionLocal<LifecycleOwner>' is deprecated. Moved to lifecycle-runtime-compose library in androidx.lifecycle.compose package.
+w: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/fleetonix/LocationService.kt:141:57 'val connectionInfo: WifiInfo!' is deprecated. Deprecated in Java.
+w: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/fleetonix/LocationService.kt:163:17 'fun stopForeground(p0: Boolean): Unit' is deprecated. Deprecated in Java.
+w: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/fleetonix/MainActivity.kt:38:26 'val LocalLifecycleOwner: ProvidableCompositionLocal<LifecycleOwner>' is deprecated. Moved to lifecycle-runtime-compose library in androidx.lifecycle.compose package.
+
+BUILD SUCCESSFUL in 22s
+15 actionable tasks: 1 executed, 14 up-to-date

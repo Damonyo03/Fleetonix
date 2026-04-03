@@ -13,13 +13,19 @@ const {onRequest} = require("firebase-functions/v2/https");
 const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
-const {Resend} = require("resend");
+const nodemailer = require("nodemailer");
 const axios = require("axios");
 
 admin.initializeApp();
 
-// Initialize Resend
-const resend = new Resend("re_NFPdHfJz_EYUuMuL9mn2Kmn4itA1ZzEfr");
+// Initialize Nodemailer
+const mailTransport = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: "fleetoni.noreply@gmail.com",
+    pass: "uhau gdxs aycu rjxl",
+  },
+});
 
 /**
  * Premium HTML Template for OTP
@@ -188,18 +194,14 @@ exports.sendPasswordResetOTP = onRequest({ cors: true }, async (req, res) => {
       expires_at: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 5 * 60 * 1000)),
     });
 
-    // Send Email via Resend
-    const {data, error} = await resend.emails.send({
-      from: "Fleetonix System <noreply@fleetonixapp.com>",
-      to: [email],
+    // Send Email via Nodemailer
+    const mailOptions = {
+      from: '"Fleetonix System" <fleetoni.noreply@gmail.com>',
+      to: email,
       subject: "Verification Code: " + otp,
       html: getOTPHtmlTemplate(otp, email),
-    });
-
-    if (error) {
-      logger.error("Resend Error:", error);
-      throw new Error(error.message);
-    }
+    };
+    await mailTransport.sendMail(mailOptions);
 
     logger.info(`Generated password reset OTP for ${email}`);
     res.json({success: true, message: "OTP sent successfully", data: {userId: userRecord.uid, email: email}});
@@ -484,13 +486,13 @@ exports.sendRegistrationOTP = onRequest({ cors: true }, async (req, res) => {
     });
 
     if (email) {
-      const { error } = await resend.emails.send({
-        from: "Fleetonix Verification <noreply@fleetonixapp.com>",
-        to: [email],
+      const mailOptions = {
+        from: '"Fleetonix Verification" <fleetoni.noreply@gmail.com>',
+        to: email,
         subject: "Verification Code: " + otp,
         html: getOTPHtmlTemplate(otp, email, true),
-      });
-      if (error) throw new Error(error.message);
+      };
+      await mailTransport.sendMail(mailOptions);
     } else {
       logger.info(`[SMS OTP] To: ${phone}, Code: ${otp}`);
     }

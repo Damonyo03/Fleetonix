@@ -5,7 +5,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,8 +13,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -24,7 +28,6 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -34,17 +37,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.Icons.Default
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import android.util.Log
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
 import com.prototype.fleetonix.ui.theme.AccentTeal
 import com.prototype.fleetonix.ui.theme.CardBlue
 import com.prototype.fleetonix.ui.theme.DividerBlue
@@ -52,69 +46,62 @@ import com.prototype.fleetonix.ui.theme.Midnight
 import com.prototype.fleetonix.ui.theme.TextPrimary
 import com.prototype.fleetonix.ui.theme.TextSecondary
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
 
 @Composable
-fun LoginScreen(
-    onLoginSuccess: () -> Unit,
-    onForgotPassword: () -> Unit = {},
-    onRegister: () -> Unit = {}
+fun RegisterScreen(
+    onOTPSent: (UserRegistrationData, String) -> Unit,
+    onBackToLogin: () -> Unit
 ) {
+    var fullName by rememberSaveable { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
+    var phone by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
+    
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
     var isLoading by rememberSaveable { mutableStateOf(false) }
     var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
-    val auth = remember { FirebaseAuth.getInstance() }
 
-    fun attemptLogin() {
+    fun attemptSendOTP() {
+        val trimmedFullName = fullName.trim()
         val trimmedEmail = email.trim()
+        val trimmedPhone = phone.trim()
+        
+        if (trimmedFullName.isBlank()) {
+            errorMessage = "Full Name is required"
+            return
+        }
         if (!Patterns.EMAIL_ADDRESS.matcher(trimmedEmail).matches()) {
             errorMessage = "Enter a valid email address"
             return
         }
-        if (password.isBlank()) {
-            errorMessage = "Password is required"
+        if (password.length < 6) {
+            errorMessage = "Password must be at least 6 characters"
             return
         }
+
         scope.launch {
             try {
                 isLoading = true
                 errorMessage = null
                 
-                // Firebase direct login
-                val authResult = auth.signInWithEmailAndPassword(trimmedEmail, password).await()
-                val user = authResult.user
+                val request = RegistrationOTPRequest(email = trimmedEmail)
+                val response = FleetonixApi.driverService.sendRegistrationOTP(request)
                 
-                if (user != null) {
-                    // Check user role in Firestore
-                    val db = FirebaseFirestore.getInstance()
-                    val userDoc = db.collection("users").document(user.uid).get().await()
-                    
-                    if (userDoc.exists() && userDoc.getString("user_type") == "driver") {
-                        // Generate and store 6-digit OTP for driver
-                        val otp = (100000..999999).random().toString()
-                        val otpData = hashMapOf(
-                            "email" to user.email,
-                            "otp" to otp,
-                            "created_at" to com.google.firebase.Timestamp.now(),
-                            "expires_at" to com.google.firebase.Timestamp(System.currentTimeMillis() / 1000 + 300, 0) // 5 mins
-                        )
-                        db.collection("otp_codes").document(user.uid).set(otpData).await()
-                        
-                        Log.d("LoginScreen", "Generated OTP for ${user.email}: $otp")
-                        // In a real app, a Cloud Function would trigger an email send here
-                    }
+                if (response.success) {
+                    val userData = UserRegistrationData(
+                        full_name = trimmedFullName,
+                        password = password,
+                        phone = trimmedPhone.ifBlank { null }
+                    )
+                    onOTPSent(userData, trimmedEmail)
+                } else {
+                    errorMessage = response.message ?: "Failed to send OTP. Try again."
                 }
-                
-                // Upon success, update presence and notify flow
-                PresenceManager.updateStatus(true)
-                onLoginSuccess()
-                
             } catch (ex: Exception) {
-                errorMessage = ex.message ?: "Authentication failed"
+                errorMessage = ex.message ?: "Network error. Please try again."
                 ex.printStackTrace()
             } finally {
                 isLoading = false
@@ -134,19 +121,29 @@ fun LoginScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(24.dp))
             Image(
                 painter = painterResource(id = R.drawable.logo),
                 contentDescription = "Fleetonix logo",
-                modifier = Modifier.size(160.dp)
+                modifier = Modifier.size(100.dp)
             )
             Spacer(modifier = Modifier.height(12.dp))
-            Text("Welcome back, driver", color = TextSecondary)
+            Text("Create an Account", color = TextPrimary, style = MaterialTheme.typography.titleLarge)
             Text(
-                "Sign in to start your assigned schedule",
-                color = TextPrimary,
+                "Register to start driving with Fleetonix",
+                color = TextSecondary,
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = fullName,
+                onValueChange = { fullName = it },
+                label = { Text("Full Name") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                colors = textFieldColors()
             )
 
             OutlinedTextField(
@@ -155,17 +152,16 @@ fun LoginScreen(
                 label = { Text("Email") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = CardBlue,
-                    unfocusedContainerColor = CardBlue,
-                    focusedIndicatorColor = AccentTeal,
-                    unfocusedIndicatorColor = DividerBlue,
-                    focusedLabelColor = AccentTeal,
-                    unfocusedLabelColor = TextSecondary,
-                    cursorColor = AccentTeal,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
-                )
+                colors = textFieldColors()
+            )
+
+            OutlinedTextField(
+                value = phone,
+                onValueChange = { phone = it },
+                label = { Text("Phone Number (Optional)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                colors = textFieldColors()
             )
 
             OutlinedTextField(
@@ -177,24 +173,14 @@ fun LoginScreen(
                 trailingIcon = {
                     IconButton(onClick = { passwordVisible = !passwordVisible }) {
                         Icon(
-                            imageVector = if (passwordVisible) Default.Visibility else Default.VisibilityOff,
+                            imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                             contentDescription = if (passwordVisible) "Hide password" else "Show password",
                             tint = if (passwordVisible) AccentTeal else TextSecondary
                         )
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = CardBlue,
-                    unfocusedContainerColor = CardBlue,
-                    focusedIndicatorColor = AccentTeal,
-                    unfocusedIndicatorColor = DividerBlue,
-                    focusedLabelColor = AccentTeal,
-                    unfocusedLabelColor = TextSecondary,
-                    cursorColor = AccentTeal,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
-                )
+                colors = textFieldColors()
             )
 
             if (!errorMessage.isNullOrBlank()) {
@@ -206,15 +192,11 @@ fun LoginScreen(
                     style = MaterialTheme.typography.bodySmall
                 )
             }
-
-            TextButton(onClick = onForgotPassword) {
-                Text("Forgot password?", color = AccentTeal)
-            }
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Button(
-                onClick = { attemptLogin() },
+                onClick = { attemptSendOTP() },
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.medium,
                 enabled = !isLoading
@@ -226,22 +208,28 @@ fun LoginScreen(
                         strokeWidth = 2.dp
                     )
                 } else {
-                    Text("Login & Go Online")
+                    Text("Next: Verify Email")
                 }
             }
-            Text(
-                text = "By logging in you agree to comply with Fleetonix driver policies.",
-                color = TextSecondary,
-                style = MaterialTheme.typography.bodySmall,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
             TextButton(
-                onClick = onRegister,
+                onClick = onBackToLogin,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Don't have an account? Register", color = AccentTeal)
+                Text("Already have an account? Log in", color = AccentTeal)
             }
         }
     }
 }
+
+@Composable
+private fun textFieldColors() = TextFieldDefaults.colors(
+    focusedContainerColor = CardBlue,
+    unfocusedContainerColor = CardBlue,
+    focusedIndicatorColor = AccentTeal,
+    unfocusedIndicatorColor = DividerBlue,
+    focusedLabelColor = AccentTeal,
+    unfocusedLabelColor = TextSecondary,
+    cursorColor = AccentTeal,
+    focusedTextColor = TextPrimary,
+    unfocusedTextColor = TextPrimary
+)
