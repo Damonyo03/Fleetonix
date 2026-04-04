@@ -111,18 +111,17 @@ include __DIR__ . '/../includes/admin_header.php';
             </div>
         </div>
 
-        <?php if ($user_type === 'client'): ?>
+        <?php if ($user_type === 'client'): 
+            $accredited_companies = getActiveAccreditedCompanies();
+        ?>
             <div class="form-group">
-                <label for="company_name">Company Name *</label>
-                <input 
-                    type="text" 
-                    id="company_name" 
-                    name="company_name" 
-                    class="form-input" 
-                    placeholder="Enter company name"
-                    required
-                    value="<?php echo isset($_POST['company_name']) ? htmlspecialchars($_POST['company_name']) : ''; ?>"
-                >
+                <label for="accredited_company_id">Accredited Company *</label>
+                <select id="accredited_company_id" name="accredited_company_id" class="form-input" required>
+                    <option value="">-- Select company --</option>
+                    <?php foreach ($accredited_companies as $company): ?>
+                        <option value="<?php echo $company['id']; ?>"><?php echo htmlspecialchars($company['name']); ?></option>
+                    <?php endforeach; ?>
+                </select>
             </div>
         <?php endif; ?>
 
@@ -150,6 +149,17 @@ include __DIR__ . '/../includes/admin_header.php';
                         value="<?php echo isset($_POST['license_expiry']) ? htmlspecialchars($_POST['license_expiry']) : ''; ?>"
                     >
                 </div>
+            </div>
+
+            <div class="form-group">
+                <label for="accredited_company_id">Accredited Company *</label>
+                <?php $accredited_companies = getActiveAccreditedCompanies(); ?>
+                <select id="accredited_company_id" name="accredited_company_id" class="form-input" required>
+                    <option value="">-- Select company --</option>
+                    <?php foreach ($accredited_companies as $company): ?>
+                        <option value="<?php echo $company['id']; ?>"><?php echo htmlspecialchars($company['name']); ?></option>
+                    <?php endforeach; ?>
+                </select>
             </div>
 
             <div class="form-row">

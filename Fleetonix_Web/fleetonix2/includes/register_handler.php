@@ -15,11 +15,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $phone = isset($_POST['phone']) ? trim($_POST['phone']) : '';
     $password = isset($_POST['password']) ? $_POST['password'] : '';
     $confirm_password = isset($_POST['confirm_password']) ? $_POST['confirm_password'] : '';
-    $company_name = isset($_POST['company_name']) ? trim($_POST['company_name']) : '';
+    $accredited_company_id = isset($_POST['accredited_company_id']) ? intval($_POST['accredited_company_id']) : 0;
     $user_type = 'client'; // All registrations are for clients
     
     // Validation
-    if (empty($full_name) || empty($email) || empty($password) || empty($confirm_password) || empty($company_name)) {
+    if (empty($full_name) || empty($email) || empty($password) || empty($confirm_password) || $accredited_company_id === 0) {
         $_SESSION['error'] = 'Please fill in all required fields';
         header('Location: ../register.php');
         exit;
@@ -92,15 +92,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $hashed_password = password_hash($password, PASSWORD_DEFAULT);
     
     // Insert user into database
-    $stmt = $conn->prepare("INSERT INTO users (email, password, full_name, phone, user_type, status) VALUES (?, ?, ?, ?, ?, 'active')");
-    $stmt->bind_param("sssss", $email, $hashed_password, $full_name, $phone, $user_type);
+    $stmt = $conn->prepare("INSERT INTO users (email, password, full_name, phone, user_type, accredited_company_id, status) VALUES (?, ?, ?, ?, ?, ?, 'active')");
+    $stmt->bind_param("sssssi", $email, $hashed_password, $full_name, $phone, $user_type, $accredited_company_id);
     
     if ($stmt->execute()) {
         $user_id = $conn->insert_id;
         
-        // Create client record
-        $stmt2 = $conn->prepare("INSERT INTO clients (user_id, company_name) VALUES (?, ?)");
-        $stmt2->bind_param("is", $user_id, $company_name);
+        // Create client record using accredited_company_id
+        $stmt2 = $conn->prepare("INSERT INTO clients (user_id, accredited_company_id) VALUES (?, ?)");
+        $stmt2->bind_param("ii", $user_id, $accredited_company_id);
         $stmt2->execute();
         $stmt2->close();
         

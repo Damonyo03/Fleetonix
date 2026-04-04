@@ -46,6 +46,7 @@ if ($otp_verified) {
     $_SESSION['user_type'] = $_SESSION['otp_user_type'];
     $_SESSION['user_name'] = $_SESSION['otp_user_name'];
     $_SESSION['user_email'] = $_SESSION['otp_user_email'];
+    $_SESSION['accredited_company_id'] = $_SESSION['otp_accredited_company_id'] ?? null;
     
     // Handle "Remember Me"
     if (isset($_SESSION['otp_remember']) && $_SESSION['otp_remember']) {
@@ -57,10 +58,11 @@ if ($otp_verified) {
     unset($_SESSION['otp_user_type']);
     unset($_SESSION['otp_user_name']);
     unset($_SESSION['otp_user_email']);
+    unset($_SESSION['otp_accredited_company_id']);
     unset($_SESSION['otp_remember']);
     
     // Redirect based on user type
-    if ($_SESSION['user_type'] === 'admin') {
+    if ($_SESSION['user_type'] === 'super_admin' || $_SESSION['user_type'] === 'company_admin' || $_SESSION['user_type'] === 'admin') {
         header('Location: ../admin/dashboard.php');
     } elseif ($_SESSION['user_type'] === 'client') {
         header('Location: ../client/dashboard.php');

@@ -260,6 +260,20 @@ fun DriverDashboard(
     var showVehicleIssueDialog by remember { mutableStateOf(false) }
     var isReportingVehicleIssue by remember { mutableStateOf(false) }
 
+    // DTR (Daily Time Record) states
+    var isTimedIn by remember { mutableStateOf(false) }
+    var lastDtrAction by remember { mutableStateOf<String?>(null) }
+    var isDtrLoading by remember { mutableStateOf(false) }
+    var dtrCooldown by remember { mutableStateOf(false) }
+
+    // Check DTR status on init
+    LaunchedEffect(auth.currentUser?.uid) {
+        val uid = auth.currentUser?.uid ?: return@LaunchedEffect
+        db.collection("drivers").document(uid).get().addOnSuccessListener { doc ->
+            isTimedIn = doc.getBoolean("is_currently_timed_in") ?: false
+        }
+    }
+
     fun parseScheduleDateTime(dateString: String?, timeString: String?): LocalDateTime? {
         if (dateString.isNullOrBlank() || timeString.isNullOrBlank()) return null
         return try {
@@ -1311,6 +1325,158 @@ fun DriverDashboard(
                     color = TextPrimary,
                     style = MaterialTheme.typography.headlineSmall
                 )
+
+                // Premium DTR (Daily Time Record) Card
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = CardBlue),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Daily Time Record",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    text = if (isTimedIn) "Currently: TIMED-IN" else "Currently: TIMED-OUT",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (isTimedIn) AccentTeal else TextSecondary
+                                )
+                            }
+                            Icon(
+                                imageVector = if (isTimedIn) Icons.Default.CheckCircle else Icons.Default.Info,
+                                contentDescription = null,
+                                tint = if (isTimedIn) AccentTeal else TextSecondary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    if (!isTimedIn && !dtrCooldown) {
+                                        scope.launch {
+                                            isDtrLoading = true
+                                            try {
+                                                val uid = auth.currentUser?.uid ?: return@launch
+                                                val email = auth.currentUser?.email ?: ""
+                                                val now = LocalDateTime.now()
+                                                
+                                                val logData = hashMapOf(
+                                                    "driver_uid" to uid,
+                                                    "driver_email" to email,
+                                                    "action" to "time_in",
+                                                    "timestamp" to FieldValue.serverTimestamp(),
+                                                    "latitude" to currentLatitude,
+                                                    "longitude" to currentLongitude,
+                                                    "device_time" to now.toString()
+                                                )
+                                                
+                                                db.collection("dtr_logs").add(logData).await()
+                                                db.collection("drivers").document(uid).update("is_currently_timed_in", true).await()
+                                                
+                                                isTimedIn = true
+                                                tripActionSuccess = "Timed in successfully at ${now.format(DateTimeFormatter.ofPattern("hh:mm a"))}"
+                                                
+                                                dtrCooldown = true
+                                                delay(5000)
+                                                dtrCooldown = false
+                                            } catch (e: Exception) {
+                                                tripActionError = "Time-in failed: ${e.message}"
+                                            } finally {
+                                                isDtrLoading = false
+                                            }
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                                enabled = !isTimedIn && !isDtrLoading && !dtrCooldown,
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
+                            ) {
+                                if (isDtrLoading && !isTimedIn) {
+                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White)
+                                } else {
+                                    Text("TIME IN")
+                                }
+                            }
+
+                            Button(
+                                onClick = {
+                                    if (isTimedIn && !dtrCooldown) {
+                                        scope.launch {
+                                            isDtrLoading = true
+                                            try {
+                                                val uid = auth.currentUser?.uid ?: return@launch
+                                                val email = auth.currentUser?.email ?: ""
+                                                val now = LocalDateTime.now()
+                                                
+                                                // OT Calculation Logic
+                                                val isOvertime = now.hour >= 17 // Standard shift ends at 5 PM
+                                                
+                                                val logData = hashMapOf(
+                                                    "driver_uid" to uid,
+                                                    "driver_email" to email,
+                                                    "action" to "time_out",
+                                                    "timestamp" to FieldValue.serverTimestamp(),
+                                                    "latitude" to currentLatitude,
+                                                    "longitude" to currentLongitude,
+                                                    "device_time" to now.toString(),
+                                                    "is_overtime" to isOvertime
+                                                )
+                                                
+                                                db.collection("dtr_logs").add(logData).await()
+                                                db.collection("drivers").document(uid).update("is_currently_timed_in", false).await()
+                                                
+                                                isTimedIn = false
+                                                tripActionSuccess = "Timed out successfully. Have a great rest!"
+                                                
+                                                dtrCooldown = true
+                                                delay(5000)
+                                                dtrCooldown = false
+                                            } catch (e: Exception) {
+                                                tripActionError = "Time-out failed: ${e.message}"
+                                            } finally {
+                                                isDtrLoading = false
+                                            }
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                                enabled = isTimedIn && !isDtrLoading && !dtrCooldown,
+                                shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentOrange)
+                            ) {
+                                if (isDtrLoading && isTimedIn) {
+                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White)
+                                } else {
+                                    Text("TIME OUT")
+                                }
+                            }
+                        }
+                        
+                        Text(
+                            text = "Standard Shift: 7:00 AM - 5:00 PM. OT counted after 5:00 PM.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondary,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
 
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),

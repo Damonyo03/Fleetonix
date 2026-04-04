@@ -17,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $phone = isset($_POST['phone']) ? trim($_POST['phone']) : '';
     $password = isset($_POST['password']) ? $_POST['password'] : '';
     $user_type = isset($_POST['user_type']) ? trim($_POST['user_type']) : '';
-    $company_name = isset($_POST['company_name']) ? trim($_POST['company_name']) : '';
+    $accredited_company_id = isset($_POST['accredited_company_id']) ? intval($_POST['accredited_company_id']) : 0;
     $license_number = isset($_POST['license_number']) ? trim($_POST['license_number']) : '';
     $license_expiry = isset($_POST['license_expiry']) ? trim($_POST['license_expiry']) : '';
     $vehicle_assigned = isset($_POST['vehicle_assigned']) ? trim($_POST['vehicle_assigned']) : '';
@@ -67,8 +67,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
     
-    if ($user_type === 'client' && empty($company_name)) {
-        $_SESSION['error'] = 'Company name is required for clients';
+    if ($user_type === 'client' && $accredited_company_id === 0) {
+        $_SESSION['error'] = 'Company selection is required for clients';
         header('Location: user_add.php?type=' . $user_type);
         exit;
     }
@@ -93,8 +93,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $hashed_password = password_hash($password, PASSWORD_DEFAULT);
     
     // Insert user
-    $stmt = $conn->prepare("INSERT INTO users (email, password, full_name, phone, user_type, status) VALUES (?, ?, ?, ?, ?, 'active')");
-    $stmt->bind_param("sssss", $email, $hashed_password, $full_name, $phone, $user_type);
+    $stmt = $conn->prepare("INSERT INTO users (email, password, full_name, phone, user_type, accredited_company_id, status) VALUES (?, ?, ?, ?, ?, ?, 'active')");
+    $stmt->bind_param("sssssi", $email, $hashed_password, $full_name, $phone, $user_type, $accredited_company_id);
     
     if ($stmt->execute()) {
         $user_id = $conn->insert_id;
@@ -107,8 +107,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt2->execute();
             $stmt2->close();
         } elseif ($user_type === 'client') {
-            $stmt2 = $conn->prepare("INSERT INTO clients (user_id, company_name) VALUES (?, ?)");
-            $stmt2->bind_param("is", $user_id, $company_name);
+            $stmt2 = $conn->prepare("INSERT INTO clients (user_id, accredited_company_id) VALUES (?, ?)");
+            $stmt2->bind_param("ii", $user_id, $accredited_company_id);
             $stmt2->execute();
             $stmt2->close();
         }

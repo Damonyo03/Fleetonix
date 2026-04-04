@@ -49,6 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['otp_user_type'] = $user['user_type'];
                 $_SESSION['otp_user_name'] = $user['full_name'];
                 $_SESSION['otp_user_email'] = $user['email'];
+                $_SESSION['otp_accredited_company_id'] = $user['accredited_company_id'];
                 $_SESSION['otp_remember'] = $remember;
                 
                 // Redirect to OTP verification page

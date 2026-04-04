@@ -1,6 +1,10 @@
 <?php
 session_start();
 require_once __DIR__ . '/includes/db_connect.php';
+require_once __DIR__ . '/includes/admin_functions.php';
+
+// Get active accredited companies for the dropdown
+$accredited_companies = getActiveAccreditedCompanies();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -122,17 +126,15 @@ require_once __DIR__ . '/includes/db_connect.php';
                     >
                 </div>
 
-                <!-- Company Name Input -->
+                <!-- Company Selection Dropdown -->
                 <div class="form-group">
-                    <label for="company_name">Company Name</label>
-                    <input 
-                        type="text" 
-                        id="company_name" 
-                        name="company_name" 
-                        class="form-input" 
-                        placeholder="Enter your company name"
-                        required
-                    >
+                    <label for="accredited_company_id">Accredited Company *</label>
+                    <select id="accredited_company_id" name="accredited_company_id" class="form-input" required>
+                        <option value="">-- Select your company --</option>
+                        <?php foreach ($accredited_companies as $company): ?>
+                            <option value="<?php echo $company['id']; ?>"><?php echo htmlspecialchars($company['name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
 
                 <!-- Hidden field - All registrations are for clients -->

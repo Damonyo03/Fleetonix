@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     full_name VARCHAR(255) NOT NULL,
-    user_type ENUM('admin', 'client', 'driver') NOT NULL,
+    user_type ENUM('super_admin', 'company_admin', 'client', 'driver') NOT NULL,
+    accredited_company_id INT NULL,
     phone VARCHAR(20),
     status ENUM('active', 'inactive', 'suspended') DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -40,6 +41,7 @@ CREATE TABLE IF NOT EXISTS drivers (
     current_status ENUM('available', 'on_schedule', 'in_progress', 'offline') DEFAULT 'offline',
     current_latitude DECIMAL(10, 8) NULL,
     current_longitude DECIMAL(11, 8) NULL,
+    accredited_company_id INT NULL,
     last_location_update TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -56,12 +58,26 @@ CREATE TABLE IF NOT EXISTS clients (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
     company_name VARCHAR(255),
+    accredited_company_id INT NULL,
     address TEXT,
     contact_person VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================
+-- ACCREDITED COMPANIES TABLE
+-- Master list of approved companies
+-- ============================================
+CREATE TABLE IF NOT EXISTS accredited_companies (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL UNIQUE,
+    status ENUM('active', 'inactive') DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_name (name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================
@@ -190,9 +206,9 @@ CREATE TABLE IF NOT EXISTS notifications (
 -- Email: aisenaldersonquia05@gmail.com
 -- Password: admin123
 -- ============================================
-INSERT INTO users (email, password, full_name, user_type, status) 
-VALUES ('aisenaldersonquia05@gmail.com', '$2y$10$r/ZeSkqtG7Ai8dSuH37tbO3E9vuiEOC9Vsf4wqYKnkaPkw8SByhLO', 'System Administrator', 'admin', 'active')
-ON DUPLICATE KEY UPDATE password = '$2y$10$r/ZeSkqtG7Ai8dSuH37tbO3E9vuiEOC9Vsf4wqYKnkaPkw8SByhLO';
+INSERT INTO users (email, password, full_name, user_type, accredited_company_id, status) 
+VALUES ('aisenaldersonquia05@gmail.com', '$2y$10$r/ZeSkqtG7Ai8dSuH37tbO3E9vuiEOC9Vsf4wqYKnkaPkw8SByhLO', 'System Administrator', 'super_admin', NULL, 'active')
+ON DUPLICATE KEY UPDATE password = '$2y$10$r/ZeSkqtG7Ai8dSuH37tbO3E9vuiEOC9Vsf4wqYKnkaPkw8SByhLO', user_type = 'super_admin', accredited_company_id = NULL;
 
 -- Note: Default password is 'admin123' (hashed with bcrypt)
 -- Please change this password immediately after first login!

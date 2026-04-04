@@ -54,7 +54,7 @@ function getDashboardStats() {
         return $stats;
     } catch (Exception $e) {
         error_log("Error in getDashboardStats: " . $e->getMessage());
-        // Return default values on error
+        $conn->close();
         return [
             'total_drivers' => 0,
             'active_drivers' => 0,
@@ -65,6 +65,42 @@ function getDashboardStats() {
             'unread_notifications' => 0
         ];
     }
+}
+
+/**
+ * Get all active accredited companies for dropdowns
+ */
+function getActiveAccreditedCompanies() {
+    $conn = getConnection();
+    $result = $conn->query("SELECT id, name FROM accredited_companies WHERE status = 'active' ORDER BY name ASC");
+    
+    $companies = [];
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $companies[] = $row;
+        }
+    }
+    
+    $conn->close();
+    return $companies;
+}
+
+/**
+ * Get all accredited companies (all statuses) for admin management
+ */
+function getAllAccreditedCompanies() {
+    $conn = getConnection();
+    $result = $conn->query("SELECT * FROM accredited_companies ORDER BY name ASC");
+    
+    $companies = [];
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $companies[] = $row;
+        }
+    }
+    
+    $conn->close();
+    return $companies;
 }
 
 /**
@@ -251,6 +287,13 @@ function getNearestDrivers($pickup_lat, $pickup_lon, $status = null) {
     // Only include active users
     $where[] = "u.status = 'active'";
     
+    // RBAC: Filter by company for company_admin
+    if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'company_admin') && !empty($_SESSION['accredited_company_id'])) {
+        $where[] = "u.accredited_company_id = ?";
+        $params[] = $_SESSION['accredited_company_id'];
+        $types[] = "i";
+    }
+    
     // Exclude offline drivers by default
     $where[] = "d.current_status != 'offline'";
     
@@ -329,6 +372,13 @@ function getAllDrivers($status = null, $search = '') {
     // Only include active users
     $where[] = "u.status = 'active'";
     
+    // RBAC: Filter by company for company_admin
+    if (isset($_SESSION['user_type']) && ($_SESSION['user_type'] === 'company_admin') && !empty($_SESSION['accredited_company_id'])) {
+        $where[] = "u.accredited_company_id = ?";
+        $params[] = $_SESSION['accredited_company_id'];
+        $types[] = "i";
+    }
+    
     if ($status) {
         // When a specific status is selected, filter by that status
         $where[] = "d.current_status = ?";
@@ -384,22 +434,24 @@ function getAllClients($search = '') {
     
     if ($search) {
         $stmt = $conn->prepare("
-            SELECT c.*, u.full_name, u.email, u.phone, u.status as user_status
+            SELECT c.*, u.full_name, u.email, u.phone, u.status as user_status, ac.name as accredited_company_name
             FROM clients c
             JOIN users u ON c.user_id = u.id
-            WHERE c.company_name LIKE ? OR u.full_name LIKE ? OR u.email LIKE ?
-            ORDER BY c.company_name ASC
+            LEFT JOIN accredited_companies ac ON c.accredited_company_id = ac.id
+            WHERE c.company_name LIKE ? OR u.full_name LIKE ? OR u.email LIKE ? OR ac.name LIKE ?
+            ORDER BY COALESCE(ac.name, c.company_name) ASC
         ");
         $search_term = "%$search%";
-        $stmt->bind_param("sss", $search_term, $search_term, $search_term);
+        $stmt->bind_param("ssss", $search_term, $search_term, $search_term, $search_term);
         $stmt->execute();
         $result = $stmt->get_result();
     } else {
         $result = $conn->query("
-            SELECT c.*, u.full_name, u.email, u.phone, u.status as user_status
+            SELECT c.*, u.full_name, u.email, u.phone, u.status as user_status, ac.name as accredited_company_name
             FROM clients c
             JOIN users u ON c.user_id = u.id
-            ORDER BY c.company_name ASC
+            LEFT JOIN accredited_companies ac ON c.accredited_company_id = ac.id
+            ORDER BY COALESCE(ac.name, c.company_name) ASC
         ");
     }
     
@@ -413,6 +465,32 @@ function getAllClients($search = '') {
     }
     $conn->close();
     return $clients;
+}
+
+/**
+ * Add a new accredited company
+ */
+function addAccreditedCompany($name) {
+    $conn = getConnection();
+    $stmt = $conn->prepare("INSERT INTO accredited_companies (name) VALUES (?)");
+    $stmt->bind_param("s", $name);
+    $result = $stmt->execute();
+    $stmt->close();
+    $conn->close();
+    return $result;
+}
+
+/**
+ * Update an accredited company
+ */
+function updateAccreditedCompany($id, $name, $status) {
+    $conn = getConnection();
+    $stmt = $conn->prepare("UPDATE accredited_companies SET name = ?, status = ? WHERE id = ?");
+    $stmt->bind_param("ssi", $name, $status, $id);
+    $result = $stmt->execute();
+    $stmt->close();
+    $conn->close();
+    return $result;
 }
 
 /**

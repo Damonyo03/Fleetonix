@@ -68,6 +68,12 @@ function requireUserType($allowedTypes) {
         $allowedTypes = [$allowedTypes];
     }
     
+    // Add backward compatibility for 'admin' type
+    if (in_array('admin', $allowedTypes)) {
+        if (!in_array('super_admin', $allowedTypes)) $allowedTypes[] = 'super_admin';
+        if (!in_array('company_admin', $allowedTypes)) $allowedTypes[] = 'company_admin';
+    }
+    
     if (!in_array($_SESSION['user_type'], $allowedTypes)) {
         $_SESSION['error'] = 'You do not have permission to access this page';
         header('Location: ../login.php');

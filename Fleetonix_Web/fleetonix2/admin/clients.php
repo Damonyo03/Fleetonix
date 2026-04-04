@@ -21,24 +21,31 @@ $search = isset($_GET['search']) ? trim($_GET['search']) : '';
 $clients = getAllClients($search);
 
 // Get booking counts for each client
-$conn = getConnection();
 $client_bookings = [];
-foreach ($clients as $client) {
-    $stmt = $conn->prepare("
-        SELECT 
-            COUNT(*) as total_bookings,
-            COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_bookings,
-            COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_bookings
-        FROM bookings
-        WHERE client_id = ?
-    ");
-    $stmt->bind_param("i", $client['id']);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $client_bookings[$client['id']] = $result->fetch_assoc();
-    $stmt->close();
+if (is_array($clients)) {
+    $conn = getConnection();
+    foreach ($clients as $client) {
+        $client_id = $client['id'] ?? 0;
+        if ($client_id > 0) {
+            $stmt = $conn->prepare("
+                SELECT 
+                    COUNT(*) as total_bookings,
+                    COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_bookings,
+                    COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_bookings
+                FROM bookings
+                WHERE client_id = ?
+            ");
+            $stmt->bind_param("i", $client_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            if ($result) {
+                $client_bookings[$client_id] = $result->fetch_assoc();
+            }
+            $stmt->close();
+        }
+    }
+    $conn->close();
 }
-$conn->close();
 
 // Include header
 include __DIR__ . '/../includes/admin_header.php';
@@ -104,10 +111,18 @@ include __DIR__ . '/../includes/admin_header.php';
             </thead>
             <tbody>
                 <?php foreach ($clients as $client): 
-                    $bookings = $client_bookings[$client['id']] ?? ['total_bookings' => 0, 'pending_bookings' => 0, 'completed_bookings' => 0];
+                    $bookings = $client_bookings[$client['id'] ?? 0] ?? ['total_bookings' => 0, 'pending_bookings' => 0, 'completed_bookings' => 0];
                 ?>
                     <tr>
-                        <td><?php echo htmlspecialchars($client['company_name'] ?? 'N/A'); ?></td>
+                        <td>
+                            <?php 
+                            if (!empty($client['accredited_company_name'])) {
+                                echo htmlspecialchars($client['accredited_company_name']);
+                            } else {
+                                echo htmlspecialchars($client['company_name'] ?? 'N/A'); 
+                            }
+                            ?>
+                        </td>
                         <td><?php echo htmlspecialchars($client['full_name']); ?></td>
                         <td><?php echo htmlspecialchars($client['email']); ?></td>
                         <td><?php echo htmlspecialchars($client['phone'] ?? 'N/A'); ?></td>
