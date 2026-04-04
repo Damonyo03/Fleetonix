@@ -19,9 +19,8 @@ object PresenceManager {
         val status = if (isOnline) "available" else "offline"
         val timestamp = FieldValue.serverTimestamp()
 
-        // Update 'users' collection status
-        db.collection("users").whereEqualTo("email", email)
-            .get()
+        // 1. Update 'users' collection
+        db.collection("users").whereEqualTo("email", email).get()
             .addOnSuccessListener { snapshot ->
                 for (doc in snapshot.documents) {
                     doc.reference.update(
@@ -31,9 +30,8 @@ object PresenceManager {
                 }
             }
 
-        // Update 'drivers' collection status
-        db.collection("drivers").whereEqualTo("driver_email", email)
-            .get()
+        // 2. Update 'drivers' collection
+        db.collection("drivers").whereEqualTo("driver_email", email).get()
             .addOnSuccessListener { snapshot ->
                 for (doc in snapshot.documents) {
                     doc.reference.update(
@@ -42,5 +40,7 @@ object PresenceManager {
                     )
                 }
             }
+            
+        Log.d("PresenceManager", "Status updated: $status for $email")
     }
 }

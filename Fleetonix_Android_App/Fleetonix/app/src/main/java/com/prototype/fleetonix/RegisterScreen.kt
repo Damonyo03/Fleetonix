@@ -34,13 +34,14 @@ import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.MenuAnchorType
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import com.google.firebase.firestore.FirebaseFirestore
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
@@ -71,8 +72,31 @@ fun RegisterScreen(
     var isLoading by rememberSaveable { mutableStateOf(false) }
     var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
     
+    // Company Selection State
+    var companies by remember { mutableStateOf<List<AccreditedCompany>>(emptyList()) }
+    var selectedCompany by remember { mutableStateOf<AccreditedCompany?>(null) }
+    var isCompanyExpanded by remember { mutableStateOf(false) }
+    
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
+
+    // Fetch companies on launch
+    LaunchedEffect(Unit) {
+        val db = FirebaseFirestore.getInstance()
+        db.collection("accredited_companies")
+            .whereEqualTo("status", "active")
+            .get()
+            .addOnSuccessListener { result ->
+                val list = result.documents.mapNotNull { doc ->
+                    val name = doc.getString("name") ?: ""
+                    AccreditedCompany(id = doc.id, name = name)
+                }
+                companies = list
+            }
+            .addOnFailureListener {
+                errorMessage = "Failed to load companies. Please check your connection."
+            }
+    }
 
     fun attemptSendOTP() {
         val trimmedFullName = fullName.trim()
@@ -91,6 +115,10 @@ fun RegisterScreen(
             errorMessage = "Password must be at least 6 characters"
             return
         }
+        if (selectedCompany == null) {
+            errorMessage = "Please select your company"
+            return
+        }
 
         scope.launch {
             try {
@@ -105,6 +133,7 @@ fun RegisterScreen(
                         full_name = trimmedFullName,
                         password = password,
                         phone = trimmedPhone.ifBlank { null },
+                        accredited_company_id = selectedCompany?.id,
                         role = selectedRole
                     )
                     onOTPSent(userData, trimmedEmail)
@@ -184,6 +213,48 @@ fun RegisterScreen(
                 modifier = Modifier.fillMaxWidth(),
                 colors = textFieldColors()
             )
+
+            // Accredited Company Selection
+            Text(
+                text = "Accredited Company",
+                color = TextSecondary,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Start
+            )
+            ExposedDropdownMenuBox(
+                expanded = isCompanyExpanded,
+                onExpandedChange = { isCompanyExpanded = !isCompanyExpanded },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = selectedCompany?.name ?: "",
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Select Company") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isCompanyExpanded) },
+                    colors = textFieldColors(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
+                )
+
+                ExposedDropdownMenu(
+                    expanded = isCompanyExpanded,
+                    onDismissRequest = { isCompanyExpanded = false },
+                    modifier = Modifier.background(CardBlue)
+                ) {
+                    companies.forEach { company ->
+                        DropdownMenuItem(
+                            text = { Text(company.name, color = TextPrimary) },
+                            onClick = {
+                                selectedCompany = company
+                                isCompanyExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
 
             Text(
                 text = "I am registering as a:",

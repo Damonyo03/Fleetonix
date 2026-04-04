@@ -265,10 +265,10 @@ class LocationService : Service() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        // App was swiped away, but service is in foreground and should persist.
+        // We log it but do NOT shut down or set to offline if the foreground service is active.
+        Log.d("LocationService", "App swiped away, service persists in foreground")
         super.onTaskRemoved(rootIntent)
-        PresenceManager.updateStatus(false)
-        Log.d("LocationService", "App swiped away, status set to offline")
-        stopSelf()
     }
 
     override fun onBind(intent: Intent?): IBinder? {
@@ -324,6 +324,11 @@ class LocationService : Service() {
             "wifi_rssi" to currentWifiRssi,
             "last_updated" to FieldValue.serverTimestamp()
         )
+
+        // Also ping presence every few updates to keep status from going stale
+        if (System.currentTimeMillis() % 10 == 0L) { // Periodic ping
+            PresenceManager.updateStatus(true)
+        }
 
         driverRef.set(locationData, SetOptions.merge())
             .addOnSuccessListener {
