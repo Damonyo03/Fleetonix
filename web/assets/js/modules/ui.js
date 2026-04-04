@@ -85,16 +85,16 @@ export function initLayout(pageTitle, userName, unreadCount = 0) {
     }
 
     // ── Header title ─────────────────────────────────────────────────────────
-    const headerTitle = document.querySelector('.admin-header h2, .client-header h2');
+    const headerTitle = document.querySelector('.header h2, .client-header h2');
     if (headerTitle) headerTitle.innerText = pageTitle;
 
     // ── User menu: name & avatar initial ──────────────────────────────────────
-    // Support both the admin pattern (.user-menu span / .user-avatar)
+    // Support both the admin pattern (.user-menu span / .avatar)
     // and the client pattern (#userName / #userInitial)
-    const userMenuName = document.querySelector('.user-menu span');
+    const userMenuName = document.querySelector('.user-profile span, .user-menu span');
     if (userMenuName) userMenuName.innerText = resolvedName;
 
-    const userAvatar = document.querySelector('.user-avatar');
+    const userAvatar = document.querySelector('.avatar');
     if (userAvatar) userAvatar.innerText = resolvedName.charAt(0).toUpperCase();
 
     // Client dashboard uses explicit IDs
@@ -104,7 +104,7 @@ export function initLayout(pageTitle, userName, unreadCount = 0) {
     if (userInitialEl) userInitialEl.innerText = resolvedName.charAt(0).toUpperCase();
 
     // ── Notification badge ────────────────────────────────────────────────────
-    const badge = document.querySelector('.notification-badge');
+    const badge = document.querySelector('.notification-badge, .notif-count');
     if (badge) {
         badge.innerText    = unreadCount > 0 ? unreadCount : '';
         badge.style.display = unreadCount > 0 ? 'block' : 'none';

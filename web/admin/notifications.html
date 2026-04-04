@@ -3,155 +3,139 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fleetonix - Admin - System Notifications</title>
+    <title>Fleetonix - Admin - Notifications</title>
     <link rel="icon" type="image/jpeg" href="../img/logo.jpg">
     <link rel="stylesheet" href="../assets/css/style.css">
     <link rel="stylesheet" href="../assets/css/admin.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        .notif-card {
-            display: flex;
-            align-items: flex-start;
-            gap: 14px;
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-left: 4px solid var(--border-color);
-            border-radius: 10px;
-            padding: 16px 20px;
-            margin-bottom: 12px;
-            transition: box-shadow 0.2s;
+        .filter-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+        .tab-btn { 
+            padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border-color);
+            background: rgba(255,255,255,0.03); color: var(--text-secondary); cursor: pointer;
+            font-size: 0.8125rem; font-weight: 600; transition: all 0.2s;
         }
-        .notif-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.12); }
-        .notif-card.unread  { border-left-color: var(--accent-blue); background: rgba(59,130,246,0.04); }
-        .notif-card.warning { border-left-color: var(--accent-orange); }
-        .notif-card.danger  { border-left-color: #ef4444; }
-        .notif-card.success { border-left-color: var(--accent-green); }
+        .tab-btn.active, .tab-btn:hover { background: var(--accent-blue); color: var(--bg-primary); border-color: var(--accent-blue); }
 
-        .notif-icon {
-            width: 38px; height: 38px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 1em; flex-shrink: 0;
+        .notif-feed { display: flex; flex-direction: column; gap: 12px; }
+        .notif-card { 
+            display: flex; gap: 16px; padding: 16px 20px; 
+            border-left: 4px solid var(--border-color); 
+            transition: all 0.2s ease;
         }
-        .notif-icon.info    { background: rgba(59,130,246,0.15); color: var(--accent-blue); }
-        .notif-icon.warning { background: rgba(245,158,11,0.15); color: var(--accent-orange); }
-        .notif-icon.danger  { background: rgba(239,68,68,0.15);  color: #ef4444; }
-        .notif-icon.success { background: rgba(16,185,129,0.15); color: var(--accent-green); }
-        .notif-icon.booking { background: rgba(139,92,246,0.15); color: #8b5cf6; }
+        .notif-card:hover { transform: translateX(4px); border-color: var(--accent-blue); }
+        .notif-card.unread { background: rgba(0, 212, 255, 0.05); border-left-color: var(--accent-blue); }
+        .notif-card.danger { border-left-color: var(--accent-error); }
+        .notif-card.warning { border-left-color: var(--accent-warning); }
 
-        .notif-body { flex: 1; }
-        .notif-title { font-weight: 700; font-size: 0.95em; color: var(--text-primary); margin-bottom: 4px; }
-        .notif-message { font-size: 0.87em; color: var(--text-secondary); margin-bottom: 6px; }
-        .notif-meta { font-size: 0.78em; color: var(--text-muted); display: flex; gap: 12px; }
-
-        .filter-tabs {
-            display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px;
+        .notif-icon-box { 
+            width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+            background: rgba(255,255,255,0.05); border: 1px solid var(--border-color);
         }
-        .filter-tab {
-            padding: 6px 16px; border-radius: 20px; border: 1px solid var(--border-color);
-            background: var(--card-bg); color: var(--text-secondary); cursor: pointer;
-            font-size: 0.85em; transition: all 0.2s;
-        }
-        .filter-tab.active, .filter-tab:hover {
-            background: var(--accent-blue); color: #fff; border-color: var(--accent-blue);
-        }
-
-        .summary-row {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-            gap: 12px; margin-bottom: 24px;
-        }
-        .summary-box {
-            background: var(--card-bg); border: 1px solid var(--border-color);
-            border-radius: 10px; padding: 14px; text-align: center;
-        }
-        .summary-box .val { font-size: 1.8em; font-weight: 800; color: var(--accent-blue); }
-        .summary-box .lbl { font-size: 0.78em; color: var(--text-muted); margin-top: 4px; }
     </style>
 </head>
 <body>
-    <div class="admin-container">
-        <aside class="admin-sidebar" id="sidebar">
+    <div class="admin-layout">
+        <!-- Unified Sidebar -->
+        <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <img src="../img/logo.jpg" alt="Logo" class="sidebar-logo">
                 <span class="sidebar-title">Fleetonix</span>
             </div>
             <nav class="sidebar-nav">
-                <div class="nav-section-label">MONITORING</div>
+                <div class="nav-section">MONITORING</div>
                 <a href="dashboard.html" class="nav-item"><i class="fas fa-chart-line"></i> Dashboard Map</a>
-                <a href="drivers.html" class="nav-item"><i class="fas fa-id-card"></i> Drivers Information</a>
+                <a href="dtr-monitoring.html" class="nav-item"><i class="fas fa-clock"></i> DTR Monitoring</a>
+                <a href="drivers.html" class="nav-item"><i class="fas fa-id-card"></i> Drivers Details</a>
 
-                <div class="nav-section-label">OPERATIONS</div>
+                <div class="nav-section">OPERATIONS</div>
                 <a href="bookings.html" class="nav-item"><i class="fas fa-calendar-check"></i> Bookings</a>
                 <a href="schedules.html" class="nav-item"><i class="fas fa-list-alt"></i> List of Trips</a>
                 <a href="trip-tickets.html" class="nav-item"><i class="fas fa-ticket-alt"></i> Trip Tickets</a>
 
-                <div class="nav-section-label">SYSTEM</div>
+                <div class="nav-section">SYSTEM</div>
+                <a href="companies.html" class="nav-item"><i class="fas fa-building"></i> Accredited Companies</a>
                 <a href="registered-users.html" class="nav-item"><i class="fas fa-users"></i> Registered Users</a>
                 <a href="settings.html" class="nav-item"><i class="fas fa-cog"></i> Settings</a>
 
-                <div class="nav-section-label">NOTIFICATIONS</div>
-                <a href="notifications.html" class="nav-item active"><i class="fas fa-bell"></i> System Notification <span class="notif-count" style="display:none;"></span></a>
+                <div class="nav-section">NOTIFICATIONS</div>
+                <a href="notifications.html" class="nav-item active"><i class="fas fa-bell"></i> Notifications <span class="badge badge-info notif-count" style="display:none;">0</span></a>
+                
                 <a href="#" id="logoutBtn" class="nav-item logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
             </nav>
         </aside>
 
-        <main class="admin-main" id="mainContent">
-            <header class="admin-header">
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="header">
                 <div class="header-left">
                     <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
-                    <h2>System Notification</h2>
+                    <h2>System Notifications</h2>
                 </div>
                 <div class="header-right">
-                    <a href="notifications.html" class="notification-icon">
-                        <i class="fas fa-bell"></i>
-                        <span class="notification-badge" style="display: none;">0</span>
-                    </a>
-                    <div class="user-menu">
-                        <div class="user-avatar">A</div>
+                    <div class="user-profile">
+                        <div class="avatar">A</div>
                         <span>Admin</span>
                     </div>
                 </div>
             </header>
 
-            <div class="admin-content">
+            <div class="content-body">
                 <div class="page-header">
-                    <h1 class="page-title">System Notification & Logs</h1>
-                    <button onclick="markAllRead()" class="btn btn-secondary" style="display:flex; align-items:center; gap:6px; font-size:0.9em;">
+                    <div class="page-title">
+                        <h1>Alert Management</h1>
+                        <p>Real-time system events, vehicle incidents, and dispatch notifications.</p>
+                    </div>
+                    <button onclick="markAllRead()" class="btn btn-secondary">
                         <i class="fas fa-check-double"></i> Mark All as Read
                     </button>
                 </div>
 
-                <!-- Summary -->
-                <div class="summary-row">
-                    <div class="summary-box"><div class="val" id="totalCount">0</div><div class="lbl">Total Events</div></div>
-                    <div class="summary-box"><div class="val" id="tripCount" style="color:var(--accent-blue);">0</div><div class="lbl">Trips</div></div>
-                    <div class="summary-box"><div class="val" id="issueCount" style="color:var(--accent-orange);">0</div><div class="lbl">Vehicle Issues</div></div>
-                    <div class="summary-box"><div class="val" id="accidentCount" style="color:#ef4444;">0</div><div class="lbl">Accidents</div></div>
+                <!-- Live Stats Bar -->
+                <div class="grid grid-cols-4" style="margin-bottom: 32px;">
+                    <div class="glass-card" style="text-align: center;">
+                        <span style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">TOTAL EVENTS</span>
+                        <div style="font-size:1.5rem; font-weight:800;" id="totalCount">0</div>
+                    </div>
+                    <div class="glass-card" style="text-align: center;">
+                        <span style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">TRIP ALERTS</span>
+                        <div style="font-size:1.5rem; font-weight:800; color:var(--accent-blue);" id="tripCount">0</div>
+                    </div>
+                    <div class="glass-card" style="text-align: center;">
+                        <span style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">VEHICLE ISSUES</span>
+                        <div style="font-size:1.5rem; font-weight:800; color:var(--accent-warning);" id="issueCount">0</div>
+                    </div>
+                    <div class="glass-card" style="text-align: center;">
+                        <span style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">INCIDENTS</span>
+                        <div style="font-size:1.5rem; font-weight:800; color:var(--accent-error);" id="accidentCount">0</div>
+                    </div>
                 </div>
 
-                <!-- Filter Tabs -->
+                <!-- Filter Navigation -->
                 <div class="filter-tabs">
-                    <button class="filter-tab active" onclick="filterBy('all', this)">All</button>
-                    <button class="filter-tab" onclick="filterBy('trip', this)">🚗 Trips</button>
-                    <button class="filter-tab" onclick="filterBy('vehicle_issue', this)">🛠️ Vehicle Issues</button>
-                    <button class="filter-tab" onclick="filterBy('accident', this)">🚨 Accidents</button>
-                    <button class="filter-tab" onclick="filterBy('system', this)">⚙️ System</button>
+                    <button class="tab-btn active" onclick="filterBy('all', this)">All Feeds</button>
+                    <button class="tab-btn" onclick="filterBy('trip', this)">🚗 Trips</button>
+                    <button class="tab-btn" onclick="filterBy('vehicle_issue', this)">🛠️ Maintenance</button>
+                    <button class="tab-btn" onclick="filterBy('accident', this)">🚨 Incidents</button>
+                    <button class="tab-btn" onclick="filterBy('system', this)">⚙️ System</button>
                 </div>
 
-                <!-- Notification List -->
-                <div id="notificationList">
-                    <div style="text-align:center; padding:60px; color:var(--text-muted);">
-                        <i class="fas fa-spinner fa-spin" style="font-size:2em; margin-bottom:12px; display:block;"></i>
-                        Loading notifications...
+                <!-- Notification Feed -->
+                <div id="notificationList" class="notif-feed">
+                    <div class="glass-card" style="text-align: center; padding: 64px;">
+                        <i class="fas fa-sync fa-spin" style="font-size: 2rem; color: var(--accent-blue); margin-bottom: 16px;"></i>
+                        <p style="color:var(--text-muted);">Syncing live event feed...</p>
                     </div>
                 </div>
             </div>
         </main>
     </div>
 
+    <!-- Modal Placeholder -->
     <div id="modalContainer"></div>
+
     <script type="module" src="../assets/js/admin.js"></script>
+    <script type="module" src="../assets/js/modules/ui.js"></script>
     <script type="module" src="../assets/js/admin-notifications.js"></script>
 </body>
 </html>
-
-

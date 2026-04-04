@@ -6,109 +6,100 @@
     <title>Fleetonix - DTR Monitoring</title>
     <link rel="icon" type="image/jpeg" href="../img/logo.jpg">
     <link rel="stylesheet" href="../assets/css/style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        .dtr-table-wrapper {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            overflow: hidden;
-            margin-top: 20px;
-        }
-        .status-pill {
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-        .status-time_in { background: rgba(16, 185, 129, 0.1); color: #10b981; }
-        .status-time_out { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
-        .ot-badge {
-            background: #f59e0b;
-            color: #000;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 0.7rem;
-            font-weight: bold;
-            margin-left: 5px;
-        }
-        .gps-link {
-            color: var(--accent-blue);
-            text-decoration: none;
-            font-size: 0.85rem;
-        }
-        .gps-link:hover { text-decoration: underline; }
-    </style>
+    <link rel="stylesheet" href="../assets/css/admin.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body class="admin-body">
-    <div class="admin-wrapper">
-        <aside class="admin-sidebar" id="sidebar">
+<body>
+    <div class="admin-layout">
+        <!-- Unified Sidebar -->
+        <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <img src="../img/logo.jpg" alt="Logo" class="sidebar-logo">
                 <span class="sidebar-title">Fleetonix</span>
             </div>
             <nav class="sidebar-nav">
-                <div class="nav-section-label">MONITORING</div>
+                <div class="nav-section">MONITORING</div>
                 <a href="dashboard.html" class="nav-item"><i class="fas fa-chart-line"></i> Dashboard Map</a>
                 <a href="dtr-monitoring.html" class="nav-item active"><i class="fas fa-clock"></i> DTR Monitoring</a>
-                <a href="drivers.html" class="nav-item"><i class="fas fa-id-card"></i> Drivers Information</a>
+                <a href="drivers.html" class="nav-item"><i class="fas fa-id-card"></i> Drivers Details</a>
 
-                <div class="nav-section-label">OPERATIONS</div>
+                <div class="nav-section">OPERATIONS</div>
                 <a href="bookings.html" class="nav-item"><i class="fas fa-calendar-check"></i> Bookings</a>
                 <a href="schedules.html" class="nav-item"><i class="fas fa-list-alt"></i> List of Trips</a>
                 <a href="trip-tickets.html" class="nav-item"><i class="fas fa-ticket-alt"></i> Trip Tickets</a>
 
-                <div class="nav-section-label">SYSTEM</div>
+                <div class="nav-section">SYSTEM</div>
                 <a href="companies.html" class="nav-item"><i class="fas fa-building"></i> Accredited Companies</a>
                 <a href="registered-users.html" class="nav-item"><i class="fas fa-users"></i> Registered Users</a>
                 <a href="settings.html" class="nav-item"><i class="fas fa-cog"></i> Settings</a>
 
-                <div class="nav-section-label">NOTIFICATIONS</div>
-                <a href="notifications.html" class="nav-item"><i class="fas fa-bell"></i> System Notification</a>
+                <div class="nav-section">NOTIFICATIONS</div>
+                <a href="notifications.html" class="nav-item"><i class="fas fa-bell"></i> Notifications <span class="badge badge-info notif-count" style="display:none;">0</span></a>
+                
                 <a href="#" id="logoutBtn" class="nav-item logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
             </nav>
         </aside>
 
-        <main class="admin-main">
-            <header class="admin-header">
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="header">
                 <div class="header-left">
                     <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
                     <h2>DTR Monitoring</h2>
                 </div>
                 <div class="header-right">
-                    <div class="user-menu">
-                        <div class="user-avatar">A</div>
-                        <span id="adminDisplayName">Admin</span>
+                    <div class="user-profile">
+                        <div class="avatar">A</div>
+                        <span>Admin</span>
                     </div>
                 </div>
             </header>
 
-            <div class="admin-content">
+            <div class="content-body">
                 <div class="page-header">
-                    <div>
-                        <h1 class="page-title">Daily Time Records</h1>
-                        <p class="page-subtitle">Real-time GPS verified attendance logs for drivers.</p>
+                    <div class="page-title">
+                        <h1>Attendance Dashboard</h1>
+                        <p>Real-time GPS verified activity logs for your fleet.</p>
                     </div>
                     <div class="header-actions">
-                        <input type="date" id="dateFilter" class="form-input" style="width: auto;">
+                        <input type="date" id="dateFilter" class="btn btn-secondary" style="background:var(--bg-secondary); color:var(--text-primary); border:1px solid var(--border-color);">
                     </div>
                 </div>
 
-                <div class="dtr-table-wrapper">
+                <!-- Log Statistics (New Addition for UI Uniformity) -->
+                <div class="grid grid-cols-4" style="margin-bottom: 32px;" id="dtrStats">
+                    <div class="glass-card">
+                        <span style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Clock-Ins</span>
+                        <div style="font-size:1.5rem; font-weight:800; color:var(--accent-green);" id="countClockIn">0</div>
+                    </div>
+                    <div class="glass-card">
+                        <span style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Clock-Outs</span>
+                        <div style="font-size:1.5rem; font-weight:800; color:var(--accent-blue);" id="countClockOut">0</div>
+                    </div>
+                    <div class="glass-card">
+                        <span style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Unique Drivers</span>
+                        <div style="font-size:1.5rem; font-weight:800;" id="countUniqueDrivers">0</div>
+                    </div>
+                    <div class="glass-card">
+                        <span style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Active Shifts</span>
+                        <div style="font-size:1.5rem; font-weight:800; color:var(--accent-teal);" id="countActiveShifts">0</div>
+                    </div>
+                </div>
+
+                <div class="table-container">
                     <table class="data-table">
                         <thead>
                             <tr>
                                 <th>Driver Name</th>
-                                <th>Company</th>
-                                <th>Action</th>
-                                <th>Timestamp</th>
-                                <th>Location (GPS)</th>
-                                <th>Notes</th>
+                                <th>Partner Organization</th>
+                                <th>Status Action</th>
+                                <th>Precision Timestamp</th>
+                                <th>GPS Location</th>
+                                <th>Audit Notes</th>
                             </tr>
                         </thead>
                         <tbody id="dtrLogsBody">
-                            <tr><td colspan="6" style="text-align: center; padding: 40px;">Loading logs...</td></tr>
+                            <tr><td colspan="6" style="text-align: center; padding: 64px; color:var(--text-muted);">Syncing attendance data...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -116,6 +107,11 @@
         </main>
     </div>
 
+    <!-- Modal Placeholder -->
+    <div id="modalContainer"></div>
+
+    <script type="module" src="../assets/js/admin.js"></script>
+    <script type="module" src="../assets/js/modules/ui.js"></script>
     <script type="module" src="../assets/js/admin-dtr-monitoring.js"></script>
 </body>
 </html>
