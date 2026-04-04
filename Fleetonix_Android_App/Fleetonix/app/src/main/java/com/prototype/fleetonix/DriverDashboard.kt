@@ -71,112 +71,155 @@ fun TripTicketDialog(
     isSubmitting: Boolean,
     onConfirm: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = { }, // Force confirmation
-        tonalElevation = 8.dp,
-        containerColor = CardBlue,
-        title = {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = AccentTeal, modifier = Modifier.size(48.dp))
-                Spacer(Modifier.height(8.dp))
-                Text("TRAVEL TRIP TICKET", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = TextPrimary)
-            }
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Divider(color = Midnight)
-                
-                TicketRow("Driver", driverName)
-                TicketRow("Vehicle", "$vehicleType ($vehiclePlate)")
-                TicketRow("Departure", timeOfDeparture)
-                TicketRow("Arrival", timeOfArrival)
-                
-                Spacer(Modifier.height(8.dp))
-                
+    androidx.compose.ui.window.Dialog(onDismissRequest = { }) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            shape = RoundedCornerShape(24.dp),
+            color = CardBlue,
+            tonalElevation = 8.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Header with Checkmark
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Midnight, RoundedCornerShape(8.dp))
-                        .padding(16.dp),
+                        .size(64.dp)
+                        .background(AccentTeal.copy(alpha = 0.2f), androidx.compose.foundation.shape.CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("TOTAL DISTANCE", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-                        Text("${"%.2f".format(totalKm)} KM", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = AccentTeal)
-                    }
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = AccentTeal,
+                        modifier = Modifier.size(40.dp)
+                    )
+                }
+                
+                Text(
+                    "TRAVEL TRIP TICKET",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                
+                Divider(color = DividerBlue, thickness = 1.dp)
+
+                // Ticket Details
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TicketRow("Driver", driverName)
+                    TicketRow("Vehicle", "$vehicleType ($vehiclePlate)")
+                    TicketRow("Departure", timeOfDeparture)
+                    TicketRow("Arrival", timeOfArrival)
                 }
 
-                // Route Map Visualization
+                Text(
+                    "TRIP ROUTE",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                    fontWeight = FontWeight.Bold
+                )
+
+                // Map Route Visualization
                 if (routePoints.isNotEmpty()) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(200.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .border(1.dp, Midnight, RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(16.dp))
                     ) {
                         val cameraPositionState = rememberCameraPositionState {
                             val center = if (routePoints.isNotEmpty()) routePoints[routePoints.size / 2] else LatLng(0.0, 0.0)
                             position = CameraPosition.fromLatLngZoom(center, 13f)
                         }
                         
-                        // Auto-zoom to fit the route
                         LaunchedEffect(routePoints) {
                             if (routePoints.size >= 2) {
-                                val boundsBuilder = LatLngBounds.builder()
-                                routePoints.forEach { boundsBuilder.include(it) }
-                                cameraPositionState.animate(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 50))
+                                try {
+                                    val boundsBuilder = LatLngBounds.builder()
+                                    routePoints.forEach { boundsBuilder.include(it) }
+                                    cameraPositionState.animate(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 50))
+                                } catch (e: Exception) {
+                                    android.util.Log.e("TripTicketDialog", "Failed to build bounds", e)
+                                }
                             }
                         }
 
                         GoogleMap(
                             modifier = Modifier.fillMaxSize(),
                             cameraPositionState = cameraPositionState,
-                            uiSettings = MapUiSettings(
-                                zoomControlsEnabled = false,
-                                scrollGesturesEnabled = true,
-                                zoomGesturesEnabled = true
-                            ),
-                            properties = MapProperties(
-                                mapStyleOptions = MapStyleOptions(MapStyles.AUBERGINE)
-                            )
+                            uiSettings = MapUiSettings(zoomControlsEnabled = false, rotateGesturesEnabled = false),
+                            properties = MapProperties(mapStyleOptions = MapStyleOptions(MapStyles.AUBERGINE))
                         ) {
                             Polyline(
                                 points = routePoints,
                                 color = AccentTeal,
-                                width = 8f,
+                                width = 10f,
                                 jointType = JointType.ROUND
                             )
                             
-                            // Start and End Markers
+                            // Green Start Pin
                             Marker(
                                 state = MarkerState(position = routePoints.first()),
-                                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE),
-                                title = "Departure"
+                                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN),
+                                title = "Start"
                             )
+                            // Red End Pin
                             Marker(
                                 state = MarkerState(position = routePoints.last()),
-                                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN),
-                                title = "Arrival"
+                                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED),
+                                title = "End"
                             )
                         }
                     }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .background(Midnight, RoundedCornerShape(16.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Route visualization unavailable", color = TextSecondary)
+                    }
+                }
+
+                // Total Distance Card
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Midnight, RoundedCornerShape(16.dp))
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("TOTAL DISTANCE", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Text("${"%.2f".format(totalKm)} KM", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = AccentTeal)
+                    }
+                }
+
+                // Confirm Button
+                Button(
+                    onClick = onConfirm,
+                    enabled = !isSubmitting,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    if (isSubmitting) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                    else Text("CONFIRM & CLOSE", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Midnight)
                 }
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = onConfirm,
-                enabled = !isSubmitting,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                if (isSubmitting) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                else Text("CONFIRM & CLOSE", fontWeight = FontWeight.Bold)
-            }
         }
-    )
+    }
 }
 
 @Composable

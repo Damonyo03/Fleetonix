@@ -65,6 +65,7 @@ fun TripHistoryScreen(
                         TripHistoryItem(
                             id = doc.id,
                             clientName = data["client_name"] as? String ?: "Unknown",
+                            driverName = data["driver_name"] as? String ?: "Driver",
                             totalKm = (data["total_km"] as? Number)?.toDouble() ?: 0.0,
                             departureTime = data["time_of_departure"] as? String ?: "--:--",
                             arrivalTime = data["time_of_arrival"] as? String ?: "--:--",
@@ -139,7 +140,7 @@ fun TripHistoryScreen(
         val routePoints = GoogleMapsService.decodePolyline(ticket.polyline)
         
         TripTicketDialog(
-            driverName = auth.currentUser?.displayName ?: "Driver",
+            driverName = ticket.driverName,
             vehiclePlate = ticket.plate,
             vehicleType = "Vehicle",
             timeOfDeparture = ticket.departureTime,
@@ -196,6 +197,7 @@ fun HistoryCard(item: TripHistoryItem, onClick: () -> Unit) {
 data class TripHistoryItem(
     val id: String,
     val clientName: String,
+    val driverName: String,
     val totalKm: Double,
     val departureTime: String,
     val arrivalTime: String,
