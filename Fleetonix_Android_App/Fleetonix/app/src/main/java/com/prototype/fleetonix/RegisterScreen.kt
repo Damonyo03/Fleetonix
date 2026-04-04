@@ -55,8 +55,10 @@ import com.prototype.fleetonix.ui.theme.DividerBlue
 import com.prototype.fleetonix.ui.theme.Midnight
 import com.prototype.fleetonix.ui.theme.TextPrimary
 import com.prototype.fleetonix.ui.theme.TextSecondary
+import androidx.compose.material3.ExperimentalMaterial3Api
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegisterScreen(
     onOTPSent: (UserRegistrationData, String) -> Unit,
