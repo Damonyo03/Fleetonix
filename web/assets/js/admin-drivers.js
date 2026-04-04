@@ -390,14 +390,58 @@ window.editDriver = async (id) => {
 };
 
 window.deleteDriver = async (id) => {
-    if (confirm("Are you sure you want to delete this driver?")) {
-        await deleteDoc(doc(db, "drivers", id));
-        
-        await addDoc(collection(db, "activity"), {
-            type: 'system',
-            title: 'Driver Deleted',
-            message: `Admin deleted driver (ID: ${id})`,
-            timestamp: serverTimestamp()
-        });
+    const snap = await getDoc(doc(db, "drivers", id));
+    if (!snap.exists()) {
+        alert("Error: Driver profile not found.");
+        return;
+    }
+    const driver = snap.data();
+
+    if (confirm(`Are you sure you want to permanently delete the driver account for ${driver.driver_name}? This will remove them from Fleet Monitoring and recalibrate organizational counts.`)) {
+        try {
+            // 1. Backend Purge (Auth + Logic)
+            const response = await fetch('https://us-central1-appfleetonix.cloudfunctions.net/adminDeleteUser', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    uid: id,
+                    email: driver.driver_email
+                })
+            });
+
+            const result = await response.json();
+            if (!result.success) {
+                // If Cloud Function fails, try to at least delete firestore docs if admin
+                console.warn("Cloud Purge failed, attempting manual Firestore cleanup:", result.message);
+                await deleteDoc(doc(db, "drivers", id));
+                try { await deleteDoc(doc(db, "users", id)); } catch(e){}
+            }
+
+            // 2. Recalibrate Organizational Counters
+            const companyId = driver.accredited_company_id;
+            if (companyId) {
+                const companyRef = doc(db, "accredited_companies", companyId);
+                const companySnap = await getDoc(companyRef);
+                if (companySnap.exists()) {
+                    await updateDoc(companyRef, {
+                        total_drivers: Math.max(0, (companySnap.data().total_drivers || 0) - 1),
+                        updated_at: serverTimestamp()
+                    });
+                }
+            }
+
+            // 3. Activity Audit
+            await addDoc(collection(db, "activity"), {
+                type: 'system',
+                title: 'Driver Deleted',
+                message: `Super Admin purged driver: ${driver.driver_name} (ID: ${id})`,
+                timestamp: serverTimestamp()
+            });
+
+            alert("Driver account and profile successfully purged.");
+        } catch (error) {
+            console.error("Deletion error:", error);
+            alert("Failed to delete driver: " + error.message);
+        }
     }
 };

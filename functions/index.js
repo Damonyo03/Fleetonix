@@ -355,6 +355,55 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
 });
 
 /**
+ * Admin Delete User
+ * Safely removes a user from Firebase Auth and Firestore.
+ */
+exports.adminDeleteUser = onRequest({ cors: true }, async (req, res) => {
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+
+  const {uid, email} = req.body;
+
+  if (!uid) {
+    res.status(400).json({success: false, message: "User UID is required."});
+    return;
+  }
+
+  try {
+    // 1. Delete from Firebase Auth
+    try {
+      await admin.auth().deleteUser(uid);
+      logger.info(`Admin deleted Auth user: ${uid}`);
+    } catch (authError) {
+      logger.warn(`Auth user ${uid} not found or already deleted:`, authError);
+      // Proceed to firestore deletion anyway to be safe
+    }
+
+    // 2. Delete from Users Collection
+    await admin.firestore().collection("users").doc(uid).delete();
+
+    // 3. Special handling for drivers collection (using email as ID per legacy schema)
+    if (email) {
+      await admin.firestore().collection("drivers").doc(email.toLowerCase().trim()).delete();
+    } else {
+      // Try to find driver by UID if email not provided
+      const driverSnap = await admin.firestore().collection("drivers").doc(uid).get();
+      if (driverSnap.exists) {
+        await admin.firestore().collection("drivers").doc(uid).delete();
+      }
+    }
+
+    logger.info(`Admin successfully purged user: ${uid}`);
+    res.json({success: true, message: "User account purged successfully."});
+  } catch (error) {
+    logger.error("Error deleting user", error);
+    res.status(500).json({success: false, message: error.message});
+  }
+});
+
+/**
  * Automated Activity Logger for Trip Phase changes
  */
 exports.onScheduleUpdate = onDocumentUpdated("schedules/{docId}", async (event) => {

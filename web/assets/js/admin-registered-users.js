@@ -11,6 +11,8 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 let allUsers = [];
+let currentUserRole = null;
+let currentAccreditedCompanyId = null;
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -33,6 +35,8 @@ onAuthStateChanged(auth, async (user) => {
 
     const adminRoles = ['admin', 'super_admin', 'company_admin'];
     const role = userData?.user_type || userData?.role;
+    currentUserRole = role;
+    currentAccreditedCompanyId = userData.accredited_company_id || null;
 
     if (!userData || !adminRoles.includes(role)) {
         console.error("Access Denied: Not an administrator.");
@@ -138,9 +142,16 @@ function renderUsers(users) {
                 <td>${u.company_name || '—'}</td>
                 <td style="color:var(--text-muted); font-size:0.85em;">${registered}</td>
                 <td>
-                    <button class="btn-icon view" title="View Details" onclick="viewUser('${u.id}')">
-                        <i class="fas fa-eye"></i>
-                    </button>
+                    <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                        <button class="btn-icon view" title="View Details" onclick="viewUser('${u.id}')">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        ${currentUserRole === 'super_admin' ? `
+                            <button class="btn-icon delete" title="Delete User" onclick="deleteUser('${u.id}')" style="background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2);">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        ` : ''}
+                    </div>
                 </td>
             </tr>
         `;
@@ -285,3 +296,68 @@ async function showCreateUserModal() {
         }
     }, 100);
 }
+
+// --- Administrative Deletion Protocol ---
+window.deleteUser = async (id) => {
+    const user = allUsers.find(u => u.id === id);
+    if (!user) return;
+
+    if (!confirm(`Are you sure you want to permanently delete the account for ${user.full_name || user.email}? This action cannot be undone and will recalibrate organizational fleet counts.`)) {
+        return;
+    }
+
+    try {
+        // 1. Backend Purge (Auth + Logic)
+        const response = await fetch('https://us-central1-appfleetonix.cloudfunctions.net/adminDeleteUser', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                uid: id,
+                email: user.email
+            })
+        });
+
+        const result = await response.json();
+        if (!result.success) {
+            throw new Error(result.message || "Failed to purge user account.");
+        }
+
+        // 2. Recalibrate Organizational Counters
+        const role = user.role || user.user_type || 'client';
+        const companyId = user.accredited_company_id;
+
+        if (companyId) {
+            const companyRef = doc(db, "accredited_companies", companyId);
+            const companySnap = await getDoc(companyRef);
+            
+            if (companySnap.exists()) {
+                const updateData = {};
+                if (role === 'driver') {
+                    updateData.total_drivers = Math.max(0, (companySnap.data().total_drivers || 0) - 1);
+                } else if (role === 'staff' || role === 'admin') {
+                    updateData.total_staff = Math.max(0, (companySnap.data().total_staff || 0) - 1);
+                }
+                
+                if (Object.keys(updateData).length > 0) {
+                    await updateDoc(companyRef, {
+                        ...updateData,
+                        updated_at: serverTimestamp()
+                    });
+                }
+            }
+        }
+
+        // 3. Activity Audit
+        await addDoc(collection(db, "activity"), {
+            type: 'system',
+            title: 'User Deleted',
+            message: `Super Admin purged user account: ${user.full_name} (${user.email})`,
+            timestamp: serverTimestamp()
+        });
+
+        alert("User account successfully purged.");
+    } catch (error) {
+        console.error("Purge error:", error);
+        alert("CRITICAL ERROR: Failed to purge user account. " + error.message);
+    }
+};
