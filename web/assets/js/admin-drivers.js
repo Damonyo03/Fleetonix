@@ -56,13 +56,60 @@ onAuthStateChanged(auth, async (user) => {
     // Fetch companies
     if (role === 'super_admin' || role === 'admin') {
         const companiesSnap = await getDocs(query(collection(db, "accredited_companies"), where("status", "==", "active")));
+        const filter = document.getElementById('companyFilter');
         companiesSnap.forEach(doc => {
             activeCompanies[doc.id] = doc.data().name;
+            if (filter) {
+                const option = document.createElement('option');
+                option.value = doc.id;
+                option.textContent = doc.data().name;
+                filter.appendChild(option);
+            }
         });
+        if (filter) filter.addEventListener('change', applyFilters);
     }
 
     initDriverList();
+    
+    // Integrity Check (Super Admin only can auto-repair)
+    if (role === 'super_admin' || role === 'admin') {
+        setTimeout(repairMissingDriverProfiles, 2000);
+    }
 });
+
+async function repairMissingDriverProfiles() {
+    console.log("Analyzing driver database integrity...");
+    try {
+        const usersSnap = await getDocs(query(collection(db, "users"), where("role", "==", "driver")));
+        const driversSnap = await getDocs(collection(db, "drivers"));
+        const existingDriverIds = new Set(driversSnap.docs.map(d => d.id));
+        
+        let repairCount = 0;
+        for (const userDoc of usersSnap.docs) {
+            if (!existingDriverIds.has(userDoc.id)) {
+                console.log(`Incomplete Profile detected for: ${userDoc.data().full_name}. Repairing...`);
+                const data = userDoc.data();
+                await setDoc(doc(db, "drivers", userDoc.id), {
+                    driver_name: data.full_name || "Repair Entry",
+                    driver_email: data.email || "",
+                    accredited_company_id: data.accredited_company_id || "",
+                    current_status: "offline",
+                    vehicle_assigned: "Pending Setup",
+                    plate_number: "TBD-0000",
+                    is_repaired: true,
+                    created_at: serverTimestamp()
+                });
+                repairCount++;
+            }
+        }
+        if (repairCount > 0) {
+            console.log(`Database Integrity Shield: ${repairCount} driver profiles restored.`);
+            alert(`System Integrity Alert: ${repairCount} missing driver profiles have been automatically restored. Mobile app functionality is now active for these users.`);
+        }
+    } catch (error) {
+        console.error("Integrity shield error:", error);
+    }
+}
 
 function initDriverList() {
     const role = currentUserData.role || currentUserData.user_type;
@@ -88,6 +135,7 @@ function applyFilters() {
     if (!driverGrid) return;
     const searchTerm = driverSearch.value.toLowerCase();
     const status = statusFilter.value;
+    const company = document.getElementById('companyFilter')?.value || 'all';
 
     const filtered = allDrivers.filter(d => {
         const data = d.data();
@@ -95,7 +143,8 @@ function applyFilters() {
                              (data.plate_number || '').toLowerCase().includes(searchTerm) || 
                              (data.vehicle_assigned || '').toLowerCase().includes(searchTerm);
         const matchesStatus = status === 'all' || data.current_status === status;
-        return matchesSearch && matchesStatus;
+        const matchesCompany = company === 'all' || data.accredited_company_id === company;
+        return matchesSearch && matchesStatus && matchesCompany;
     });
     renderDrivers(filtered);
 }
@@ -235,6 +284,17 @@ if (addDriverBtn) {
                     status: "active",
                     created_at: serverTimestamp()
                 });
+
+                // Update Company Driver Counter if applicable
+                if (companyId) {
+                    const companyDoc = await getDoc(doc(db, "accredited_companies", companyId));
+                    if (companyDoc.exists()) {
+                        await updateDoc(doc(db, "accredited_companies", companyId), {
+                            total_drivers: (companyDoc.data().total_drivers || 0) + 1,
+                            updated_at: serverTimestamp()
+                        });
+                    }
+                }
 
                 await signOut(secondaryAuth);
 

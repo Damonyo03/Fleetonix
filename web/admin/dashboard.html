@@ -83,9 +83,14 @@
                         <h1>Fleet Overview</h1>
                         <p id="welcomeMessage">Real-time status of your global operations.</p>
                     </div>
-                    <button class="btn btn-primary" id="newAdminBookingBtn">
-                        <i class="fas fa-plus"></i> New Booking
-                    </button>
+                    <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                        <select id="companyFilter" class="btn btn-secondary" style="display:none; min-width:200px; text-align:left;">
+                            <option value="all">Global View (All Partners)</option>
+                        </select>
+                        <button class="btn btn-primary" id="newAdminBookingBtn">
+                            <i class="fas fa-plus"></i> New Booking
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Stats Grid -->

@@ -11,6 +11,9 @@ let driverPolylines = {};
 let allDriversData = {};
 let pendingBookingsMap = new Map();
 let currentDispatchBookingId = null;
+let currentUserData = null;
+let selectedCompanyId = 'all';
+let unsubscribeStats = [];
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -39,12 +42,18 @@ onAuthStateChanged(auth, async (user) => {
         return;
     }
 
+    currentUserData = userData;
     const name = userData ? userData.full_name : user.email.split('@')[0];
     initLayout('Dashboard', name);
     document.getElementById('welcomeMessage').innerText = `Welcome back, ${name}! Here's what's happening with your fleet.`;
 
+    const userRole = userData?.role || userData?.user_type;
+    if (userRole === 'super_admin' || userRole === 'admin') {
+        initCompanyFilter();
+    }
+
     // Start Live Listeners
-    initStats();
+    refreshDashboardData();
     initMap();
     initDashboardUI();
 });
@@ -63,25 +72,82 @@ function initDashboardUI() {
     }
 }
 
+async function initCompanyFilter() {
+    const filter = document.getElementById('companyFilter');
+    if (!filter) return;
+
+    try {
+        const companiesSnap = await getDocs(query(collection(db, "accredited_companies"), where("status", "==", "active")));
+        companiesSnap.forEach(doc => {
+            const option = document.createElement('option');
+            option.value = doc.id;
+            option.textContent = doc.data().name;
+            filter.appendChild(option);
+        });
+        filter.style.display = 'block';
+
+        filter.addEventListener('change', (e) => {
+            selectedCompanyId = e.target.value;
+            refreshDashboardData();
+            updateMapFilters();
+        });
+    } catch (error) {
+        console.error("Error loading companies for filter:", error);
+    }
+}
+
+function refreshDashboardData() {
+    unsubscribeStats.forEach(unsub => unsub());
+    unsubscribeStats = [];
+    initStats();
+}
+
+function updateMapFilters() {
+    Object.keys(driverMarkers).forEach(key => {
+        const driver = allDriversData[key];
+        const marker = driverMarkers[key];
+        if (marker) {
+            const matchesCompany = selectedCompanyId === 'all' || driver.accredited_company_id === selectedCompanyId;
+            marker.setVisible(matchesCompany);
+            if (driverPolylines[key]) {
+                driverPolylines[key].setMap(matchesCompany ? driversMap : null);
+            }
+        }
+    });
+    updateOnlineDriversList();
+}
+
 function initStats() {
     // Real-time stats from Firestore
-    onSnapshot(collection(db, "users"), (snapshot) => {
-        const drivers = snapshot.docs.filter(d => d.data().user_type === 'driver').length;
-        const clients = snapshot.docs.filter(d => d.data().user_type === 'client').length;
+    let usersQuery = collection(db, "users");
+    let bookingsQuery = query(collection(db, "bookings"), where("status", "==", "pending"));
+    let schedulesQuery = query(collection(db, "schedules"), where("status", "in", ["pending", "started", "in_progress"]));
+
+    if (selectedCompanyId !== 'all') {
+        usersQuery = query(usersQuery, where("accredited_company_id", "==", selectedCompanyId));
+        bookingsQuery = query(bookingsQuery, where("accredited_company_id", "==", selectedCompanyId));
+        schedulesQuery = query(schedulesQuery, where("accredited_company_id", "==", selectedCompanyId));
+    }
+
+    const unsubUsers = onSnapshot(usersQuery, (snapshot) => {
+        const drivers = snapshot.docs.filter(d => (d.data().user_type === 'driver' || d.data().role === 'driver')).length;
+        const clients = snapshot.docs.filter(d => (d.data().user_type === 'client' || d.data().role === 'client')).length;
         document.getElementById('totalDrivers').innerText = drivers;
         document.getElementById('totalClients').innerText = clients;
     });
 
-    onSnapshot(query(collection(db, "bookings"), where("status", "==", "pending")), (snapshot) => {
+    const unsubBookings = onSnapshot(bookingsQuery, (snapshot) => {
         const pendingBadge = document.getElementById('pendingBookings');
         if (pendingBadge) pendingBadge.innerText = snapshot.size;
         
         renderPendingBookingsWidget(snapshot);
     });
 
-    onSnapshot(query(collection(db, "schedules"), where("status", "in", ["pending", "started", "in_progress"])), (snapshot) => {
+    const unsubSchedules = onSnapshot(schedulesQuery, (snapshot) => {
         document.getElementById('activeSchedules').innerText = snapshot.size;
     });
+
+    unsubscribeStats.push(unsubUsers, unsubBookings, unsubSchedules);
 }
 
 function animateMarkerTo(marker, newPos) {
@@ -149,27 +215,34 @@ function initMap() {
                 driver_name: data.driver_name,
                 current_status: data.current_status,
                 vehicle_assigned: data.vehicle_assigned,
-                driver_email: email
+                driver_email: email,
+                accredited_company_id: data.accredited_company_id || ""
             });
 
             // If a marker already exists for this driver, update its icon/info
             if (driverMarkers[key]) {
                 const markerIcon = getMarkerIcon(data.current_status || 'available');
                 driverMarkers[key].setIcon(markerIcon);
-                // Also update position if the drivers collection has it (for persistent offline markers)
+                
+                // Set visibility based on company filter
+                const matchesCompany = selectedCompanyId === 'all' || data.accredited_company_id === selectedCompanyId;
+                driverMarkers[key].setVisible(matchesCompany);
+
+                // Also update position if the drivers collection has it
                 if (data.current_latitude && data.current_longitude) {
                     driverMarkers[key].setPosition({ lat: data.current_latitude, lng: data.current_longitude });
                 }
             } else if (data.current_latitude && data.current_longitude) {
                 // If NO marker exists but we have location, create a persistent/offline marker
-                console.log(`Creating persistent marker for ${data.driver_name} from drivers collection`);
                 const status = data.current_status || 'offline';
+                const matchesCompany = selectedCompanyId === 'all' || data.accredited_company_id === selectedCompanyId;
                 const marker = new google.maps.Marker({
                     position: { lat: data.current_latitude, lng: data.current_longitude },
                     map: driversMap,
                     title: data.driver_name || 'Driver',
                     icon: getMarkerIcon(status),
-                    opacity: status === 'offline' ? 0.6 : 1.0
+                    opacity: status === 'offline' ? 0.6 : 1.0,
+                    visible: matchesCompany
                 });
                 
                 // Add info window logic (simplified or reuse a function)

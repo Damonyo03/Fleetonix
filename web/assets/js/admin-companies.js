@@ -65,12 +65,24 @@ function createCompanyCard(id, company) {
             </div>
             <span class="company-status ${statusClass}">${company.status}</span>
         </div>
+        
+        <div class="company-stats" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; padding: 12px; background: rgba(255,255,255,0.03); border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            <div style="text-align: center;">
+                <span style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; display: block;">Drivers</span>
+                <strong style="font-size: 1.1rem; color: var(--accent-orange);">${company.total_drivers || 0}</strong>
+            </div>
+            <div style="text-align: center; border-left: 1px solid var(--border-color);">
+                <span style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; display: block;">Staff</span>
+                <strong style="font-size: 1.1rem; color: var(--accent-blue);">${company.total_staff || 0}</strong>
+            </div>
+        </div>
+
         <div style="display: flex; gap: 10px; margin-top: 15px;">
-            <button class="btn btn-secondary btn-sm edit-btn" data-id="${id}" style="padding: 6px 12px; font-size: 0.8rem;">
+            <button class="btn btn-secondary btn-sm edit-btn" data-id="${id}" style="padding: 6px 12px; font-size: 0.8rem; width: 100%;">
                 <i class="fas fa-edit"></i> Edit
             </button>
             ${(currentUserRole === 'super_admin' || currentUserRole === 'admin') ? `
-            <button class="btn btn-danger btn-sm delete-btn" data-id="${id}" style="padding: 6px 12px; font-size: 0.8rem; background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2);">
+            <button class="btn btn-danger btn-sm delete-btn" data-id="${id}" style="padding: 6px 12px; font-size: 0.8rem; background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); width: 100%;">
                 <i class="fas fa-trash"></i> Delete
             </button>` : ''}
         </div>
@@ -132,6 +144,8 @@ companyForm.onsubmit = async (e) => {
             // Create
             await addDoc(collection(db, "accredited_companies"), {
                 name, shorthand, status,
+                total_drivers: 0,
+                total_staff: 0,
                 created_at: serverTimestamp(),
                 updated_at: serverTimestamp()
             });

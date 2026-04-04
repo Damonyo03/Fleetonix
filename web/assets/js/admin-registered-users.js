@@ -52,13 +52,35 @@ onAuthStateChanged(auth, async (user) => {
     // Filter + Search listeners
     document.getElementById('roleFilter')?.addEventListener('change', applyFilters);
     document.getElementById('searchInput')?.addEventListener('input', applyFilters);
+    document.getElementById('companyFilter')?.addEventListener('change', applyFilters);
 
     // Create User Button
     document.getElementById('createUserBtn')?.addEventListener('click', showCreateUserModal);
+    
+    // Populate Companies Filter
+    initCompanyFilter();
 });
+
+async function initCompanyFilter() {
+    const filter = document.getElementById('companyFilter');
+    if (!filter) return;
+
+    try {
+        const companiesSnap = await getDocs(query(collection(db, "accredited_companies"), where("status", "==", "active")));
+        companiesSnap.forEach(doc => {
+            const option = document.createElement('option');
+            option.value = doc.id;
+            option.textContent = doc.data().name;
+            filter.appendChild(option);
+        });
+    } catch (error) {
+        console.error("Error loading companies for filter:", error);
+    }
+}
 
 function applyFilters() {
     const role   = document.getElementById('roleFilter')?.value || 'all';
+    const company = document.getElementById('companyFilter')?.value || 'all';
     const search = (document.getElementById('searchInput')?.value || '').toLowerCase();
 
     let filtered = allUsers;
@@ -67,6 +89,9 @@ function applyFilters() {
             const uRole = u.role || u.user_type || '';
             return uRole === role;
         });
+    }
+    if (company !== 'all') {
+        filtered = filtered.filter(u => u.accredited_company_id === company);
     }
     if (search) filtered = filtered.filter(u =>
         (u.full_name || '').toLowerCase().includes(search) ||
@@ -228,6 +253,19 @@ async function showCreateUserModal() {
             }
 
             alert(`User account for ${fullName} created successfully!`);
+
+            // Increment Company Staff Counter if applicable
+            if (companyName) {
+                const companySnap = await getDocs(query(collection(db, "accredited_companies"), where("name", "==", companyName)));
+                if (!companySnap.empty) {
+                    const companyId = companySnap.docs[0].id;
+                    const companyDoc = companySnap.docs[0].data();
+                    await updateDoc(doc(db, "accredited_companies", companyId), {
+                        total_staff: (companyDoc.total_staff || 0) + 1,
+                        updated_at: serverTimestamp()
+                    });
+                }
+            }
         } catch (err) {
             console.error("User creation error:", err);
             throw new Error(err.message);
