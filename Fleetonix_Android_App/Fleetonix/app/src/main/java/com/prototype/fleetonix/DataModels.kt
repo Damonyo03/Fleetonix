@@ -29,7 +29,9 @@ data class DriverUser(
 
 data class DriverProfile(
     val id: String? = null,
-    @SerializedName("license_number") val licenseNumber: String? = null,
+    @SerializedName("profile_image_url") val profileImageUrl: String? = null,
+    @SerializedName("car_details") val carDetails: String? = null,
+    @SerializedName("car_color") val carColor: String? = null,
     @SerializedName("vehicle_assigned") val vehicleAssigned: String? = null,
     @SerializedName("vehicle_type") val vehicleType: String? = null,
     @SerializedName("plate_number") val plateNumber: String? = null,

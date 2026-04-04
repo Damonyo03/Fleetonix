@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, updateDoc, deleteDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, updateDoc, deleteDoc, setDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { initLayout, showModal, hideModal } from "./modules/ui.js";
 
@@ -68,20 +68,27 @@ function renderDrivers(docs) {
         const driver = d.data();
         const id = d.id;
         const status = driver.current_status || 'offline';
+        const displayStatus = status.replace('_', ' ');
         return `
             <div class="driver-card">
                 <div class="driver-status ${status}"></div>
+                <div class="driver-profile-header">
+                    <div class="driver-avatar-large">
+                        ${driver.profile_image_url ? `<img src="${driver.profile_image_url}" alt="${driver.driver_name}">` : `<i class="fas fa-user-circle"></i>`}
+                    </div>
+                </div>
                 <div class="driver-info">
                     <h3>${driver.driver_name || 'Unnamed Driver'}</h3>
-                    <p><i class="fas fa-truck-pickup"></i> ${driver.vehicle_assigned || 'No vehicle'}</p>
+                    <p><i class="fas fa-truck-pickup"></i> ${driver.vehicle_assigned || 'No vehicle'} ${driver.car_color ? `(${driver.car_color})` : ''}</p>
                     <p><i class="fas fa-id-card"></i> ${driver.plate_number || 'No plate'}</p>
                     <p><i class="fas fa-phone"></i> ${driver.driver_phone || 'No phone'}</p>
+                    ${driver.car_details ? `<p class="car-details-small"><i class="fas fa-info-circle"></i> ${driver.car_details}</p>` : ''}
                 </div>
                 <div class="driver-meta">
-                    <span>Status: ${status.replace('_', ' ')}</span>
+                    <span class="status-badge ${status}">${displayStatus}</span>
                     <div class="card-actions">
-                        <button class="btn-icon edit" onclick="window.editDriver('${id}')"><i class="fas fa-edit"></i></button>
-                        <button class="btn-icon delete" onclick="window.deleteDriver('${id}')"><i class="fas fa-trash"></i></button>
+                        <button class="btn-icon edit" onclick="window.editDriver('${id}')" title="Edit Driver"><i class="fas fa-edit"></i></button>
+                        <button class="btn-icon delete" onclick="window.deleteDriver('${id}')" title="Delete Driver"><i class="fas fa-trash"></i></button>
                     </div>
                 </div>
             </div>
@@ -97,13 +104,27 @@ if (addDriverBtn) {
                 <label>Driver Name</label>
                 <input type="text" id="modal_driver_name" class="form-input" required>
             </div>
-            <div class="form-group">
-                <label>Vehicle Model</label>
-                <input type="text" id="modal_vehicle" class="form-input" required>
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label>Vehicle Model</label>
+                    <input type="text" id="modal_vehicle" class="form-input" placeholder="e.g. Toyota Vios" required>
+                </div>
+                <div class="form-group">
+                    <label>Car Color</label>
+                    <input type="text" id="modal_color" class="form-input" placeholder="e.g. White" required>
+                </div>
             </div>
             <div class="form-group">
                 <label>Plate Number</label>
                 <input type="text" id="modal_plate" class="form-input" required>
+            </div>
+            <div class="form-group">
+                <label>Car Details (Optional)</label>
+                <input type="text" id="modal_car_details" class="form-input" placeholder="e.g. Manual, 2023 Model">
+            </div>
+            <div class="form-group">
+                <label>Profile Image URL (Optional)</label>
+                <input type="url" id="modal_image_url" class="form-input" placeholder="https://example.com/image.jpg">
             </div>
             <div class="form-group">
                 <label>Phone Number</label>
@@ -140,6 +161,9 @@ if (addDriverBtn) {
                 await setDoc(doc(db, "drivers", driverId), {
                     driver_name: name,
                     vehicle_assigned: vehicle,
+                    car_color: document.getElementById('modal_color').value,
+                    car_details: document.getElementById('modal_car_details').value,
+                    profile_image_url: document.getElementById('modal_image_url').value,
                     plate_number: plate,
                     driver_phone: phone,
                     driver_email: email,
@@ -185,13 +209,27 @@ window.editDriver = async (id) => {
             <label>Driver Name</label>
             <input type="text" id="modal_driver_name" class="form-input" value="${driver.driver_name}" required>
         </div>
-        <div class="form-group">
-            <label>Vehicle Model</label>
-            <input type="text" id="modal_vehicle" class="form-input" value="${driver.vehicle_assigned}" required>
+        <div class="form-grid-2">
+            <div class="form-group">
+                <label>Vehicle Model</label>
+                <input type="text" id="modal_vehicle" class="form-input" value="${driver.vehicle_assigned}" required>
+            </div>
+            <div class="form-group">
+                <label>Car Color</label>
+                <input type="text" id="modal_color" class="form-input" value="${driver.car_color || ''}" required>
+            </div>
         </div>
         <div class="form-group">
             <label>Plate Number</label>
             <input type="text" id="modal_plate" class="form-input" value="${driver.plate_number}" required>
+        </div>
+        <div class="form-group">
+            <label>Car Details (Optional)</label>
+            <input type="text" id="modal_car_details" class="form-input" value="${driver.car_details || ''}">
+        </div>
+        <div class="form-group">
+            <label>Profile Image URL (Optional)</label>
+            <input type="url" id="modal_image_url" class="form-input" value="${driver.profile_image_url || ''}">
         </div>
         <div class="form-group">
             <label>Driver Email</label>
@@ -212,6 +250,9 @@ window.editDriver = async (id) => {
         await updateDoc(doc(db, "drivers", id), {
             driver_name: document.getElementById('modal_driver_name').value,
             vehicle_assigned: document.getElementById('modal_vehicle').value,
+            car_color: document.getElementById('modal_color').value,
+            car_details: document.getElementById('modal_car_details').value,
+            profile_image_url: document.getElementById('modal_image_url').value,
             plate_number: document.getElementById('modal_plate').value,
             driver_email: email,
             current_status: document.getElementById('modal_status').value

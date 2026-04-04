@@ -231,9 +231,14 @@ async function showCreateBookingModal(clients) {
             const driverSelect = document.getElementById('modal_driver');
             const driverName = driverSelect.options[driverSelect.selectedIndex].text.replace('🟢 ', '');
             
-            // Get driver email
-            const driverUserDoc = await getDoc(doc(db, "users", driverId));
+            // Get driver details from both collections
+            const [driverUserDoc, driverDoc] = await Promise.all([
+                getDoc(doc(db, "users", driverId)),
+                getDoc(doc(db, "drivers", driverId))
+            ]);
+            
             const driverEmail = driverUserDoc.exists() ? (driverUserDoc.data().email || "") : "";
+            const dData = driverDoc.exists() ? driverDoc.data() : {};
 
             const scheduleData = sanitizeFirestoreData({
                 booking_id: bookingId,
@@ -246,6 +251,9 @@ async function showCreateBookingModal(clients) {
                 driver_id: driverId,
                 driver_email: driverEmail.toLowerCase().trim(),
                 driver_name: driverName,
+                driver_image_url: dData.profile_image_url || "",
+                car_details: dData.car_details || "",
+                car_color: dData.car_color || "",
                 trip_phase: "pending",
                 status: "pending",
                 pickup_location: pickup,
@@ -501,6 +509,9 @@ window.assignDriver = async (id) => {
                             data-name="${d.driver_name || ''}"
                             data-phone="${d.driver_phone || ''}"
                             data-plate="${d.plate_number || ''}"
+                            data-image="${d.profile_image_url || ''}"
+                            data-details="${d.car_details || ''}"
+                            data-color="${d.car_color || ''}"
                             data-vehicle="${d.vehicle_assigned || ''}">
                         ${d.isOnline ? '🟢 [ONLINE]' : '⚪ [OFFLINE]'} ${d.driver_name} - ${d.vehicle_assigned} (${d.plate_number})
                     </option>`).join('')}
@@ -528,6 +539,9 @@ window.assignDriver = async (id) => {
         const driverPhone = selectedOption.getAttribute('data-phone');
         const plateNumber = selectedOption.getAttribute('data-plate');
         const vehicleAssigned = selectedOption.getAttribute('data-vehicle');
+        const driverImage = selectedOption.getAttribute('data-image');
+        const carDetails = selectedOption.getAttribute('data-details');
+        const carColor = selectedOption.getAttribute('data-color');
         const date = document.getElementById('modal_sched_date').value;
         const time = document.getElementById('modal_sched_time').value;
 
@@ -540,6 +554,9 @@ window.assignDriver = async (id) => {
             driver_email: driverEmail,
             driver_name: driverName,
             driver_phone: driverPhone,
+            driver_image_url: driverImage || "",
+            car_details: carDetails || "",
+            car_color: carColor || "",
             plate_number: plateNumber,
             vehicle_assigned: vehicleAssigned,
             status: "pending",

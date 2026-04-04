@@ -382,8 +382,17 @@ function updateOnlineDriversList() {
         const statusA = a.current_status || 'offline';
         const statusB = b.current_status || 'offline';
         
-        if (statusA === 'available' && statusB !== 'available') return -1;
-        if (statusA !== 'available' && statusB === 'available') return 1;
+        // Priority: In Progress/On Schedule -> Available -> Offline
+        const getPriority = (s) => {
+            if (s === 'on_schedule' || s === 'accepted' || s === 'pickup' || s === 'dropoff') return 1;
+            if (s === 'available') return 2;
+            return 3;
+        };
+        
+        const priA = getPriority(statusA);
+        const priB = getPriority(statusB);
+        
+        if (priA !== priB) return priA - priB;
         return (a.driver_name || '').localeCompare(b.driver_name || '');
     });
 
@@ -391,20 +400,25 @@ function updateOnlineDriversList() {
         const status = driver.current_status || 'offline';
         const phase = driver.current_trip_phase || (status === 'on_schedule' ? 'accepted' : '');
         const displayStatus = phase ? phase : status;
+        const statusLabel = displayStatus.replace('_', ' ');
         
         return `
-            <div class="driver-item" onclick="focusDriver('${driver.id}')">
+            <div class="driver-item ${status === 'offline' ? 'offline' : ''}" onclick="focusDriver('${driver.id}')">
                 <div class="status-dot ${displayStatus}"></div>
                 <div class="driver-info">
                     <div class="driver-name">${driver.driver_name || 'Unnamed Driver'}</div>
-                    <div class="driver-status-text">${displayStatus.replace('_', ' ')}</div>
+                    <div class="driver-status-text ${displayStatus}">${statusLabel}</div>
                 </div>
-                ${status === 'available' ? '<i class="fas fa-check-circle" style="color: #10b981; font-size: 0.8em;"></i>' : ''}
+                <div class="driver-badge-area">
+                    ${status === 'available' ? '<span class="status-badge available" style="font-size: 0.65rem; padding: 2px 6px;">Available</span>' : ''}
+                    ${['on_schedule', 'accepted', 'pickup', 'dropoff', 'in_progress'].includes(displayStatus) ? `<span class="status-badge ${displayStatus}" style="font-size: 0.65rem; padding: 2px 6px;">${statusLabel}</span>` : ''}
+                    ${status === 'offline' ? '<span class="status-badge offline" style="font-size: 0.65rem; padding: 2px 6px;">Offline</span>' : ''}
+                </div>
             </div>
         `;
-    }).join('') : '<div style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 0.85em;">No drivers online.</div>';
+    }).join('') : '<div style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 0.85em;">No drivers found in fleet.</div>';
     
-    // The badge should only count 'available' and 'on_trip' (not offline) and must hide ghosts
+    // Total count of truly online/active drivers
     const onlineOnlyCount = validDrivers.filter(d => d.current_status && d.current_status !== 'offline').length;
     if (onlineCount) onlineCount.innerText = onlineOnlyCount;
 }

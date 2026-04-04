@@ -302,7 +302,7 @@
 
 .stat-card {
     background: var(--bg-card);
-    border-radius: 12px;
+    border-radius: 6px;
     padding: 20px;
     border: 1px solid var(--border-color);
     transition: all 0.3s ease;
@@ -366,7 +366,7 @@
 /* Data Tables */
 .data-table-wrapper {
     background: var(--bg-card);
-    border-radius: 12px;
+    border-radius: 6px;
     padding: 20px;
     border: 1px solid var(--border-color);
     overflow-x: auto;
@@ -429,7 +429,7 @@
 .status-badge {
     display: inline-block;
     padding: 4px 12px;
-    border-radius: 12px;
+    border-radius: 6px;
     font-size: 0.85rem;
     font-weight: 500;
 }
@@ -527,7 +527,7 @@
 /* Forms */
 .form-card {
     background: var(--bg-card);
-    border-radius: 12px;
+    border-radius: 6px;
     padding: 30px;
     border: 1px solid var(--border-color);
     max-width: 800px;
@@ -604,7 +604,7 @@
 .loading-content {
     background: var(--bg-card);
     padding: 30px;
-    border-radius: 12px;
+    border-radius: 6px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -849,7 +849,7 @@
     /* Remove max-height: 90vh to let it grow naturally */
     display: flex;
     flex-direction: column;
-    border-radius: 12px;
+    border-radius: 6px;
     border: 1px solid var(--border-color);
     box-shadow: 0 10px 25px rgba(0,0,0,0.5);
     overflow: visible; /* CRITICAL: Ensure dropdowns aren't clipped */
@@ -1089,7 +1089,7 @@
     background: var(--bg-secondary);
     width: 90%;
     max-width: 500px;
-    border-radius: 12px;
+    border-radius: 6px;
     border: 1px solid var(--border-color);
     box-shadow: 0 10px 40px rgba(0,0,0,0.5);
     overflow: hidden;
@@ -1347,3 +1347,25 @@
 .status-badge.in_progress, .status-badge.pickup, .status-badge.dropoff, .status-badge.return_pickup, .in_progress, .pickup, .dropoff, .return_pickup { background-color: #e9d5ff !important; color: #6b21a8 !important; }
 .status-badge.completed, .completed { background-color: #bbf7d0 !important; color: #166534 !important; }
 .status-badge.cancelled, .cancelled { background-color: #fecaca !important; color: #991b1b !important; }
+
+/* Real-time Driver Status Badges */
+.status-badge.available { background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
+.status-badge.on_schedule, .status-badge.accepted { background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.3); }
+.status-badge.pickup, .status-badge.in_progress { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; border: 1px solid rgba(139, 92, 246, 0.3); }
+.status-badge.dropoff { background: rgba(249, 115, 22, 0.15); color: #f97316; border: 1px solid rgba(249, 115, 22, 0.3); }
+.status-badge.offline { background: rgba(107, 114, 128, 0.15); color: #6b7280; border: 1px solid rgba(107, 114, 128, 0.3); }
+.driver-badge-area { margin-left: auto; display: flex; align-items: center; }
+.driver-item.offline { opacity: 0.7; }
+.driver-status-text.available { color: #10b981; }
+.driver-status-text.on_schedule, .driver-status-text.accepted { color: #3b82f6; }
+.driver-status-text.pickup, .driver-status-text.in_progress { color: #8b5cf6; }
+.driver-status-text.dropoff { color: #f97316; }
+.driver-status-text.offline { color: #6b7280; }
+
+/* Driver Profile Enhancements */
+.driver-profile-header { display: flex; justify-content: center; margin-bottom: 15px; padding-top: 10px; }
+.driver-avatar-large { width: 80px; height: 80px; border-radius: 50%; background: var(--bg-input); display: flex; align-items: center; justify-content: center; overflow: hidden; border: 2px solid var(--border-color); }
+.driver-avatar-large img { width: 100%; height: 100%; object-fit: cover; }
+.driver-avatar-large i { font-size: 50px; color: var(--text-muted); }
+.car-details-small { font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; padding: 4px 8px; background: rgba(255,255,255,0.03); border-radius: 4px; }
+.form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }

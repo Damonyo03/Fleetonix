@@ -393,12 +393,13 @@ function renderActiveTripOverlay(schedule) {
         </div>
         <div class="active-trip-body" style="margin-top: 15px;">
             <div class="driver-info" style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
-                <div class="driver-avatar" style="width: 45px; height: 45px; background: var(--accent-blue); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">
-                    ${(schedule.driver_name || 'D').charAt(0)}
+                <div class="driver-avatar" style="width: 50px; height: 50px; background: var(--accent-blue); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; overflow: hidden; border: 1px solid rgba(255,255,255,0.1);">
+                    ${schedule.driver_image_url ? `<img src="${schedule.driver_image_url}" style="width: 100%; height: 100%; object-fit: cover;">` : (schedule.driver_name || 'D').charAt(0)}
                 </div>
                 <div>
                     <h4 style="margin: 0; font-size: 0.95rem; color: white;">${schedule.driver_name || 'Professional Driver'}</h4>
-                    <p style="margin: 2px 0 0; font-size: 0.75rem; color: var(--text-muted);">${schedule.vehicle_assigned || 'Fleet Vehicle'} • ${schedule.plate_number || 'N/A'}</p>
+                    <p style="margin: 2px 0 0; font-size: 0.75rem; color: var(--text-muted);">${schedule.vehicle_assigned || 'Fleet Vehicle'} ${schedule.car_color ? `(${schedule.car_color})` : ''} • ${schedule.plate_number || 'N/A'}</p>
+                    ${schedule.car_details ? `<p style="margin: 2px 0 0; font-size: 0.7rem; color: var(--accent-blue); opacity: 0.8;">${schedule.car_details}</p>` : ''}
                 </div>
             </div>
             <div class="trip-locations" style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 12px;">

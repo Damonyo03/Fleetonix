@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.sp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.prototype.fleetonix.ui.theme.*
 import kotlinx.coroutines.tasks.await
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,12 +98,21 @@ fun DriverProfile(
                     .border(2.dp, TextPrimary.copy(alpha = 0.5f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = null,
-                    modifier = Modifier.size(70.dp),
-                    tint = Color.White
-                )
+                if (driver?.profileImageUrl != null && driver.profileImageUrl.isNotEmpty()) {
+                    AsyncImage(
+                        model = driver.profileImageUrl,
+                        contentDescription = "Profile Picture",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = null,
+                        modifier = Modifier.size(70.dp),
+                        tint = Color.White
+                    )
+                }
             }
             
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -127,9 +138,13 @@ fun DriverProfile(
             
             // Vehicle Details Card
             ProfileSection(title = "VEHICLE ASSIGNMENT", icon = Icons.Default.DirectionsCar) {
-                ProfileDetailRow(label = "Licensed Number", value = driver?.licenseNumber ?: "N/A", icon = Icons.Default.Badge)
                 ProfileDetailRow(label = "Vehicle Model", value = driver?.vehicleAssigned ?: "N/A", icon = Icons.Default.CarRental)
                 ProfileDetailRow(label = "Plate Number", value = driver?.plateNumber ?: "N/A", icon = Icons.Default.Numbers)
+                ProfileDetailRow(label = "Vehicle Color", value = driver?.carColor ?: "Not Specified", icon = Icons.Default.Palette)
+                
+                if (driver?.carDetails != null && driver.carDetails.isNotEmpty()) {
+                    ProfileDetailRow(label = "Additional Details", value = driver.carDetails, icon = Icons.Default.Info)
+                }
                 
                 val statusColor = when (driver?.currentStatus) {
                     "available" -> AccentTeal
