@@ -778,14 +778,12 @@ fun DriverDashboard(
                         currentHeading = bearing
                         totalDistanceMetres = totalDist
                         
-                        // Accumulate Actual Route Points during job movement
-                        // Include all active phases: from accepting -> completion
-                        val activePhases = listOf("accepted", "moving_to_pickup", "pickup", "moving_to_dropoff", "dropoff", "return_pickup", "ready_to_complete")
-                        if (lat != 0.0 && lng != 0.0 && activePhases.contains(tripPhase)) {
-                            val newPoint = LatLng(lat, lng)
-                            if (actualRoutePoints.isEmpty() || 
-                                GoogleMapsService.calculatePolylineDistance(listOf(actualRoutePoints.last(), newPoint)) > 10f) {
-                                actualRoutePoints.add(newPoint)
+                        val routePolyline = intent.getStringExtra(LocationService.EXTRA_ROUTE_POLYLINE)
+                        if (!routePolyline.isNullOrEmpty()) {
+                            val remotePoints = GoogleMapsService.decodePolyline(routePolyline)
+                            if (remotePoints.size > actualRoutePoints.size) {
+                                actualRoutePoints.clear()
+                                actualRoutePoints.addAll(remotePoints)
                                 
                                 // Sync live telemetry to Firestore Trip Ticket
                                 scope.launch {
@@ -793,7 +791,7 @@ fun DriverDashboard(
                                         try {
                                             db.collection("trip_tickets").document(ticketId).update(
                                                 "total_km", totalDistanceMetres / 1000.0,
-                                                "route_polyline", GoogleMapsService.encodePolyline(actualRoutePoints.toList())
+                                                "route_polyline", routePolyline
                                             )
                                         } catch (e: Exception) {
                                             Log.e("DriverDashboard", "Live sync failed", e)
@@ -1609,6 +1607,12 @@ fun DriverDashboard(
                                             // Reset tracking for new job
                                             actualRoutePoints.clear()
                                             totalDistanceMetres = 0f
+                                            
+                                            // Notify service to start accumulating NEW route
+                                            val startTripIntent = Intent(context, LocationService::class.java).apply {
+                                                action = LocationService.ACTION_START_TRIP
+                                            }
+                                            context.startService(startTripIntent)
 
                                             val docId = nextSchedule?.docId ?: throw Exception("Schedule ID missing")
                                             db.collection("schedules").document(docId).update(
@@ -2072,6 +2076,12 @@ fun DriverDashboard(
                                                 // Reset tracking for new job
                                                 actualRoutePoints.clear()
                                                 totalDistanceMetres = 0f
+
+                                                // Notify service to start accumulating NEW route
+                                                val startTripIntent = Intent(context, LocationService::class.java).apply {
+                                                    action = LocationService.ACTION_START_TRIP
+                                                }
+                                                context.startService(startTripIntent)
                                                 db.collection("schedules").document(docId).update(
                                                     "status", "accepted",
                                                     "trip_phase", "accepted",

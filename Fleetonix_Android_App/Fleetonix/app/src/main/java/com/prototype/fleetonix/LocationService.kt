@@ -46,6 +46,8 @@ class LocationService : Service() {
     private var totalDistanceMetres = 0f
     private var lastLocation: android.location.Location? = null
     private var driverDocId: String? = null
+    private val actualRoutePoints = mutableListOf<com.google.android.gms.maps.model.LatLng>()
+    private var isTripActive = false
     
     // Telematics State
     private var currentGForce = 1.0 // Normalized Earth Gravity
@@ -70,6 +72,7 @@ class LocationService : Service() {
         const val EXTRA_GEOFENCE_ID = "extra_geofence_id"
         const val EXTRA_TARGET_PHASE = "extra_target_phase"
         const val EXTRA_TOTAL_DISTANCE = "extra_total_distance"
+        const val EXTRA_ROUTE_POLYLINE = "extra_route_polyline"
     }
 
     override fun onCreate() {
@@ -89,6 +92,15 @@ class LocationService : Service() {
                         val distance = last.distanceTo(location)
                         if (location.accuracy < 150) { // Relaxed to 150m for urban reliability
                             totalDistanceMetres += distance
+                            
+                            // Accumulate points for route visualization if trip is active
+                            if (isTripActive) {
+                                val newPoint = com.google.android.gms.maps.model.LatLng(location.latitude, location.longitude)
+                                if (actualRoutePoints.isEmpty() || 
+                                    GoogleMapsService.calculateDistance(actualRoutePoints.last(), newPoint) >= 10f) {
+                                    actualRoutePoints.add(newPoint)
+                                }
+                            }
                         }
                     }
                     lastLocation = location
@@ -108,6 +120,7 @@ class LocationService : Service() {
                         putExtra(EXTRA_ACCURACY, location.accuracy)
                         putExtra(EXTRA_BEARING, location.bearing)
                         putExtra(EXTRA_TOTAL_DISTANCE, totalDistanceMetres)
+                        putExtra(EXTRA_ROUTE_POLYLINE, GoogleMapsService.encodePolyline(actualRoutePoints))
                         putExtra("wifi_ssid", currentWifiSsid)
                     }
                     sendBroadcast(intent)
@@ -179,6 +192,8 @@ class LocationService : Service() {
                 Log.d("LocationService", "Service started: Driver $driverDocId is now ONLINE")
             }
             ACTION_STOP -> {
+                isTripActive = false
+                actualRoutePoints.clear()
                 PresenceManager.updateStatus(false)
                 stopForeground(true)
                 stopSelf()
@@ -199,9 +214,11 @@ class LocationService : Service() {
             }
             ACTION_START_TRIP -> {
                 totalDistanceMetres = 0f
+                actualRoutePoints.clear()
                 lastLocation = null
+                isTripActive = true
                 updateDriverStatus("on_trip")
-                Log.d("LocationService", "Trip started, distance reset")
+                Log.d("LocationService", "Trip started, distance and route reset")
             }
         }
 
