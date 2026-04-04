@@ -1100,20 +1100,20 @@ fun DriverDashboard(
                             }
                         }
 
-<<<<<<< HEAD
+                        // Trip History option
                         // Trip Tickets History option
                         TextButton(
                             onClick = {
                                 scope.launch { drawerState.close() }
                                 showTripHistory = true
-=======
-                        // My Trip History option - left aligned
-                        TextButton(
-                            onClick = {
-                                scope.launch { drawerState.close() }
-                                onViewHistory()
->>>>>>> 026b65d13820c178b2bd8023992a4e4e03c529e5
                             },
+
+
+
+
+
+
+
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
@@ -1122,23 +1122,14 @@ fun DriverDashboard(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Icon(
-<<<<<<< HEAD
                                     imageVector = Icons.Default.History,
-                                    contentDescription = "Trip Tickets",
-=======
-                                    imageVector = Icons.Default.DateRange,
-                                    contentDescription = "History",
->>>>>>> 026b65d13820c178b2bd8023992a4e4e03c529e5
+                                    contentDescription = "Trip History",
                                     tint = TextPrimary,
                                     modifier = Modifier.size(20.dp)
                                 )
                                 Spacer(modifier = Modifier.padding(horizontal = 8.dp))
                                 Text(
-<<<<<<< HEAD
-                                    text = "Trip Tickets",
-=======
-                                    text = "My Trip History",
->>>>>>> 026b65d13820c178b2bd8023992a4e4e03c529e5
+                                    text = "Trip History",
                                     color = TextPrimary,
                                     style = MaterialTheme.typography.bodyLarge
                                 )
@@ -2101,11 +2092,7 @@ fun DriverDashboard(
                                 "time_of_departure" to (pickedUpAt ?: ""),
                                 "time_of_arrival" to (completedAt ?: ""),
                                 "total_km" to (totalDistanceMetres / 1000.0),
-<<<<<<< HEAD
-                                "route_polyline" to routePolyline,
-=======
                                 "route_polyline" to GoogleMapsService.encodePolyline(actualRoutePoints),
->>>>>>> 026b65d13820c178b2bd8023992a4e4e03c529e5
                                 "created_at" to FieldValue.serverTimestamp()
                             )
                             db.collection("trip_tickets").add(ticketData).await()
@@ -2114,15 +2101,19 @@ fun DriverDashboard(
                             val currentMileage = session.driver?.currentMileage ?: 0.0
                             val newMileage = currentMileage + (totalDistanceMetres / 1000.0)
                             
-                            val uid = auth.currentUser?.uid
-                            if (uid != null) {
-                                db.collection("drivers").document(uid).update(
+                            val email = auth.currentUser?.email
+                            if (email != null) {
+                                val dSnap = db.collection("drivers")
+                                    .whereEqualTo("driver_email", email.lowercase().trim())
+                                    .get().await()
+                                    
+                                dSnap.documents.firstOrNull()?.reference?.update(
                                     "current_status", "available",
                                     "current_trip_id", "",
                                     "current_trip_phase", "completed",
                                     "current_mileage", newMileage,
                                     "last_updated", com.google.firebase.firestore.FieldValue.serverTimestamp()
-                                ).await()
+                                )?.await()
                             }
                             
                             showTripTicket = false
