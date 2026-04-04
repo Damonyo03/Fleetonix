@@ -413,30 +413,72 @@ exports.adminClearData = onRequest({ cors: true }, async (req, res) => {
     return;
   }
 
+  logger.info("CRITICAL: adminClearData triggered for FULL SYSTEM RESET");
+
   try {
     const db = admin.firestore();
-    const collections = ["schedules", "bookings", "activity", "accidents", "vehicle_issues"];
-    const backup = {};
+    const auth = admin.auth();
+    
+    // 1. Define ALL collections to wipe
+    const allCollections = [
+      "users", "drivers", "bookings", "schedules", "activity", "accidents", 
+      "vehicle_issues", "registration_otps", "otps", "accredited_companies", 
+      "dtr_logs", "vehicle_logs", "driver_locations", "trip_tickets", "otp_codes"
+    ];
 
-    // 1. Fetch data for backup
-    for (const col of collections) {
+    // 2. Perform deletion in batches for every collection
+    for (const col of allCollections) {
       const snap = await db.collection(col).get();
-      backup[col] = snap.docs.map((d) => ({id: d.id, ...d.data()}));
+      const docs = snap.docs;
+      
+      // Delete in chunks of 500
+      for (let i = 0; i < docs.length; i += 500) {
+        const batch = db.batch();
+        const chunk = docs.slice(i, i + 500);
+        chunk.forEach((doc) => batch.delete(doc.ref));
+        await batch.commit();
+      }
+      logger.info(`Cleared collection: ${col}`);
     }
 
-    // 2. Perform deletion in batches
-    for (const col of collections) {
-      const snap = await db.collection(col).get();
-      const batch = db.batch();
-      snap.docs.forEach((doc) => batch.delete(doc.ref));
-      await batch.commit();
+    // 3. Delete all Auth Users
+    let users = await auth.listUsers(1000);
+    while (users.users.length > 0) {
+      const uids = users.users.map((u) => u.uid);
+      await auth.deleteUsers(uids);
+      logger.info(`Deleted batch of ${uids.length} Auth users.`);
+      if (users.pageToken) {
+        users = await auth.listUsers(1000, users.pageToken);
+      } else {
+        break;
+      }
     }
 
-    logger.info("Admin cleared all transactional data");
+    // 4. Create the requested Super Admin Account
+    const adminEmail = "perezralph15@gmail.com";
+    const adminPassword = "admin123";
+    
+    const userRecord = await auth.createUser({
+      email: adminEmail,
+      password: adminPassword,
+      displayName: "Super Admin",
+      emailVerified: true
+    });
+
+    await db.collection("users").doc(userRecord.uid).set({
+      full_name: "Super Admin",
+      email: adminEmail,
+      role: "super_admin",
+      user_type: "super_admin",
+      status: "active",
+      created_at: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    logger.info("Admin cleared all data and restored super admin: " + adminEmail);
     res.json({
       success: true,
-      message: "Data cleared successfully. Backup attached.",
-      backup: backup,
+      message: "System reset successful. Super admin account restored.",
+      admin_uid: userRecord.uid
     });
   } catch (error) {
     logger.error("Clear data error", error);
