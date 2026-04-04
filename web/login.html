@@ -108,7 +108,8 @@
                 if (!querySnapshot.empty) {
                     const userData = querySnapshot.docs[0].data();
                     console.log("User found in Firestore:", userData);
-                    if (userData.user_type === 'admin') {
+                    const adminRoles = ['admin', 'super_admin', 'company_admin'];
+                    if (adminRoles.includes(userData.user_type || userData.role)) {
                         window.location.href = 'admin/dashboard.html';
                     } else if (userData.user_type === 'client') {
                         window.location.href = 'client/dashboard.html';
