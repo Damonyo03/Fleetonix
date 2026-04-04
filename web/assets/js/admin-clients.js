@@ -16,7 +16,8 @@ const secondaryAuth = getAuth(secondaryApp);
 const clientTableBody = document.getElementById('clientTableBody');
 const clientSearch = document.getElementById('clientSearch');
 
-let allClients = [];
+let currentUserData = null;
+let activeCompanies = {};
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -25,14 +26,32 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     const userDoc = await getDoc(doc(db, "users", user.uid));
-    const name = userDoc.exists() ? userDoc.data().full_name : user.email.split('@')[0];
+    currentUserData = userDoc.exists() ? userDoc.data() : { role: 'admin' };
+    const name = currentUserData.full_name || user.email.split('@')[0];
     initLayout('Client Management', name);
+
+    // Fetch companies if super_admin
+    const role = currentUserData.role || currentUserData.user_type;
+    if (role === 'super_admin' || role === 'admin') {
+        const companiesSnap = await getDocs(query(collection(db, "accredited_companies"), where("status", "==", "active")));
+        companiesSnap.forEach(doc => {
+            activeCompanies[doc.id] = doc.data().name;
+        });
+    }
 
     initClientList();
 });
 
 function initClientList() {
-    const q = query(collection(db, "users"), where("user_type", "==", "client"));
+    const role = currentUserData.role || currentUserData.user_type;
+    const companyId = currentUserData.accredited_company_id;
+
+    let q = query(collection(db, "users"), where("user_type", "==", "client"));
+
+    // RBAC Filtering for Company Admins
+    if (role === 'company_admin' && companyId) {
+        q = query(collection(db, "users"), where("user_type", "==", "client"), where("accredited_company_id", "==", companyId));
+    }
 
     onSnapshot(q, (snapshot) => {
         allClients = snapshot.docs;
@@ -87,8 +106,11 @@ window.editClient = async (id) => {
 
     const content = `
         <div class="form-group">
-            <label>Company Name</label>
-            <input type="text" id="modal_company_name" class="form-input" value="${client.company_name || ''}" required>
+            <label>Accredited Company</label>
+            <select id="modal_accredited_company_id" class="form-input" required>
+                <option value="">-- Select Company --</option>
+                ${Object.entries(activeCompanies).map(([id, name]) => `<option value="${id}" ${client.accredited_company_id === id ? 'selected' : ''}>${name}</option>`).join('')}
+            </select>
         </div>
         <div class="form-group">
             <label>Contact Person</label>
@@ -101,8 +123,11 @@ window.editClient = async (id) => {
     `;
 
     showModal('client-modal', 'Edit Client', content, async () => {
+        const companyId = document.getElementById('modal_accredited_company_id').value;
+        const companyName = activeCompanies[companyId] || "";
         await updateDoc(doc(db, "users", id), {
-            company_name: document.getElementById('modal_company_name').value,
+            accredited_company_id: companyId,
+            company_name: companyName,
             full_name: document.getElementById('modal_full_name').value,
             address: document.getElementById('modal_address').value
         });
@@ -125,8 +150,11 @@ if (addClientBtn) {
     addClientBtn.onclick = () => {
         const content = `
             <div class="form-group">
-                <label>Company Name</label>
-                <input type="text" id="modal_company_name" class="form-input">
+                <label>Accredited Company</label>
+                <select id="modal_accredited_company_id" class="form-input" required>
+                    <option value="">-- Select Company --</option>
+                    ${Object.entries(activeCompanies).map(([id, name]) => `<option value="${id}">${name}</option>`).join('')}
+                </select>
             </div>
             <div class="form-group">
                 <label>Contact Person (Full Name)</label>
@@ -159,15 +187,19 @@ if (addClientBtn) {
             }
 
             try {
+                const companyId = document.getElementById('modal_accredited_company_id').value;
+                const companyName = activeCompanies[companyId] || "";
                 const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
                 const clientId = userCredential.user.uid;
 
                 await setDoc(doc(db, "users", clientId), {
-                    company_name: company,
+                    accredited_company_id: companyId,
+                    company_name: companyName,
                     full_name: name,
                     address: address,
                     email: email,
                     user_type: "client",
+                    role: "client",
                     status: "active",
                     created_at: serverTimestamp()
                 });

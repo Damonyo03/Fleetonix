@@ -23,6 +23,8 @@ if (newAdminBookingBtn) {
     });
 }
 
+let currentUserData = null;
+
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
         window.location.href = '../login.html';
@@ -30,7 +32,8 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     const userDoc = await getDoc(doc(db, "users", user.uid));
-    const name = userDoc.exists() ? (userDoc.data().full_name || user.email.split('@')[0]) : user.email.split('@')[0];
+    currentUserData = userDoc.exists() ? userDoc.data() : { role: 'admin' };
+    const name = currentUserData.full_name || user.email.split('@')[0];
     
     // Only set layout title to 'Bookings' if we are on the bookings page
     if (window.location.pathname.includes('bookings.html')) {
@@ -85,7 +88,7 @@ async function showCreateBookingModal(clients) {
             <label for="modal_client">Select Client</label>
             <select id="modal_client" class="form-input">
                 <option value="">-- Choose a Client --</option>
-                ${clients.map(c => `<option value="${c.id}" data-name="${c.full_name}" data-email="${c.email}">${c.full_name} (${c.email})</option>`).join('')}
+                ${clients.map(c => `<option value="${c.id}" data-name="${c.full_name}" data-email="${c.email}" data-company-id="${c.accredited_company_id || ''}">${c.full_name} (${c.email})</option>`).join('')}
             </select>
         </div>
 
@@ -180,6 +183,9 @@ async function showCreateBookingModal(clients) {
         const clientEmail = isExisting
             ? (selectedOption?.getAttribute('data-email') || '')
             : document.getElementById('modal_guest_email').value;
+        const clientCompanyId = isExisting
+            ? (selectedOption?.getAttribute('data-company-id') || '')
+            : (currentUserData.accredited_company_id || ''); // For guest bookings by company_admin, tag with their company
 
         if (isExisting && !clientId) throw new Error("Please select a registered client.");
         if (!isExisting && (!clientName || !clientEmail)) throw new Error("Please enter Guest name and email.");
@@ -201,6 +207,7 @@ async function showCreateBookingModal(clients) {
             client_id: clientId,
             client_name: clientName,
             client_email: clientEmail,
+            accredited_company_id: clientCompanyId,
             company_name: isExisting ? '' : (document.getElementById('modal_company')?.value || ''),
 
             pickup_location: pickup,
@@ -247,6 +254,7 @@ async function showCreateBookingModal(clients) {
                 client_id: clientId,
                 client_name: clientName,
                 client_email: clientEmail,
+                accredited_company_id: clientCompanyId,
                 company_name: isExisting ? '' : (document.getElementById('modal_company')?.value || ''),
                 driver_id: driverId,
                 driver_email: driverEmail.toLowerCase().trim(),
@@ -374,7 +382,19 @@ async function showCreateBookingModal(clients) {
 
 // --- Booking List ---
 function initBookingList() {
-    onSnapshot(query(collection(db, "bookings"), orderBy("created_at", "desc")), (snapshot) => {
+    const role = currentUserData.role || currentUserData.user_type;
+    const companyId = currentUserData.accredited_company_id;
+
+    let q = collection(db, "bookings");
+
+    // RBAC Filtering for Company Admins
+    if (role === 'company_admin' && companyId) {
+        q = query(collection(db, "bookings"), where("accredited_company_id", "==", companyId));
+    } else {
+        q = query(collection(db, "bookings"), orderBy("created_at", "desc"));
+    }
+
+    onSnapshot(q, (snapshot) => {
         allBookings = snapshot.docs;
         applyFilters();
     });

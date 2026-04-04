@@ -119,7 +119,8 @@ onAuthStateChanged(auth, async (user) => {
             }
         }
 
-        if (!userData || (userData.user_type !== 'admin' && userData.role !== 'admin')) {
+        const adminRoles = ['admin', 'super_admin', 'company_admin'];
+        if (!userData || !adminRoles.includes(userData.user_type || userData.role)) {
             console.error("Access Denied: User is not an administrator.", userData);
             // Block access and redirect
             window.location.href = '../login.html?error=unauthorized';

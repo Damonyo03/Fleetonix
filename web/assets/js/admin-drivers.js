@@ -17,7 +17,8 @@ const driverGrid = document.getElementById('driverGrid');
 const driverSearch = document.getElementById('driverSearch');
 const statusFilter = document.getElementById('statusFilter');
 
-let allDrivers = [];
+let currentUserData = null;
+let activeCompanies = {};
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -26,14 +27,34 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     const userDoc = await getDoc(doc(db, "users", user.uid));
-    const name = userDoc.exists() ? userDoc.data().full_name : user.email.split('@')[0];
+    currentUserData = userDoc.exists() ? userDoc.data() : { role: 'admin' };
+    const name = currentUserData.full_name || user.email.split('@')[0];
     initLayout('Driver Management', name);
+
+    // Fetch companies if super_admin
+    const role = currentUserData.role || currentUserData.user_type;
+    if (role === 'super_admin' || role === 'admin') {
+        const companiesSnap = await getDocs(query(collection(db, "accredited_companies"), where("status", "==", "active")));
+        companiesSnap.forEach(doc => {
+            activeCompanies[doc.id] = doc.data().name;
+        });
+    }
 
     initDriverList();
 });
 
 function initDriverList() {
-    onSnapshot(collection(db, "drivers"), (snapshot) => {
+    const role = currentUserData.role || currentUserData.user_type;
+    const companyId = currentUserData.accredited_company_id;
+
+    let driverQuery = collection(db, "drivers");
+
+    // RBAC Filtering for Company Admins
+    if (role === 'company_admin' && companyId) {
+        driverQuery = query(collection(db, "drivers"), where("accredited_company_id", "==", companyId));
+    }
+
+    onSnapshot(driverQuery, (snapshot) => {
         allDrivers = snapshot.docs;
         applyFilters();
     });
@@ -138,6 +159,14 @@ if (addDriverBtn) {
                 <label>Password (At least 6 characters)</label>
                 <input type="password" id="modal_password" class="form-input" required minlength="6">
             </div>
+            ${(currentUserData.role === 'super_admin' || currentUserData.role === 'admin') ? `
+            <div class="form-group">
+                <label>Accredited Company</label>
+                <select id="modal_accredited_company_id" class="form-input" required>
+                    <option value="">-- Select Company --</option>
+                    ${Object.entries(activeCompanies).map(([id, name]) => `<option value="${id}">${name}</option>`).join('')}
+                </select>
+            </div>` : ''}
         `;
 
         showModal('driver-modal', 'Add New Driver', content, async () => {
@@ -158,15 +187,21 @@ if (addDriverBtn) {
                 const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
                 const driverId = userCredential.user.uid;
 
+                const role = currentUserData.role || currentUserData.user_type;
+                const companyId = (role === 'super_admin' || role === 'admin') 
+                    ? document.getElementById('modal_accredited_company_id').value 
+                    : currentUserData.accredited_company_id;
+
                 await setDoc(doc(db, "drivers", driverId), {
                     driver_name: name,
                     vehicle_assigned: vehicle,
                     car_color: document.getElementById('modal_color').value,
-                    car_details: document.getElementById('modal_car_details').value,
-                    profile_image_url: document.getElementById('modal_image_url').value,
+                    car_details: document.getElementById('modal_car_details').value || "",
+                    profile_image_url: document.getElementById('modal_image_url').value || "",
                     plate_number: plate,
                     driver_phone: phone,
                     driver_email: email,
+                    accredited_company_id: companyId || "",
                     current_status: "offline",
                     created_at: serverTimestamp()
                 });
@@ -176,7 +211,10 @@ if (addDriverBtn) {
                     full_name: name,
                     email: email,
                     user_type: "driver",
-                    status: "active"
+                    role: "driver",
+                    accredited_company_id: companyId || "",
+                    status: "active",
+                    created_at: serverTimestamp()
                 });
 
                 // Clear secondary auth state

@@ -14,6 +14,8 @@ const scheduleTableBody = document.getElementById('scheduleTableBody');
 
 let allSchedules = [];
 
+let currentUserData = null;
+
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
         window.location.href = '../login.html';
@@ -21,7 +23,8 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     const userDoc = await getDoc(doc(db, "users", user.uid));
-    const name = userDoc.exists() ? userDoc.data().full_name : user.email.split('@')[0];
+    currentUserData = userDoc.exists() ? userDoc.data() : { role: 'admin' };
+    const name = currentUserData.full_name || user.email.split('@')[0];
     initLayout('Trip Schedules', name);
 
     initScheduleList();
@@ -61,6 +64,11 @@ function initExportFeature() {
 function initClearDataFeature() {
     const btn = document.getElementById('clearDataBtn');
     if (btn) {
+        // Only super_admin can clear ALL data
+        const role = currentUserData?.role || currentUserData?.user_type;
+        if (role !== 'super_admin' && role !== 'admin') {
+            btn.style.display = 'none';
+        }
         btn.onclick = async () => {
             if (!confirm("⚠️ WARNING: This will permanently delete all schedules, bookings, activity logs, and reports. A backup will be downloaded first. Proceed?")) return;
 
@@ -102,7 +110,17 @@ function initClearDataFeature() {
 }
 
 function initScheduleList() {
-    onSnapshot(query(collection(db, "schedules"), orderBy("created_at", "desc")), (snapshot) => {
+    const role = currentUserData.role || currentUserData.user_type;
+    const companyId = currentUserData.accredited_company_id;
+
+    let q = query(collection(db, "schedules"), orderBy("created_at", "desc"));
+
+    // RBAC Filtering for Company Admins
+    if (role === 'company_admin' && companyId) {
+        q = query(collection(db, "schedules"), where("accredited_company_id", "==", companyId), orderBy("created_at", "desc"));
+    }
+
+    onSnapshot(q, (snapshot) => {
         allSchedules = snapshot.docs;
         renderSchedules(allSchedules);
     });

@@ -326,6 +326,7 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
       full_name: fullName,
       email: email.toLowerCase().trim(),
       role: role,
+      accredited_company_id: req.body.accredited_company_id || "",
       company_name: companyName || "",
       created_at: admin.firestore.FieldValue.serverTimestamp(),
       user_type: role, // Compatibility for dual-schema
@@ -338,6 +339,7 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
       await admin.firestore().collection("drivers").doc(email.toLowerCase().trim()).set({
         driver_name: fullName,
         driver_email: email.toLowerCase().trim(),
+        accredited_company_id: req.body.accredited_company_id || "",
         current_status: "offline",
         created_at: admin.firestore.FieldValue.serverTimestamp(),
         updated_at: admin.firestore.FieldValue.serverTimestamp(),
@@ -567,6 +569,7 @@ exports.completeRegistration = onRequest({ cors: true }, async (req, res) => {
       email: email.toLowerCase().trim(),
       phone: phone || userData.phone || "",
       company_name: userData.company_name || "",
+      accredited_company_id: userData.accredited_company_id || "",
       user_type: role,
       status: "active",
       created_at: admin.firestore.FieldValue.serverTimestamp(),
@@ -577,6 +580,7 @@ exports.completeRegistration = onRequest({ cors: true }, async (req, res) => {
       await admin.firestore().collection("drivers").doc(email.toLowerCase().trim()).set({
         driver_name: userData.full_name,
         driver_email: email.toLowerCase().trim(),
+        accredited_company_id: userData.accredited_company_id || "",
         current_status: "offline",
         created_at: admin.firestore.FieldValue.serverTimestamp(),
         updated_at: admin.firestore.FieldValue.serverTimestamp(),

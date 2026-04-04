@@ -49,8 +49,10 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="company_name">Company Name</label>
-                    <input type="text" id="company_name" class="form-input" placeholder="Enter your company name" required>
+                    <label for="accredited_company_id">Accredited Company</label>
+                    <select id="accredited_company_id" class="form-input" required>
+                        <option value="">-- Select company --</option>
+                    </select>
                 </div>
 
                 <div class="form-group">
@@ -111,7 +113,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, serverTimestamp, getDocs, collection, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import { firebaseConfig } from "./assets/js/firebase-config.js";
 
         const app = initializeApp(firebaseConfig);
@@ -129,13 +131,34 @@
         const displayEmail = document.getElementById('displayEmail');
 
         let pendingUserData = null;
+        let activeCompanies = {};
+
+        // Fetch accredited companies on load
+        async function initCompanies() {
+            const companySelect = document.getElementById('accredited_company_id');
+            try {
+                const companiesSnap = await getDocs(query(collection(db, "accredited_companies"), where("status", "==", "active"), orderBy("name")));
+                companiesSnap.forEach(doc => {
+                    const data = doc.data();
+                    activeCompanies[doc.id] = data.name;
+                    const option = document.createElement('option');
+                    option.value = doc.id;
+                    option.textContent = data.name;
+                    companySelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error("Error fetching companies:", error);
+            }
+        }
+        initCompanies();
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             const fullName = document.getElementById('full_name').value;
             const email = document.getElementById('email').value;
             const phone = document.getElementById('phone').value;
-            const company = document.getElementById('company_name').value;
+            const companyId = document.getElementById('accredited_company_id').value;
+            const companyName = activeCompanies[companyId] || "";
             const password = document.getElementById('password').value;
             const confirm = document.getElementById('confirm_password').value;
 
@@ -144,7 +167,7 @@
                 return;
             }
 
-            pendingUserData = { fullName, email, phone, company, password };
+            pendingUserData = { fullName, email, phone, company_name: companyName, accredited_company_id: companyId, password };
             
             setLoading(true);
             try {
