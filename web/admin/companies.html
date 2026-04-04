@@ -90,7 +90,7 @@
                 <div class="header-right">
                     <div class="user-profile">
                         <div class="avatar">A</div>
-                        <span>Admin</span>
+                        <span id="adminName">Admin</span>
                     </div>
                 </div>
             </header>
@@ -116,11 +116,41 @@
         </main>
     </div>
 
-    <!-- Modal Placeholder -->
-    <div id="modalContainer"></div>
+    <!-- Company Management Modal -->
+    <div class="modal-backdrop" id="companyModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modalTitle">Register New Company</h3>
+                <button class="close-modal">&times;</button>
+            </div>
+            <form id="companyForm">
+                <div class="modal-body">
+                    <input type="hidden" id="companyId">
+                    <div class="form-group">
+                        <label for="name">Official Company Name</label>
+                        <input type="text" id="name" class="form-input" placeholder="e.g. Fleetonix Logistics" required>
+                    </div>
+                    <div class="form-group" style="margin-top: 16px;">
+                        <label for="shorthand">Shorthand / Code</label>
+                        <input type="text" id="shorthand" class="form-input" placeholder="e.g. FLX-LOG" required>
+                    </div>
+                    <div class="form-group" style="margin-top: 16px;">
+                        <label for="status">Account Status</label>
+                        <select id="status" class="form-input">
+                            <option value="active">Active (Full Access)</option>
+                            <option value="inactive">Inactive (Suspended)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary close-btn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Organization</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <script type="module" src="../assets/js/admin.js"></script>
-    <script type="module" src="../assets/js/modules/ui.js"></script>
     <script type="module" src="../assets/js/admin-companies.js"></script>
 </body>
 </html>

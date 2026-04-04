@@ -8,6 +8,18 @@
     <link rel="stylesheet" href="../assets/css/style.css">
     <link rel="stylesheet" href="../assets/css/admin.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @media print {
+            .sidebar, .header, .header-actions, .page-header p, .badge, .gps-link i, .menu-toggle { display: none !important; }
+            .main-content { margin-left: 0 !important; padding: 0 !important; }
+            .content-body { padding: 0 !important; max-width: 100% !important; }
+            .glass-card { border: none !important; box-shadow: none !important; background: transparent !important; padding: 0 !important; }
+            .data-table { color: black !important; border: 1px solid #eee !important; min-width: 100% !important; }
+            .data-table th, .data-table td { border: 1px solid #eee !important; color: black !important; padding: 8px !important; }
+            .page-title h1 { color: black !important; font-size: 24pt !important; margin-bottom: 20px !important; }
+            body { background: white !important; color: black !important; }
+        }
+    </style>
 </head>
 <body>
     <div class="admin-layout">
@@ -50,7 +62,7 @@
                 <div class="header-right">
                     <div class="user-profile">
                         <div class="avatar">A</div>
-                        <span>Admin</span>
+                        <span id="adminDisplayName">Admin</span>
                     </div>
                 </div>
             </header>
@@ -61,8 +73,11 @@
                         <h1>Attendance Dashboard</h1>
                         <p>Real-time GPS verified activity logs for your fleet.</p>
                     </div>
-                    <div class="header-actions">
+                    <div class="header-actions" style="display: flex; gap: 12px;">
                         <input type="date" id="dateFilter" class="btn btn-secondary" style="background:var(--bg-secondary); color:var(--text-primary); border:1px solid var(--border-color);">
+                        <button class="btn btn-primary" onclick="window.print()">
+                            <i class="fas fa-print"></i> Print Report
+                        </button>
                     </div>
                 </div>
 
@@ -111,7 +126,6 @@
     <div id="modalContainer"></div>
 
     <script type="module" src="../assets/js/admin.js"></script>
-    <script type="module" src="../assets/js/modules/ui.js"></script>
     <script type="module" src="../assets/js/admin-dtr-monitoring.js"></script>
 </body>
 </html>
