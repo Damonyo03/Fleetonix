@@ -340,34 +340,34 @@ function initMap() {
     `;
 }
 
-// Cleanup "ghost" markers periodically (every 5 mins)
+// Cleanup "ghost" markers periodically (every 1 min)
     setInterval(() => {
         const now = Date.now();
-        const tenMins = 10 * 60 * 1000; // Shorter threshold for active markers
-        const oneHour = 60 * 60 * 1000; // Threshold for offline markers
+        const tenMins = 10 * 60 * 1000; 
         
         Object.keys(driverMarkers).forEach(id => {
             const data = allDriversData[id];
             if (data && data.last_updated) {
                 const diff = now - (data.last_updated.seconds * 1000);
-                const status = data.current_status || 'offline';
                 
-                // If status is online but no update for 10 mins, it's a ghost
-                if (status !== 'offline' && diff > tenMins) {
-                    console.log(`Fading ghost marker for ${id} (no update for 10m)`);
-                    driverMarkers[id].setOpacity(0.3);
-                } 
-                // If it's more than an hour old, hide it regardless
-                if (diff > oneHour) {
-                    console.log(`Hiding very stale marker for ${id}`);
+                // If status is online but no update for 10 mins, hide it (Ghost)
+                if (diff > tenMins) {
+                    console.log(`Hiding ghost/stale marker for ${id} (no update for 10m)`);
                     driverMarkers[id].setMap(null);
-                } else if (driverMarkers[id].getMap() === null) {
-                    // Restore if it's within the hour again
-                    driverMarkers[id].setMap(driversMap);
+                    if (driverPolylines[id]) driverPolylines[id].setMap(null);
+                } else {
+                    // Restore if it's within the window
+                    if (driverMarkers[id].getMap() === null) {
+                        driverMarkers[id].setMap(driversMap);
+                        if (driverPolylines[id]) driverPolylines[id].setMap(driversMap);
+                    }
                 }
             }
         });
-    }, 60000); // Check every minute
+        
+        // Refresh the list UI to reflect status changes
+        updateOnlineDriversList();
+    }, 60000); 
 }
 
 function updateOnlineDriversList() {
@@ -375,8 +375,24 @@ function updateOnlineDriversList() {
     const onlineCount = document.getElementById('onlineCount');
     if (!listContainer) return;
 
-    // Filter out ghost telemetry (Loading Driver...)
-    const validDrivers = Object.values(allDriversData).filter(d => d.driver_name && d.driver_name !== 'Loading Driver...');
+    // Filter out ghost telemetry and stale sessions (10min inactivity = offline/ghost)
+    const now = Date.now();
+    const tenMins = 10 * 60 * 1000;
+    
+    const validDrivers = Object.values(allDriversData).filter(d => {
+        if (!d.driver_name || d.driver_name === 'Loading Driver...') return false;
+        
+        // If they have location, check for staleness
+        if (d.last_updated) {
+            const diff = now - (d.last_updated.seconds * 1000);
+            if (diff > tenMins) return false; // This is a ghost/inactive
+        } else {
+            // No location update at all? Probably not online ever.
+            return false;
+        }
+        
+        return true;
+    });
 
     const sortedDrivers = validDrivers.sort((a, b) => {
         const statusA = a.current_status || 'offline';

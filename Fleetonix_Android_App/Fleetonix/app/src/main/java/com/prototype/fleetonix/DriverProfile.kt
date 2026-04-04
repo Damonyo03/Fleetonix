@@ -36,29 +36,58 @@ fun DriverProfile(
     var phoneNumber by remember { mutableStateOf("Loading...") }
     var isLoading by remember { mutableStateOf(true) }
     
-    val driver = session.driver
+    // Live data states
+    var liveDriverName by remember { mutableStateOf(session.user?.name ?: "") }
+    var liveProfileImageUrl by remember { mutableStateOf(session.driver?.profileImageUrl ?: "") }
+    var liveVehicleAssigned by remember { mutableStateOf(session.driver?.vehicleAssigned ?: "") }
+    var livePlateNumber by remember { mutableStateOf(session.driver?.plateNumber ?: "") }
+    var liveCarColor by remember { mutableStateOf(session.driver?.carColor ?: "") }
+    var liveCarDetails by remember { mutableStateOf(session.driver?.carDetails ?: "") }
+    var liveStatus by remember { mutableStateOf(session.driver?.currentStatus ?: "offline") }
+
     val user = session.user
-    
+    val driverId = session.user?.id
+
+    // 1. Listen for USER metadata (Phone)
     LaunchedEffect(user?.email) {
         if (user?.email != null) {
-            try {
-                val snapshot = db.collection("users")
-                    .whereEqualTo("email", user.email)
-                    .limit(1)
-                    .get()
-                    .await()
-                
-                if (!snapshot.isEmpty) {
-                    val userData = snapshot.documents[0]
-                    phoneNumber = userData.getString("phone") ?: "Not Provided"
-                } else {
-                    phoneNumber = "Not Found"
+            db.collection("users")
+                .whereEqualTo("email", user.email)
+                .limit(1)
+                .addSnapshotListener { snapshot, e ->
+                    if (e != null) {
+                        return@addSnapshotListener
+                    }
+                    if (snapshot != null && !snapshot.isEmpty) {
+                        val userData = snapshot.documents[0]
+                        phoneNumber = userData.getString("phone") ?: "Not Provided"
+                        val newName = userData.getString("full_name") ?: ""
+                        if (newName.isNotEmpty()) liveDriverName = newName
+                    }
                 }
-            } catch (e: Exception) {
-                phoneNumber = "Error loading"
-            } finally {
-                isLoading = false
-            }
+        }
+    }
+
+    // 2. Listen for DRIVER profile details in real-time
+    LaunchedEffect(driverId) {
+        if (driverId != null) {
+            db.collection("drivers").document(driverId)
+                .addSnapshotListener { snapshot, e ->
+                    isLoading = false
+                    if (e != null || snapshot == null || !snapshot.exists()) {
+                        return@addSnapshotListener
+                    }
+                    
+                    val data = snapshot.data ?: return@addSnapshotListener
+                    liveProfileImageUrl = data["profile_image_url"] as? String ?: ""
+                    liveVehicleAssigned = data["vehicle_assigned"] as? String ?: ""
+                    livePlateNumber = data["plate_number"] as? String ?: ""
+                    liveCarColor = data["car_color"] as? String ?: ""
+                    liveCarDetails = data["car_details"] as? String ?: ""
+                    liveStatus = data["current_status"] as? String ?: "offline"
+                }
+        } else {
+            isLoading = false
         }
     }
     
@@ -98,9 +127,9 @@ fun DriverProfile(
                     .border(2.dp, TextPrimary.copy(alpha = 0.5f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                if (driver?.profileImageUrl != null && driver.profileImageUrl.isNotEmpty()) {
+                if (liveProfileImageUrl.isNotEmpty()) {
                     AsyncImage(
-                        model = driver.profileImageUrl,
+                        model = liveProfileImageUrl,
                         contentDescription = "Profile Picture",
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
@@ -117,7 +146,7 @@ fun DriverProfile(
             
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = user?.name ?: "Professional Driver",
+                    text = liveDriverName,
                     color = TextPrimary,
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.ExtraBold
@@ -138,22 +167,23 @@ fun DriverProfile(
             
             // Vehicle Details Card
             ProfileSection(title = "VEHICLE ASSIGNMENT", icon = Icons.Default.DirectionsCar) {
-                ProfileDetailRow(label = "Vehicle Model", value = driver?.vehicleAssigned ?: "N/A", icon = Icons.Default.CarRental)
-                ProfileDetailRow(label = "Plate Number", value = driver?.plateNumber ?: "N/A", icon = Icons.Default.Numbers)
-                ProfileDetailRow(label = "Vehicle Color", value = driver?.carColor ?: "Not Specified", icon = Icons.Default.Palette)
+                ProfileDetailRow(label = "Vehicle Model", value = if (liveVehicleAssigned.isEmpty()) "N/A" else liveVehicleAssigned, icon = Icons.Default.CarRental)
+                ProfileDetailRow(label = "Plate Number", value = if (livePlateNumber.isEmpty()) "N/A" else livePlateNumber, icon = Icons.Default.Numbers)
+                ProfileDetailRow(label = "Vehicle Color", value = if (liveCarColor.isEmpty()) "Not Specified" else liveCarColor, icon = Icons.Default.Palette)
                 
-                if (driver?.carDetails != null && driver.carDetails.isNotEmpty()) {
-                    ProfileDetailRow(label = "Additional Details", value = driver.carDetails, icon = Icons.Default.Info)
+                if (liveCarDetails.isNotEmpty()) {
+                    ProfileDetailRow(label = "Additional Details", value = liveCarDetails, icon = Icons.Default.Info)
                 }
                 
-                val statusColor = when (driver?.currentStatus) {
+                val statusColor = when (liveStatus) {
                     "available" -> AccentTeal
+                    "on_schedule", "moving_to_pickup", "pickup", "moving_to_dropoff", "dropoff", "return_pickup", "ready_to_complete" -> AccentBlue
                     "busy" -> AccentOrange
                     else -> TextSecondary
                 }
                 ProfileDetailRow(
                     label = "Current Status", 
-                    value = driver?.currentStatus?.replace("_", " ")?.uppercase() ?: "OFFLINE", 
+                    value = liveStatus.replace("_", " ").uppercase(), 
                     icon = Icons.Default.Circle,
                     valueColor = statusColor
                 )

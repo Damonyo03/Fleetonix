@@ -289,7 +289,7 @@ async function showCreateBookingModal(clients) {
                 user_id: clientId,
                 user_email: clientEmail,
                 title: 'Driver Assigned',
-                message: `Professional Driver ${driverName} (${vehicleAssigned}) has been assigned to your booking #${bookingId}.`,
+                message: `Professional Driver ${driverName} (${dData.vehicle_assigned || dData.car_details || "Vehicle Assigned"}) has been assigned to your booking #${bookingId}.`,
                 type: 'assignment',
                 is_read: false,
                 booking_id: bookingId,
