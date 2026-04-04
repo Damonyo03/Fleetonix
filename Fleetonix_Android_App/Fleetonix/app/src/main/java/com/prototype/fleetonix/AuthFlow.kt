@@ -121,12 +121,14 @@ fun AuthFlow() {
                             userData = doc.data
                             userRole = doc.getString("user_type")
                             Log.d("AuthFlow", "User role identified: $userRole")
-                            // Auto-verify drivers - OTP step skipped (email delivery not yet configured)
+                            // Auto-verify drivers
                             if (userRole == "driver") {
                                 isDriverVerified = true
                             }
                         } else {
-                            Log.w("AuthFlow", "User record not found in Firestore for $email")
+                            Log.w("AuthFlow", "User record not found in Firestore for $email. Signing out.")
+                            auth.signOut()
+                            currentUser = null
                         }
                     } catch (e: Exception) {
                         Log.e("AuthFlow", "Error fetching user role", e)
@@ -245,14 +247,14 @@ fun AuthFlow() {
             "splash" -> SplashScreen(onFinished = { showSplash = false })
             "loading_role" -> {
                 Box(modifier = Modifier.fillMaxSize().background(com.prototype.fleetonix.ui.theme.Midnight), contentAlignment = Alignment.Center) {
-                    androidx.compose.material3.CircularProgressIndicator(color = com.prototype.fleetonix.ui.theme.AccentTeal)
+                    CircularProgressIndicator(color = com.prototype.fleetonix.ui.theme.AccentTeal)
                 }
             }
             "unauthorized" -> {
                 Box(modifier = Modifier.fillMaxSize().background(com.prototype.fleetonix.ui.theme.Midnight), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
-                        androidx.compose.material3.Icon(
-                            imageVector = androidx.compose.material.icons.Icons.Default.Warning,
+                        Icon(
+                            imageVector = Icons.Default.Warning,
                             contentDescription = "Unauthorized",
                             tint = Color(0xFFFF6B6B),
                             modifier = Modifier.size(64.dp)
