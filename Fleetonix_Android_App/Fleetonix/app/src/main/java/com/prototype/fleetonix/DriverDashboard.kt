@@ -154,7 +154,7 @@ fun TripTicketDialog(
                         GoogleMap(
                             modifier = Modifier.fillMaxSize(),
                             cameraPositionState = cameraPositionState,
-                            uiSettings = MapUiSettings(zoomControlsEnabled = false, rotateGesturesEnabled = false),
+                            uiSettings = MapUiSettings(zoomControlsEnabled = false, rotationGesturesEnabled = false),
                             properties = MapProperties(mapStyleOptions = MapStyleOptions(MapStyles.AUBERGINE))
                         ) {
                             Polyline(
