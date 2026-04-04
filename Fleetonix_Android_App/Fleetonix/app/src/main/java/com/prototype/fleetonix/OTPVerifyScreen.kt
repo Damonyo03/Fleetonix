@@ -130,9 +130,13 @@ fun OTPVerifyScreen(
                             ),
                             driver = DriverProfile(
                                 id = driverSnap.documents.firstOrNull()?.id,
-                                licenseNumber = driverData?.get("license_number") as? String,
+                                profileImageUrl = driverData?.get("profile_image_url") as? String,
+                                carDetails = driverData?.get("car_details") as? String,
+                                carColor = driverData?.get("car_color") as? String,
                                 vehicleAssigned = driverData?.get("vehicle_assigned") as? String,
+                                vehicleType = driverData?.get("vehicle_type") as? String,
                                 plateNumber = driverData?.get("plate_number") as? String,
+                                currentMileage = (driverData?.get("current_mileage") as? Number)?.toDouble(),
                                 currentStatus = driverData?.get("current_status") as? String ?: "available"
                             )
                         )

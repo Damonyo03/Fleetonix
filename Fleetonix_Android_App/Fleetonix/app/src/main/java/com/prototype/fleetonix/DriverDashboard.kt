@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -137,7 +138,7 @@ fun TripTicketDialog(
                                 zoomGesturesEnabled = true
                             ),
                             properties = MapProperties(
-                                mapStyleOptions = MapStyleOptions(MapStyles.MIDNIGHT)
+                                mapStyleOptions = MapStyleOptions(MapStyles.AUBERGINE)
                             )
                         ) {
                             Polyline(
@@ -325,12 +326,12 @@ fun DriverDashboard(
 
     // Trip Ticket states
     var totalDistanceMetres by remember { mutableStateOf(0f) }
-    var actualRoutePoints = remember { mutableStateListOf<LatLng>() }
     var acceptedAt by remember { mutableStateOf<String?>(null) }
     var pickedUpAt by remember { mutableStateOf<String?>(null) }
     var completedAt by remember { mutableStateOf<String?>(null) }
     var showTripTicket by remember { mutableStateOf(false) }
     var targetTripId by remember { mutableStateOf<String?>(null) }
+    var activeTicketId by remember { mutableStateOf<String?>(null) }
 
     // New Task Popup states
     var lastKnownScheduleId by remember { mutableStateOf<Int?>(null) }
@@ -727,24 +728,35 @@ fun DriverDashboard(
 
                     Log.d("LocationTracking", "Received: $lat, $lng (Acc: $accuracy, Dist: $totalDist)")
 
+                        currentLatitude = lat
+                        currentLongitude = lng
+                        currentSpeed = speed
                         currentAccuracy = accuracy
                         currentHeading = bearing
                         totalDistanceMetres = totalDist
                         
                         // Accumulate Actual Route Points during job movement
-                        if (lat != 0.0 && lng != 0.0 && (tripPhase == "moving_to_pickup" || tripPhase == "moving_to_dropoff" || tripPhase == "return_pickup")) {
+                        // Include all active phases: from accepting -> completion
+                        val activePhases = listOf("accepted", "moving_to_pickup", "pickup", "moving_to_dropoff", "dropoff", "return_pickup", "ready_to_complete")
+                        if (lat != 0.0 && lng != 0.0 && activePhases.contains(tripPhase)) {
                             val newPoint = LatLng(lat, lng)
                             if (actualRoutePoints.isEmpty() || 
                                 GoogleMapsService.calculatePolylineDistance(listOf(actualRoutePoints.last(), newPoint)) > 10f) {
                                 actualRoutePoints.add(newPoint)
-                            }
-                        }
-
-                        // Capture route points for Trip Ticket
-                        if (tripPhase == "moving_to_pickup" || tripPhase == "picked_up" || tripPhase == "moving_to_dropoff" || tripPhase == "return_pickup") {
-                            val newPoint = LatLng(lat, lng)
-                            if (actualRoutePoints.isEmpty() || GoogleMapsService.calculateDistance(actualRoutePoints.last(), newPoint) > 10.0) {
-                                actualRoutePoints.add(newPoint)
+                                
+                                // Sync live telemetry to Firestore Trip Ticket
+                                scope.launch {
+                                    activeTicketId?.let { ticketId ->
+                                        try {
+                                            db.collection("trip_tickets").document(ticketId).update(
+                                                "total_km", totalDistanceMetres / 1000.0,
+                                                "route_polyline", GoogleMapsService.encodePolyline(actualRoutePoints.toList())
+                                            )
+                                        } catch (e: Exception) {
+                                            Log.e("DriverDashboard", "Live sync failed", e)
+                                        }
+                                    }
+                                }
                             }
                         }
 
@@ -805,7 +817,6 @@ fun DriverDashboard(
                     }
                 }
             }
-        }
 
         val filter = android.content.IntentFilter(LocationService.ACTION_LOCATION_UPDATE)
         Log.d("LocationTracking", "Registering Dashboard Receiver")
@@ -1551,6 +1562,10 @@ fun DriverDashboard(
                                             isStartingTrip = true
                                             tripActionError = null
                                             tripActionSuccess = null
+                                            
+                                            // Reset tracking for new job
+                                            actualRoutePoints.clear()
+                                            totalDistanceMetres = 0f
 
                                             val docId = nextSchedule?.docId ?: throw Exception("Schedule ID missing")
                                             db.collection("schedules").document(docId).update(
@@ -1561,6 +1576,25 @@ fun DriverDashboard(
 
                                             acceptedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
                                             
+                                            // Create initial real-time Trip Ticket
+                                            val initialTicketData = hashMapOf(
+                                                "schedule_id" to docId,
+                                                "driver_email" to (auth.currentUser?.email?.lowercase()?.trim() ?: ""),
+                                                "driver_name" to (session.user?.name ?: "Driver"),
+                                                "client_name" to (nextSchedule?.client?.name ?: "Unknown"),
+                                                "vehicle_plate" to (session.driver?.plateNumber ?: ""),
+                                                "pickup_location" to (nextSchedule?.pickup_location?.address ?: "Unknown"),
+                                                "dropoff_location" to (nextSchedule?.dropoff_location?.address ?: "Unknown"),
+                                                "time_of_departure" to "", 
+                                                "time_of_arrival" to "",
+                                                "total_km" to 0.0,
+                                                "route_polyline" to "",
+                                                "status" to "in_progress",
+                                                "created_at" to FieldValue.serverTimestamp()
+                                            )
+                                            val ticketRef = db.collection("trip_tickets").add(initialTicketData).await()
+                                            activeTicketId = ticketRef.id
+                                            
                                             // Sync to drivers collection for Admin visibility
                                             val driverEmail = auth.currentUser?.email
                                             if (driverEmail != null) {
@@ -1570,7 +1604,8 @@ fun DriverDashboard(
                                                 dSnap.documents.firstOrNull()?.reference?.update(
                                                     "current_status", "on_schedule",
                                                     "current_trip_id", docId,
-                                                    "current_trip_phase", "accepted"
+                                                    "current_trip_phase", "accepted",
+                                                    "active_ticket_id", activeTicketId
                                                 )
                                             }
 
@@ -1786,6 +1821,13 @@ fun DriverDashboard(
 
                                                     pickedUpAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
                                                     
+                                                    // Sync departure time to live Trip Ticket
+                                                    activeTicketId?.let { ticketId ->
+                                                        db.collection("trip_tickets").document(ticketId).update(
+                                                            "time_of_departure", pickedUpAt
+                                                        )
+                                                    }
+                                                    
                                                     // Sync to drivers collection
                                                     val email = auth.currentUser?.email
                                                     if (email != null) {
@@ -1794,7 +1836,8 @@ fun DriverDashboard(
                                                             .get().await()
                                                         dSnap.documents.firstOrNull()?.reference?.update(
                                                             "current_status", "picked_up",
-                                                            "current_trip_phase", "picked_up"
+                                                            "current_trip_phase", "picked_up",
+                                                            "time_of_departure", pickedUpAt
                                                         )
                                                     }
                                                     tripActionSuccess = "Passenger Picked Up! Ready for dropoff route."
@@ -1982,6 +2025,10 @@ fun DriverDashboard(
                                             try {
                                                 isStartingTrip = true
                                                 tripActionError = null
+                                                
+                                                // Reset tracking for new job
+                                                actualRoutePoints.clear()
+                                                totalDistanceMetres = 0f
                                                 db.collection("schedules").document(docId).update(
                                                     "status", "accepted",
                                                     "trip_phase", "accepted",
@@ -1990,16 +2037,35 @@ fun DriverDashboard(
 
                                                 acceptedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
                                                 
+                                                // Create initial real-time Trip Ticket
+                                                val initialTicketData = hashMapOf(
+                                                    "schedule_id" to docId,
+                                                    "driver_email" to (auth.currentUser?.email?.lowercase()?.trim() ?: ""),
+                                                    "driver_name" to (session.user?.name ?: "Driver"),
+                                                    "client_name" to (nextSchedule?.client?.name ?: "Unknown"),
+                                                    "vehicle_plate" to (session.driver?.plateNumber ?: ""),
+                                                    "pickup_location" to (nextSchedule?.pickup_location?.address ?: "Unknown"),
+                                                    "dropoff_location" to (nextSchedule?.dropoff_location?.address ?: "Unknown"),
+                                                    "time_of_departure" to "",
+                                                    "time_of_arrival" to "",
+                                                    "total_km" to 0.0,
+                                                    "route_polyline" to "",
+                                                    "status" to "in_progress",
+                                                    "created_at" to FieldValue.serverTimestamp()
+                                                )
+                                                val ticketRef = db.collection("trip_tickets").add(initialTicketData).await()
+                                                activeTicketId = ticketRef.id
+
                                                 val email = auth.currentUser?.email
                                                 if (email != null) {
                                                     val driverSnap = db.collection("drivers")
-                                                        .whereEqualTo("driver_email", email)
+                                                        .whereEqualTo("driver_email", email.lowercase().trim())
                                                         .get().await()
                                                     driverSnap.documents.firstOrNull()?.reference?.update(
                                                         "current_status", "on_schedule",
                                                         "current_trip_id", docId,
                                                         "current_trip_phase", "accepted",
-                                                        "accepted_at", acceptedAt
+                                                        "active_ticket_id", activeTicketId
                                                     )
                                                 }
                                                 showNewTaskOverlay = false
@@ -2083,7 +2149,7 @@ fun DriverDashboard(
                             // Save the actual Trip Ticket for the Admin Dashboard and History
                             val ticketData = hashMapOf(
                                 "schedule_id" to docId,
-                                "driver_email" to (auth.currentUser?.email ?: ""),
+                                "driver_email" to (auth.currentUser?.email?.lowercase()?.trim() ?: ""),
                                 "driver_name" to (session.user?.name ?: "Driver"),
                                 "client_name" to (nextSchedule?.client?.name ?: "Unknown"),
                                 "vehicle_plate" to (session.driver?.plateNumber ?: ""),
@@ -2093,9 +2159,13 @@ fun DriverDashboard(
                                 "time_of_arrival" to (completedAt ?: ""),
                                 "total_km" to (totalDistanceMetres / 1000.0),
                                 "route_polyline" to GoogleMapsService.encodePolyline(actualRoutePoints),
-                                "created_at" to FieldValue.serverTimestamp()
+                                "status" to "completed",
+                                "completed_at" to FieldValue.serverTimestamp()
                             )
-                            db.collection("trip_tickets").add(ticketData).await()
+                            activeTicketId?.let { ticketId ->
+                                db.collection("trip_tickets").document(ticketId).update(ticketData as Map<String, Any>).await()
+                            }
+                            activeTicketId = null
                             
                             // Update driver back to available and sync to drivers collection
                             val currentMileage = session.driver?.currentMileage ?: 0.0
@@ -2112,15 +2182,18 @@ fun DriverDashboard(
                                     "current_trip_id", "",
                                     "current_trip_phase", "completed",
                                     "current_mileage", newMileage,
+                                    "active_ticket_id", "",
                                     "last_updated", com.google.firebase.firestore.FieldValue.serverTimestamp()
                                 )?.await()
                             }
                             
-                            showTripTicket = false
+                            tripActionSuccess = "Trip completed successfully!"
                         } catch (e: Exception) {
                             tripActionError = "Failed: ${e.message}"
+                            Log.e("DriverDashboard", "Trip completion failed", e)
                         } finally {
                             isCompletingTrip = false
+                            showTripTicket = false
                         }
                     }
                 }

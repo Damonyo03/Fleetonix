@@ -396,7 +396,7 @@ fun AuthFlow() {
                                 name = userData?.get("full_name") as? String ?: user.displayName,
                                 email = user.email
                             ),
-                            driver = DriverProfile(null, null, null, null, "available")
+                            driver = DriverProfile(currentStatus = "available")
                         ),
                         feed = DriverFeedData(feedData.size, feedData),
                         isFeedLoading = feedLoading,

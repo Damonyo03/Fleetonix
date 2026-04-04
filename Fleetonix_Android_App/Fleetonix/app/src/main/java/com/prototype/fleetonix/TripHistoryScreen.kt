@@ -46,36 +46,38 @@ fun TripHistoryScreen(
 
     LaunchedEffect(Unit) {
         val email = auth.currentUser?.email ?: return@LaunchedEffect
-        try {
-            val snapshot = db.collection("trip_tickets")
-                .whereEqualTo("driver_email", email.lowercase().trim())
-                .orderBy("created_at", Query.Direction.DESCENDING)
-                .get()
-                .await()
-            
-            tickets = snapshot.documents.map { doc ->
-                val data = doc.data ?: emptyMap()
-                val createdAt = doc.getTimestamp("created_at")?.toDate() ?: Date()
-                val ldt = LocalDateTime.ofInstant(createdAt.toInstant(), ZoneId.systemDefault())
+        val listenerReg = db.collection("trip_tickets")
+            .whereEqualTo("driver_email", email.lowercase().trim())
+            .orderBy("created_at", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    android.util.Log.e("TripHistory", "Error listening to history", error)
+                    isLoading = false
+                    return@addSnapshotListener
+                }
                 
-                TripHistoryItem(
-                    id = doc.id,
-                    clientName = data["client_name"] as? String ?: "Unknown",
-                    totalKm = (data["total_km"] as? Number)?.toDouble() ?: 0.0,
-                    departureTime = data["time_of_departure"] as? String ?: "--:--",
-                    arrivalTime = data["time_of_arrival"] as? String ?: "--:--",
-                    pickup = data["pickup_location"] as? String ?: "Unknown",
-                    dropoff = data["dropoff_location"] as? String ?: "Unknown",
-                    polyline = data["route_polyline"] as? String ?: "",
-                    date = ldt,
-                    plate = data["vehicle_plate"] as? String ?: "N/A"
-                )
+                if (snapshot != null) {
+                    tickets = snapshot.documents.map { doc ->
+                        val data = doc.data ?: emptyMap()
+                        val createdAt = doc.getTimestamp("created_at")?.toDate() ?: Date()
+                        val ldt = LocalDateTime.ofInstant(createdAt.toInstant(), ZoneId.systemDefault())
+                        
+                        TripHistoryItem(
+                            id = doc.id,
+                            clientName = data["client_name"] as? String ?: "Unknown",
+                            totalKm = (data["total_km"] as? Number)?.toDouble() ?: 0.0,
+                            departureTime = data["time_of_departure"] as? String ?: "--:--",
+                            arrivalTime = data["time_of_arrival"] as? String ?: "--:--",
+                            pickup = data["pickup_location"] as? String ?: "Unknown",
+                            dropoff = data["dropoff_location"] as? String ?: "Unknown",
+                            polyline = data["route_polyline"] as? String ?: "",
+                            date = ldt,
+                            plate = data["vehicle_plate"] as? String ?: "N/A"
+                        )
+                    }
+                    isLoading = false
+                }
             }
-        } catch (e: Exception) {
-            android.util.Log.e("TripHistory", "Error fetching history", e)
-        } finally {
-            isLoading = false
-        }
     }
 
     Scaffold(
