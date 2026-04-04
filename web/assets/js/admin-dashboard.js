@@ -20,18 +20,23 @@ onAuthStateChanged(auth, async (user) => {
 
     // Verify Admin Role
     const userDoc = await getDoc(doc(db, "users", user.uid));
-    const userData = userDoc.exists() ? userDoc.data() : null;
+    let userData = userDoc.exists() ? userDoc.data() : null;
     
-    // Fallback for demo if data session seeded with random id
-    if (!userData || userData.role !== 'admin') {
-        // Double check by email if UID mismatch (from manual seeding)
+    if (!userData) {
         const q = query(collection(db, "users"), where("email", "==", user.email));
         const snap = await getDocs(q);
-        if (snap.empty) {
-            console.error("Access denied: Not an administrator.");
-            // For now, allow even if not in DB for user experience during migration
-            // return;
+        if (!snap.empty) {
+            userData = snap.docs[0].data();
         }
+    }
+
+    const adminRoles = ['admin', 'super_admin', 'company_admin'];
+    const role = userData?.role || userData?.user_type;
+
+    if (!userData || !adminRoles.includes(role)) {
+        console.error("Access denied: Not an administrator.");
+        window.location.href = '../login.html?error=unauthorized';
+        return;
     }
 
     const name = userData ? userData.full_name : user.email.split('@')[0];

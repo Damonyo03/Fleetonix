@@ -1,7 +1,7 @@
-import { initializeApp, getApps, getApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import {
-    getFirestore, collection, query, onSnapshot, doc, getDoc, orderBy, addDoc, setDoc, serverTimestamp
+    getFirestore, collection, query, onSnapshot, doc, getDoc, orderBy, addDoc, getDocs, where, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { initLayout, showModal } from "./modules/ui.js";
@@ -13,9 +13,34 @@ const db = getFirestore(app);
 let allUsers = [];
 
 onAuthStateChanged(auth, async (user) => {
-    if (!user) { window.location.href = '../login.html'; return; }
+    if (!user) {
+        if (!window.location.pathname.includes('login.html')) {
+            window.location.href = '../login.html';
+        }
+        return;
+    }
+
     const userDoc = await getDoc(doc(db, "users", user.uid));
-    const name = userDoc.exists() ? (userDoc.data().full_name || user.email.split('@')[0]) : user.email.split('@')[0];
+    let userData = userDoc.exists() ? userDoc.data() : null;
+
+    if (!userData) {
+        const q = query(collection(db, "users"), where("email", "==", user.email));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+            userData = snap.docs[0].data();
+        }
+    }
+
+    const adminRoles = ['admin', 'super_admin', 'company_admin'];
+    const role = userData?.user_type || userData?.role;
+
+    if (!userData || !adminRoles.includes(role)) {
+        console.error("Access Denied: Not an administrator.");
+        window.location.href = '../login.html?error=unauthorized';
+        return;
+    }
+
+    const name = userData.full_name || user.email.split('@')[0];
     initLayout('Registered Users', name);
 
     // Load all users from 'users' collection in real-time
@@ -62,7 +87,7 @@ function renderUsers(users) {
 
     tbody.innerHTML = users.map(u => {
         const role = u.role || u.user_type || 'unknown';
-        const badgeColor = role === 'admin' ? 'var(--accent-blue)' :
+        const badgeColor = role === 'admin' || role === 'super_admin' ? 'var(--accent-blue)' :
                            role === 'client' ? 'var(--accent-green)' :
                            role === 'driver' ? 'var(--accent-orange)' : 'var(--text-muted)';
         const registered = u.created_at?.toDate
@@ -120,7 +145,6 @@ window.viewUser = async (id) => {
         </div>
     `, async () => { /* read-only */ });
 
-    // Log the view action as a system event
     try {
         await addDoc(collection(db, "activity"), {
             type: 'system',
@@ -130,7 +154,6 @@ window.viewUser = async (id) => {
         });
     } catch (e) { console.error("Error logging activity:", e); }
 
-    // Switch save to a close button
     setTimeout(() => {
         const btn = document.querySelector('.save-modal');
         if (btn) { btn.textContent = 'Close'; btn.classList.replace('btn-primary', 'btn-secondary'); }
@@ -173,12 +196,6 @@ async function showCreateUserModal() {
                 <input type="text" id="modal_company" class="form-input" placeholder="Optional">
             </div>
         </div>
-        <div style="background: rgba(59, 130, 246, 0.05); padding: 12px; border-radius: 8px; border: 1px solid rgba(59, 130, 246, 0.1); margin-top: 10px;">
-            <p style="margin:0; font-size:0.85em; color:var(--text-secondary); line-height:1.4;">
-                <i class="fas fa-info-circle" style="color:var(--accent-blue);"></i> 
-                This will create a new account in Firebase Auth and a corresponding profile in Firestore.
-            </p>
-        </div>
     `;
 
     showModal('create-user-modal', 'Create New User', content, async () => {
@@ -192,12 +209,7 @@ async function showCreateUserModal() {
             throw new Error("Please fill in all required fields.");
         }
 
-        if (password.length < 8) {
-            throw new Error("Password must be at least 8 characters long.");
-        }
-
         try {
-            // Use the Cloud Function to create the user (avoids secondary app complexity)
             const response = await fetch('https://us-central1-appfleetonix.cloudfunctions.net/adminCreateUser', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -215,18 +227,13 @@ async function showCreateUserModal() {
                 throw new Error(result.message || "Failed to create user");
             }
 
-            // The Cloud Function already creates the Firestore document, 
-            // but we can log the activity on the client side for immediate feedback if needed,
-            // though the function could also handle it. For now, just show success.
             alert(`User account for ${fullName} created successfully!`);
         } catch (err) {
             console.error("User creation error:", err);
-            const msg = getFriendlyErrorMessage(err);
-            throw new Error(msg);
+            throw new Error(err.message);
         }
     });
 
-    // Toggle Eye Logic for Modal
     setTimeout(() => {
         const toggleBtn = document.getElementById('toggleModalPassword');
         const passInput = document.getElementById('modal_password');
@@ -236,18 +243,7 @@ async function showCreateUserModal() {
                 passInput.type = isPass ? 'text' : 'password';
                 toggleBtn.classList.toggle('fa-eye');
                 toggleBtn.classList.toggle('fa-eye-slash');
-                toggleBtn.style.color = isPass ? 'var(--accent-blue)' : 'var(--text-muted)';
             });
         }
     }, 100);
-}
-
-function getFriendlyErrorMessage(error) {
-    const code = error.code || error.message || "";
-    if (code.includes('email-already-in-use')) return "This email is already registered.";
-    if (code.includes('invalid-email')) return "Please enter a valid email address.";
-    if (code.includes('weak-password')) return "The password is too weak. Use at least 8 characters.";
-    if (code.includes('network-request-failed')) return "Connection error. Please check your internet.";
-    if (code.includes('too-many-requests')) return "Too many attempts. Please try again later.";
-    return "An unexpected error occurred. Please try again.";
 }

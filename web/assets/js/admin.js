@@ -82,8 +82,8 @@ window.toggleAccordion = function(header) {
 
 // Real-time Sidebar Alerts & Global Logout for Admin
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getAuth, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { getFirestore, collection, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getAuth, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { getFirestore, collection, query, where, onSnapshot, getDoc, doc, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { clearUserCache } from "./modules/ui.js";
 
@@ -91,13 +91,10 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { getDoc, doc, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
 // ── Admin Role Guard ──────────────────────────────────────────────────────────
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
-        // Not logged in, redirect to login
+        console.log("No active administrative session. Redirecting to login.");
         if (!window.location.pathname.includes('login.html')) {
             window.location.href = '../login.html';
         }
@@ -105,34 +102,38 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     try {
-        // Fetch user doc directly by UID
+        console.log("Auth session active for:", user.email, " UID:", user.uid);
         const userRef = doc(db, "users", user.uid);
         const userSnap = await getDoc(userRef);
         let userData = userSnap.exists() ? userSnap.data() : null;
 
-        // Fallback: If UID doc doesn't exist (e.g. manual auth creation), search by email
         if (!userData) {
+            console.warn("UID document missing in Firestore. Attempting email fallback...");
             const q = query(collection(db, "users"), where("email", "==", user.email));
             const emailSnap = await getDocs(q);
             if (!emailSnap.empty) {
                 userData = emailSnap.docs[0].data();
+                console.log("User data fallback found successfully.");
             }
         }
 
         const adminRoles = ['admin', 'super_admin', 'company_admin'];
-        if (!userData || !adminRoles.includes(userData.user_type || userData.role)) {
-            console.error("Access Denied: User is not an administrator.", userData);
+        const role = userData?.user_type || userData?.role;
+        
+        console.log("Validating access for role:", role);
+
+        if (!userData || !adminRoles.includes(role)) {
+            console.error("Access Denied: Current role is not an administrator.", { userData, role });
             // Block access and redirect
             window.location.href = '../login.html?error=unauthorized';
         } else {
+            console.log("Authorization verified. Access granted.");
             // Authorized. Update UI with name if needed
             const name = userData.full_name || user.email.split('@')[0];
-            // No need to call initLayout here as pages call it themselves, 
-            // but we can ensure the cache is fresh.
             if (typeof cacheUser === 'function') cacheUser(name, 'admin');
         }
     } catch (error) {
-        console.error("Authorization check failed:", error);
+        console.error("Authorization check failed with critical error:", error);
     }
 });
 
@@ -210,4 +211,3 @@ document.addEventListener('click', (e) => {
         }
     }
 });
-

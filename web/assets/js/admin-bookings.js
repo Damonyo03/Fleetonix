@@ -27,13 +27,34 @@ let currentUserData = null;
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
-        window.location.href = '../login.html';
+        if (!window.location.pathname.includes('login.html')) {
+            window.location.href = '../login.html';
+        }
         return;
     }
 
     const userDoc = await getDoc(doc(db, "users", user.uid));
-    currentUserData = userDoc.exists() ? userDoc.data() : { role: 'admin' };
-    const name = currentUserData.full_name || user.email.split('@')[0];
+    let userData = userDoc.exists() ? userDoc.data() : null;
+
+    if (!userData) {
+        const q = query(collection(db, "users"), where("email", "==", user.email));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+            userData = snap.docs[0].data();
+        }
+    }
+
+    const adminRoles = ['admin', 'super_admin', 'company_admin'];
+    const role = userData?.user_type || userData?.role;
+
+    if (!userData || !adminRoles.includes(role)) {
+        console.error("Access Denied: Not an administrator.");
+        window.location.href = '../login.html?error=unauthorized';
+        return;
+    }
+
+    currentUserData = userData;
+    const name = userData.full_name || user.email.split('@')[0];
     
     // Only set layout title to 'Bookings' if we are on the bookings page
     if (window.location.pathname.includes('bookings.html')) {
@@ -185,7 +206,7 @@ async function showCreateBookingModal(clients) {
             : document.getElementById('modal_guest_email').value;
         const clientCompanyId = isExisting
             ? (selectedOption?.getAttribute('data-company-id') || '')
-            : (currentUserData.accredited_company_id || ''); // For guest bookings by company_admin, tag with their company
+            : (currentUserData.accredited_company_id || ''); 
 
         if (isExisting && !clientId) throw new Error("Please select a registered client.");
         if (!isExisting && (!clientName || !clientEmail)) throw new Error("Please enter Guest name and email.");
@@ -238,7 +259,7 @@ async function showCreateBookingModal(clients) {
             const driverSelect = document.getElementById('modal_driver');
             const driverName = driverSelect.options[driverSelect.selectedIndex].text.replace('🟢 ', '');
             
-            // Get driver details from both collections
+            // Get driver details
             const [driverUserDoc, driverDoc] = await Promise.all([
                 getDoc(doc(db, "users", driverId)),
                 getDoc(doc(db, "drivers", driverId))
@@ -281,7 +302,7 @@ async function showCreateBookingModal(clients) {
 
             await addDoc(collection(db, "schedules"), scheduleData);
 
-            // Update driver status in drivers collection
+            // Update driver status
             const driverQuery = query(collection(db, "drivers"), where("driver_email", "==", driverEmail));
             const driverSnap = await getDocs(driverQuery);
             if (!driverSnap.empty) {
@@ -316,7 +337,7 @@ async function showCreateBookingModal(clients) {
         alert("Booking created successfully! " + (autoDispatch ? "It has been sent to dispatch." : "It is now pending approval."));
     });
 
-    // Initialize client type toggle logic after modal renders
+    // Initialize client type toggle logic
     setTimeout(async () => {
         const radios = document.querySelectorAll('input[name="client_type"]');
         radios.forEach(r => r.addEventListener('change', (e) => {
@@ -324,7 +345,6 @@ async function showCreateBookingModal(clients) {
             document.getElementById('new_client_section').style.display = e.target.value === 'new' ? 'block' : 'none';
         }));
 
-        // Populate Drivers List with real-time sync
         const driverSelect = document.getElementById('modal_driver');
         if (driverSelect) {
             try {
@@ -347,7 +367,6 @@ async function showCreateBookingModal(clients) {
                     const email = (data.driver_email || "").toLowerCase().trim();
                     if (!email || driverMap.has(email)) return;
 
-                    // Sync real-time online status
                     const loc = locationMap[email];
                     let isOnline = false;
                     if (loc && loc.last_updated) {
@@ -356,7 +375,7 @@ async function showCreateBookingModal(clients) {
                     }
 
                     driverMap.set(email, {
-                        id: dDoc.id, // Using the drivers collection ID
+                        id: dDoc.id,
                         name: data.driver_name,
                         isOnline: isOnline
                     });
@@ -387,7 +406,7 @@ function initBookingList() {
 
     let q = collection(db, "bookings");
 
-    // RBAC Filtering for Company Admins
+    // RBAC Filtering
     if (role === 'company_admin' && companyId) {
         q = query(collection(db, "bookings"), where("accredited_company_id", "==", companyId));
     } else {
@@ -454,8 +473,8 @@ window.viewBookingDetails = async (id) => {
             <div><strong>Status:</strong> <span class="status-badge ${b.status}">${b.status}</span></div>
             <div><strong>Notes:</strong> ${b.special_instructions || '-'}</div>
         </div>
-    `, async () => { /* read-only, no save action */ });
-    // Change save button to Close
+    `, async () => { /* read-only */ });
+    
     setTimeout(() => {
         const saveBtn = document.querySelector('.save-modal');
         if (saveBtn) { saveBtn.textContent = 'Close'; saveBtn.classList.replace('btn-primary', 'btn-secondary'); }
@@ -467,19 +486,16 @@ window.assignDriver = async (id) => {
     if (!bookingDoc.exists()) return;
     const booking = bookingDoc.data();
 
-    // 1. Fetch available drivers and real-time locations
     const [driversSnap, locationsSnap] = await Promise.all([
         getDocs(query(collection(db, "drivers"), where("current_status", "==", "available"))),
         getDocs(collection(db, "driver_locations"))
     ]);
 
-    // 2. Map locations by driver email for quick lookup
     const locationMap = {};
     locationsSnap.docs.forEach(doc => {
         locationMap[doc.id.toLowerCase().trim()] = doc.data();
     });
 
-    // 3. Process and de-duplicate driver list
     const driverMap = new Map();
     const now = Date.now();
     const tenMins = 10 * 60 * 1000;
@@ -487,19 +503,13 @@ window.assignDriver = async (id) => {
     driversSnap.docs.forEach(dDoc => {
         const data = dDoc.data();
         const email = (data.driver_email || "").toLowerCase().trim();
-        if (!email) return;
+        if (!email || driverMap.has(email)) return;
 
-        // Skip if we already processed this driver (De-duplication)
-        if (driverMap.has(email)) return;
-
-        // Determine real-time "Online" status
         const loc = locationMap[email];
         let isOnline = false;
         if (loc && loc.last_updated) {
             const lastActive = loc.last_updated.toMillis ? loc.last_updated.toMillis() : (loc.last_updated.seconds * 1000);
-            if (now - lastActive < tenMins) {
-                isOnline = true;
-            }
+            if (now - lastActive < tenMins) isOnline = true;
         }
 
         driverMap.set(email, {
@@ -509,7 +519,6 @@ window.assignDriver = async (id) => {
         });
     });
 
-    // 4. Convert to array and sort (Online first)
     const processedDrivers = Array.from(driverMap.values()).sort((a, b) => {
         if (a.isOnline === b.isOnline) return a.driver_name.localeCompare(b.driver_name);
         return a.isOnline ? -1 : 1;
@@ -527,8 +536,6 @@ window.assignDriver = async (id) => {
                     <option value="${d.id}" 
                             data-email="${d.driver_email || ''}" 
                             data-name="${d.driver_name || ''}"
-                            data-phone="${d.driver_phone || ''}"
-                            data-plate="${d.plate_number || ''}"
                             data-image="${d.profile_image_url || ''}"
                             data-details="${d.car_details || ''}"
                             data-color="${d.car_color || ''}"
@@ -537,7 +544,6 @@ window.assignDriver = async (id) => {
                     </option>`).join('')}
             </select>
         </div>
-        ${processedDrivers.length === 0 ? '<p style="color:var(--accent-orange);"><i class="fas fa-exclamation-triangle"></i> No available drivers at the moment.</p>' : ''}
         <div class="form-group">
             <label>Schedule Date</label>
             <input type="date" id="modal_sched_date" class="form-input" value="${booking.pickup_date || ''}" required>
@@ -556,12 +562,10 @@ window.assignDriver = async (id) => {
         const driverId = selectedOption.value;
         const driverEmail = selectedOption.getAttribute('data-email')?.toLowerCase().trim();
         const driverName = selectedOption.getAttribute('data-name');
-        const driverPhone = selectedOption.getAttribute('data-phone');
-        const plateNumber = selectedOption.getAttribute('data-plate');
-        const vehicleAssigned = selectedOption.getAttribute('data-vehicle');
         const driverImage = selectedOption.getAttribute('data-image');
         const carDetails = selectedOption.getAttribute('data-details');
         const carColor = selectedOption.getAttribute('data-color');
+        const vehicleAssigned = selectedOption.getAttribute('data-vehicle');
         const date = document.getElementById('modal_sched_date').value;
         const time = document.getElementById('modal_sched_time').value;
 
@@ -569,15 +573,14 @@ window.assignDriver = async (id) => {
 
         const scheduleData = sanitizeFirestoreData({
             booking_id: id,
+            numeric_booking_id: generateNumericId(),
             schedule_id: generateNumericId(),
             driver_id: driverId,
             driver_email: driverEmail,
             driver_name: driverName,
-            driver_phone: driverPhone,
             driver_image_url: driverImage || "",
             car_details: carDetails || "",
             car_color: carColor || "",
-            plate_number: plateNumber,
             vehicle_assigned: vehicleAssigned,
             status: "pending",
             trip_phase: "pending",
@@ -614,7 +617,7 @@ window.assignDriver = async (id) => {
             updated_at: serverTimestamp()
         });
 
-        // 4. Create Notification for Client
+        // Notifications & logs
         await addDoc(collection(db, "notifications"), {
             user_id: booking.client_id || 'guest',
             user_email: booking.client_email,
@@ -626,7 +629,6 @@ window.assignDriver = async (id) => {
             timestamp: serverTimestamp()
         });
 
-        // Log Activity
         await addDoc(collection(db, "activity"), {
             type: 'system',
             title: 'Booking Assigned',
@@ -642,7 +644,6 @@ window.deleteBooking = async (id) => {
     if (confirm("Are you sure you want to delete this booking request?")) {
         await deleteDoc(doc(db, "bookings", id));
         
-        // Log Activity
         await addDoc(collection(db, "activity"), {
             type: 'system',
             title: 'Booking Deleted',

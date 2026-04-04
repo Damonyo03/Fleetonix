@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, updateDoc, deleteDoc, setDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, updateDoc, deleteDoc, setDoc, addDoc, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { initLayout, showModal, hideModal } from "./modules/ui.js";
 
@@ -18,21 +18,42 @@ const driverSearch = document.getElementById('driverSearch');
 const statusFilter = document.getElementById('statusFilter');
 
 let currentUserData = null;
+let allDrivers = [];
 let activeCompanies = {};
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
-        window.location.href = '../login.html';
+        if (!window.location.pathname.includes('login.html')) {
+            window.location.href = '../login.html';
+        }
         return;
     }
 
     const userDoc = await getDoc(doc(db, "users", user.uid));
-    currentUserData = userDoc.exists() ? userDoc.data() : { role: 'admin' };
-    const name = currentUserData.full_name || user.email.split('@')[0];
+    let userData = userDoc.exists() ? userDoc.data() : null;
+
+    if (!userData) {
+        const q = query(collection(db, "users"), where("email", "==", user.email));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+            userData = snap.docs[0].data();
+        }
+    }
+
+    const adminRoles = ['admin', 'super_admin', 'company_admin'];
+    const role = userData?.user_type || userData?.role;
+
+    if (!userData || !adminRoles.includes(role)) {
+        console.error("Access Denied: Not an administrator.");
+        window.location.href = '../login.html?error=unauthorized';
+        return;
+    }
+
+    currentUserData = userData;
+    const name = userData.full_name || user.email.split('@')[0];
     initLayout('Driver Management', name);
 
-    // Fetch companies if super_admin
-    const role = currentUserData.role || currentUserData.user_type;
+    // Fetch companies
     if (role === 'super_admin' || role === 'admin') {
         const companiesSnap = await getDocs(query(collection(db, "accredited_companies"), where("status", "==", "active")));
         companiesSnap.forEach(doc => {
@@ -49,7 +70,7 @@ function initDriverList() {
 
     let driverQuery = collection(db, "drivers");
 
-    // RBAC Filtering for Company Admins
+    // RBAC Filtering
     if (role === 'company_admin' && companyId) {
         driverQuery = query(collection(db, "drivers"), where("accredited_company_id", "==", companyId));
     }
@@ -183,7 +204,6 @@ if (addDriverBtn) {
             }
 
             try {
-                // Create user in Firebase Auth
                 const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
                 const driverId = userCredential.user.uid;
 
@@ -206,7 +226,6 @@ if (addDriverBtn) {
                     created_at: serverTimestamp()
                 });
                 
-                // Set initial user record for role validation
                 await setDoc(doc(db, "users", driverId), {
                     full_name: name,
                     email: email,
@@ -217,10 +236,8 @@ if (addDriverBtn) {
                     created_at: serverTimestamp()
                 });
 
-                // Clear secondary auth state
                 await signOut(secondaryAuth);
 
-                // Log Activity
                 await addDoc(collection(db, "activity"), {
                     type: 'system',
                     title: 'New Driver Created',
@@ -295,7 +312,7 @@ window.editDriver = async (id) => {
             driver_email: email,
             current_status: document.getElementById('modal_status').value
         });
-        // Update user record too for consistency
+        
         try {
             await updateDoc(doc(db, "users", id), {
                 full_name: document.getElementById('modal_driver_name').value,
@@ -303,7 +320,6 @@ window.editDriver = async (id) => {
             });
         } catch (e) { console.log("User doc might not exist yet for this driver ID"); }
 
-        // Log Activity
         await addDoc(collection(db, "activity"), {
             type: 'system',
             title: 'Driver Updated',
@@ -317,7 +333,6 @@ window.deleteDriver = async (id) => {
     if (confirm("Are you sure you want to delete this driver?")) {
         await deleteDoc(doc(db, "drivers", id));
         
-        // Log Activity
         await addDoc(collection(db, "activity"), {
             type: 'system',
             title: 'Driver Deleted',
@@ -326,5 +341,3 @@ window.deleteDriver = async (id) => {
         });
     }
 };
-
-

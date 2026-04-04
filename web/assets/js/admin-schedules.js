@@ -18,13 +18,34 @@ let currentUserData = null;
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
-        window.location.href = '../login.html';
+        if (!window.location.pathname.includes('login.html')) {
+            window.location.href = '../login.html';
+        }
         return;
     }
 
     const userDoc = await getDoc(doc(db, "users", user.uid));
-    currentUserData = userDoc.exists() ? userDoc.data() : { role: 'admin' };
-    const name = currentUserData.full_name || user.email.split('@')[0];
+    let userData = userDoc.exists() ? userDoc.data() : null;
+
+    if (!userData) {
+        const q = query(collection(db, "users"), where("email", "==", user.email));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+            userData = snap.docs[0].data();
+        }
+    }
+
+    const adminRoles = ['admin', 'super_admin', 'company_admin'];
+    const role = userData?.user_type || userData?.role;
+
+    if (!userData || !adminRoles.includes(role)) {
+        console.error("Access Denied: Not an administrator.");
+        window.location.href = '../login.html?error=unauthorized';
+        return;
+    }
+
+    currentUserData = userData;
+    const name = userData.full_name || user.email.split('@')[0];
     initLayout('Trip Schedules', name);
 
     initScheduleList();
@@ -64,8 +85,8 @@ function initExportFeature() {
 function initClearDataFeature() {
     const btn = document.getElementById('clearDataBtn');
     if (btn) {
-        // Only super_admin can clear ALL data
         const role = currentUserData?.role || currentUserData?.user_type;
+        // Only super_admin and admin can clear data
         if (role !== 'super_admin' && role !== 'admin') {
             btn.style.display = 'none';
         }
@@ -85,7 +106,6 @@ function initClearDataFeature() {
                 const result = await response.json();
 
                 if (result.success) {
-                    // Download Backup as JSON (User can convert to CSV if needed, but JSON is more reliable for all fields)
                     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(result.backup, null, 2));
                     const downloadAnchorNode = document.createElement('a');
                     downloadAnchorNode.setAttribute("href", dataStr);
@@ -115,7 +135,7 @@ function initScheduleList() {
 
     let q = query(collection(db, "schedules"), orderBy("created_at", "desc"));
 
-    // RBAC Filtering for Company Admins
+    // RBAC Filtering
     if (role === 'company_admin' && companyId) {
         q = query(collection(db, "schedules"), where("accredited_company_id", "==", companyId), orderBy("created_at", "desc"));
     }
@@ -136,14 +156,12 @@ function renderSchedules(docs) {
         const sched = d.data();
         const id = d.id;
         
-        // Granular status display
         let statusHtml = '';
         if (sched.status === 'completed') {
             statusHtml = '<span class="status-badge completed">Completed</span>';
         } else if (sched.status === 'cancelled') {
             statusHtml = '<span class="status-badge cancelled">Cancelled</span>';
         } else {
-            // Map trip_phase to user-friendly status
             const phase = sched.trip_phase || 'pending';
             const phaseMap = {
                 'pending': { label: 'Scheduled', cls: 'scheduled' },
@@ -196,7 +214,6 @@ window.updateScheduleStatus = async (id) => {
             updated_at: serverTimestamp()
         });
 
-        // Reset driver availability if trip is finished
         if (newStatus === 'completed' || newStatus === 'cancelled') {
             if (sched.driver_id) {
                 await updateDoc(doc(db, "drivers", sched.driver_id), {
@@ -214,14 +231,12 @@ window.deleteSchedule = async (id) => {
         const snap = await getDoc(doc(db, "schedules", id));
         if (snap.exists()) {
             const data = snap.data();
-            // Reset driver status to available
             if (data.driver_id) {
                 await updateDoc(doc(db, "drivers", data.driver_id), {
                     current_status: 'available',
                     updated_at: serverTimestamp()
                 });
             }
-            // Revert the booking to pending so it can be re-assigned
             if (data.booking_id) {
                 await updateDoc(doc(db, "bookings", data.booking_id), {
                     status: 'pending',
@@ -236,5 +251,3 @@ window.deleteSchedule = async (id) => {
         alert("Failed to delete schedule: " + error.message);
     }
 };
-
-
