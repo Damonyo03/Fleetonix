@@ -257,6 +257,7 @@ fun DriverDashboard(
     var isReportingAccident by remember { mutableStateOf(false) }
 
     var isReportingVehicleIssue by remember { mutableStateOf(false) }
+    var showVehicleIssueDialog by remember { mutableStateOf(false) }
     
     fun getAddressFromLocation(lat: Double, lng: Double): String {
         return try {
@@ -307,7 +308,7 @@ fun DriverDashboard(
                     if (lastLog != null) {
                         val ts = lastLog.getTimestamp("timestamp")
                         if (ts != null) {
-                            lastTimeInObj = ts.toDate().toInstant().atZone(ZoneId.system_resource()).toLocalDateTime()
+                            lastTimeInObj = ts.toDate().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime()
                             lastTimeInStr = lastTimeInObj?.format(DateTimeFormatter.ofPattern("hh:mm a"))
                         }
                     }
@@ -736,8 +737,6 @@ fun DriverDashboard(
         }
     }
 
-    // Acknowledgment Listener
-    var latestAckMessage by remember { mutableStateOf<String?>(null) }
     DisposableEffect(auth.currentUser?.email) {
         val email = auth.currentUser?.email
         if (email == null) return@DisposableEffect onDispose {}
@@ -1120,14 +1119,13 @@ fun DriverDashboard(
 
                 val user = auth.currentUser
                 val schedule = nextSchedule
-                val issueDescription = description ?: issueType
 
                 val issueData = hashMapOf(
                     "driver_email" to user?.email,
                     "schedule_id" to (schedule?.scheduleId ?: 0),
                     "firebase_schedule_id" to schedule?.docId,
                     "issue_type" to issueType,
-                    "description" to issueDescription,
+                    "description" to (description ?: issueType),
                     "latitude" to lat,
                     "longitude" to lng,
                     "reported_at" to FieldValue.serverTimestamp()
@@ -1478,7 +1476,6 @@ fun DriverDashboard(
                                                 val now = LocalDateTime.now()
                                                 
                                                  val addr = getAddressFromLocation(currentLatitude, currentLongitude)
-                                                 val now = LocalDateTime.now()
                                                  
                                                  // OT Calculation Logic (threshold: 5:30 PM)
                                                  val isOvertime = now.hour >= 17 && (now.hour > 17 || now.minute >= 30)
@@ -1807,6 +1804,7 @@ fun DriverDashboard(
                                                     if (dest != null) {
                                                         val originStr = "${currentLatitude},${currentLongitude}"
                                                         val destStr = "${dest.latitude},${dest.longitude}"
+                                                        val MapsKey = context.getString(R.string.google_maps_key).ifEmpty { "YOUR_KEY_HERE" }
                                                         val resp = GoogleMapsService.api.getDirections(originStr, destStr, MapsKey)
                                                         if (resp.status == "OK" && resp.routes.isNotEmpty()) {
                                                             val encoded = resp.routes[0].overviewPolyline.points
