@@ -74,9 +74,12 @@
                         <p>Real-time GPS verified activity logs for your fleet.</p>
                     </div>
                     <div class="header-actions" style="display: flex; gap: 12px;">
-                        <input type="date" id="dateFilter" class="btn btn-secondary" style="background:var(--bg-secondary); color:var(--text-primary); border:1px solid var(--border-color);">
-                        <button class="btn btn-primary" onclick="window.print()">
-                            <i class="fas fa-print"></i> Print Report
+                        <input type="date" id="dateFilter" class="btn btn-secondary" style="width: auto; text-transform: none; text-align: left;">
+                        <select id="companyFilter" class="btn btn-secondary" style="width: auto; text-transform: none; text-align: left; display: none;">
+                            <option value="all">All Companies</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="initDTRLogs()" style="padding: 10px 24px;">
+                            <i class="fas fa-search"></i> Refresh Logs
                         </button>
                     </div>
                 </div>

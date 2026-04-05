@@ -1388,7 +1388,10 @@ fun DriverDashboard(
                                                 db.collection("dtr_logs").add(logData).await()
                                                 // Use set+merge so it creates the doc if it doesn't exist
                                                 db.collection("drivers").document(uid)
-                                                    .set(mapOf("is_currently_timed_in" to true), com.google.firebase.firestore.SetOptions.merge()).await()
+                                                    .set(mapOf(
+                                                        "is_currently_timed_in" to true,
+                                                        "current_status" to "available"
+                                                    ), com.google.firebase.firestore.SetOptions.merge()).await()
                                                 
                                                 isTimedIn = true
                                                 tripActionSuccess = "Timed in successfully at ${now.format(DateTimeFormatter.ofPattern("hh:mm a"))}"
@@ -1443,7 +1446,10 @@ fun DriverDashboard(
                                                 db.collection("dtr_logs").add(logData).await()
                                                 // Use set+merge so it creates the doc if it doesn't exist
                                                 db.collection("drivers").document(uid)
-                                                    .set(mapOf("is_currently_timed_in" to false), com.google.firebase.firestore.SetOptions.merge()).await()
+                                                    .set(mapOf(
+                                                        "is_currently_timed_in" to false,
+                                                        "current_status" to "offline"
+                                                    ), com.google.firebase.firestore.SetOptions.merge()).await()
                                                 
                                                 isTimedIn = false
                                                 tripActionSuccess = "Timed out successfully. Have a great rest!"

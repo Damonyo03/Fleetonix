@@ -14,6 +14,8 @@ const db = getFirestore(app);
 
 let allTickets = [];
 let uniqueDrivers = new Set();
+let currentUserData = null; // Store admin user data for RBAC
+let selectedCompanyId = localStorage.getItem('fleetonix_global_company') || 'all';
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -22,58 +24,182 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     const userDoc = await getDoc(doc(db, "users", user.uid));
-    const name = userDoc.exists() ? (userDoc.data().full_name || user.email.split('@')[0]) : user.email.split('@')[0];
+    const userData = userDoc.exists() ? userDoc.data() : {};
+    currentUserData = userData;
+    currentUserData.uid = user.uid;
+    const name = userData.full_name || user.email.split('@')[0];
     initLayout('Trip Tickets', name);
+
+    const role = userData?.role || userData?.user_type;
+    
+    // If company_admin, force their company
+    if (role === 'company_admin' && userData.accredited_company_id) {
+        selectedCompanyId = userData.accredited_company_id;
+    }
+
+    // Initialize Company Filter for Super Admins
+    if (role === 'super_admin' || role === 'admin') {
+        initCompanyFilter();
+    }
 
     loadTickets();
 });
 
+async function initCompanyFilter() {
+    const filter = document.getElementById('companyFilter');
+    if (!filter) return;
+
+    try {
+        const companiesSnap = await getDocs(query(collection(db, "accredited_companies"), where("status", "==", "active")));
+        
+        filter.innerHTML = '<option value="all">All Companies</option>';
+        companiesSnap.forEach(doc => {
+            const option = document.createElement('option');
+            option.value = doc.id;
+            option.textContent = doc.data().name;
+            filter.appendChild(option);
+        });
+        
+        filter.value = selectedCompanyId;
+        filter.style.display = 'inline-block';
+
+        filter.addEventListener('change', (e) => {
+            selectedCompanyId = e.target.value;
+            localStorage.setItem('fleetonix_global_company', selectedCompanyId);
+            loadTickets();
+        });
+    } catch (error) {
+        console.error("Error loading companies:", error);
+    }
+}
+
 function loadTickets() {
+    if (!currentUserData) {
+        console.warn("User data not loaded yet.");
+        return;
+    }
+
     const role = currentUserData.role || currentUserData.user_type;
     const companyId = currentUserData.accredited_company_id;
-    
-    // Listen real-time to completed schedules
-    let q;
-    if ((role === 'company_admin' || role === 'admin') && companyId) {
-        q = query(
-            collection(db, "schedules"),
-            where("status", "==", "completed"),
+
+    // --- Real-time listener on trip_tickets (primary source from Android app) ---
+    let tripTicketsQuery;
+    if (role === 'driver') {
+        tripTicketsQuery = query(
+            collection(db, "trip_tickets"),
+            where("driver_id", "==", currentUserData.uid),
+            orderBy("created_at", "desc")
+        );
+    } else if (role === 'company_admin' && companyId) {
+        tripTicketsQuery = query(
+            collection(db, "trip_tickets"),
             where("accredited_company_id", "==", companyId),
-            orderBy("completed_at", "desc")
+            orderBy("created_at", "desc")
+        );
+    } else if ((role === 'super_admin' || role === 'admin') && selectedCompanyId !== 'all') {
+        tripTicketsQuery = query(
+            collection(db, "trip_tickets"),
+            where("accredited_company_id", "==", selectedCompanyId),
+            orderBy("created_at", "desc")
         );
     } else {
-        q = query(
-            collection(db, "schedules"),
-            where("status", "==", "completed"),
-            orderBy("completed_at", "desc")
+        tripTicketsQuery = query(
+            collection(db, "trip_tickets"),
+            orderBy("created_at", "desc")
         );
     }
 
-    // Fallback: also catch trips where trip_phase is completed
-    onSnapshot(q, (snapshot) => {
-        allTickets = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-        populateDriverFilter();
-        renderTickets(allTickets);
-        updateSummaryStats(allTickets);
-    }, async (error) => {
-        // Fallback if index not ready - fetch without orderBy
-        console.warn("Primary query failed, trying fallback:", error.message);
-        let q2;
-        if ((role === 'company_admin' || role === 'admin') && companyId) {
-            q2 = query(collection(db, "schedules"), 
+    onSnapshot(tripTicketsQuery, (snapshot) => {
+        // Map trip_tickets into a uniform structure
+        const tripTickets = snapshot.docs.map(d => {
+            const data = d.data();
+            return {
+                id: d.id,
+                _source: 'trip_tickets',
+                driver_name: data.driver_name || data.driverName || '—',
+                driver_uid: data.driver_uid || '',
+                driver_email: data.driver_email || '',
+                vehicle_assigned: data.vehicle_assigned || data.vehicle_type || '—',
+                plate_number: data.plate_number || data.vehicle_plate || '—',
+                client_name: data.client_name || '—',
+                pickup_location: data.pickup_location || '—',
+                dropoff_location: data.dropoff_location || '—',
+                time_of_departure: data.time_of_departure || data.accepted_at || '—',
+                picked_up_at: data.picked_up_at || '—',
+                time_of_arrival: data.time_of_arrival || '—',
+                total_km_travelled: data.total_km || data.total_km_travelled || 0,
+                route_polyline: data.route_polyline || '',
+                completed_at: data.created_at,
+                schedule_date: data.schedule_date || '',
+                schedule_time: data.schedule_time || '',
+                accredited_company_id: data.accredited_company_id || '',
+                ...data
+            };
+        });
+
+        // --- Also listen to completed schedules (legacy source) ---
+        let schedulesQuery;
+        if (role === 'driver') {
+            schedulesQuery = query(
+                collection(db, "schedules"),
+                where("status", "==", "completed"),
+                where("driver_id", "==", currentUserData.uid)
+            );
+        } else if (role === 'company_admin' && companyId) {
+            schedulesQuery = query(
+                collection(db, "schedules"),
                 where("status", "==", "completed"),
                 where("accredited_company_id", "==", companyId)
             );
+        } else if ((role === 'super_admin' || role === 'admin') && selectedCompanyId !== 'all') {
+            schedulesQuery = query(
+                collection(db, "schedules"),
+                where("status", "==", "completed"),
+                where("accredited_company_id", "==", selectedCompanyId)
+            );
         } else {
-            q2 = query(collection(db, "schedules"), where("status", "==", "completed"));
+            schedulesQuery = query(
+                collection(db, "schedules"),
+                where("status", "==", "completed")
+            );
         }
-        onSnapshot(q2, (snapshot) => {
-            allTickets = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            // Sort client-side
+
+        onSnapshot(schedulesQuery, (schedSnap) => {
+            const schedTickets = schedSnap.docs.map(d => ({ id: d.id, _source: 'schedules', ...d.data() }));
+
+            // Merge: trip_tickets takes priority; add schedules not already covered
+            const tripTicketIds = new Set(tripTickets.map(t => t.id));
+            const mergedSchedules = schedTickets.filter(s => !tripTicketIds.has(s.id));
+
+            allTickets = [...tripTickets, ...mergedSchedules];
+            // Sort by completed_at descending
             allTickets.sort((a, b) => {
-                const aTime = a.completed_at?.toMillis?.() || 0;
-                const bTime = b.completed_at?.toMillis?.() || 0;
-                return bTime - aTime;
+                const at = a.completed_at?.toMillis?.() || a.completed_at?.seconds * 1000 || 0;
+                const bt = b.completed_at?.toMillis?.() || b.completed_at?.seconds * 1000 || 0;
+                return bt - at;
+            });
+
+            populateDriverFilter();
+            renderTickets(allTickets);
+            updateSummaryStats(allTickets);
+        }, (err) => {
+            console.warn("Schedules listener error:", err.message);
+            // Just use trip_tickets if schedules fails
+            allTickets = tripTickets;
+            populateDriverFilter();
+            renderTickets(allTickets);
+            updateSummaryStats(allTickets);
+        });
+    }, (error) => {
+        console.error("trip_tickets listener failed:", error.message);
+        // Fallback: listen to completed schedules only
+        const q = query(collection(db, "schedules"), where("status", "==", "completed"));
+        onSnapshot(q, (snapshot) => {
+            allTickets = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            allTickets.sort((a, b) => {
+                const at = a.completed_at?.toMillis?.() || 0;
+                const bt = b.completed_at?.toMillis?.() || 0;
+                return bt - at;
             });
             populateDriverFilter();
             renderTickets(allTickets);
@@ -201,7 +327,7 @@ function formatTimestamp(ts) {
     }
 }
 
-window.applyFilters = function() {
+window.applyFilters = function () {
     const fromDate = document.getElementById('filterDateFrom').value;
     const toDate = document.getElementById('filterDateTo').value;
     const driver = document.getElementById('filterDriver').value;
@@ -233,7 +359,7 @@ window.applyFilters = function() {
     updateSummaryStats(filtered);
 };
 
-window.clearFilters = function() {
+window.clearFilters = function () {
     document.getElementById('filterDateFrom').value = '';
     document.getElementById('filterDateTo').value = '';
     document.getElementById('filterDriver').value = '';
@@ -241,17 +367,17 @@ window.clearFilters = function() {
     updateSummaryStats(allTickets);
 };
 
-window.exportTripTickets = function() {
+window.exportTripTickets = function () {
     const fromDate = document.getElementById('filterDateFrom').value;
     const toDate = document.getElementById('filterDateTo').value;
     const driver = document.getElementById('filterDriver').value;
-    
+
     // Use the currently filtered list if any, otherwise all tickets
     // Actually, it's better to just apply current filters to allTickets
     let filtered = [...allTickets];
     if (driver) filtered = filtered.filter(t => t.driver_name === driver);
     // ... we could use same logic as applyFilters but let's just use a global `currentFilteredTickets`
-    
+
     // For simplicity, let's just export what's currently being shown or re-filter
     if (driver) {
         filtered = filtered.filter(t => t.driver_name === driver);
@@ -281,12 +407,12 @@ window.exportTripTickets = function() {
 let routeMap = null;
 let currentPolyline = null;
 
-window.viewTripRoute = function(id, polyline, driverName) {
+window.viewTripRoute = function (id, polyline, driverName) {
     const modal = document.getElementById('routeModal');
     if (!modal) return;
-    
+
     modal.style.display = 'flex';
-    
+
     // Initialize map if not already done
     if (!routeMap) {
         routeMap = new google.maps.Map(document.getElementById('routeMap'), {
@@ -320,7 +446,7 @@ window.viewTripRoute = function(id, polyline, driverName) {
 
     try {
         const decodedPath = google.maps.geometry.encoding.decodePath(polyline);
-        
+
         currentPolyline = new google.maps.Polyline({
             path: decodedPath,
             geodesic: true,
@@ -347,7 +473,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (closeBtn) closeBtn.onclick = () => routeModal.style.display = 'none';
     if (closeBtnFooter) closeBtnFooter.onclick = () => routeModal.style.display = 'none';
-    
+
     window.onclick = (event) => {
         if (event.target == routeModal) {
             routeModal.style.display = 'none';

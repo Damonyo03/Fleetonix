@@ -12,10 +12,11 @@ const dtrLogsBody = document.getElementById('dtrLogsBody');
 const dateFilter = document.getElementById('dateFilter');
 let currentUserData = null;
 let activeCompanies = {};
+let selectedCompanyId = localStorage.getItem('fleetonix_global_company') || 'all';
 
 // Set default date to today
 const today = new Date().toISOString().split('T')[0];
-dateFilter.value = today;
+if (dateFilter) dateFilter.value = today;
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -27,6 +28,18 @@ onAuthStateChanged(auth, async (user) => {
     currentUserData = userDoc.exists() ? userDoc.data() : { role: 'admin' };
     document.getElementById('adminDisplayName').textContent = currentUserData.full_name || "Administrator";
 
+    const role = currentUserData?.role || currentUserData?.user_type;
+
+    // If company_admin, force their company
+    if (role === 'company_admin' && currentUserData.accredited_company_id) {
+        selectedCompanyId = currentUserData.accredited_company_id;
+    }
+
+    // Initialize Company Filter for Super Admins
+    if (role === 'super_admin' || role === 'admin') {
+        initCompanyFilter();
+    }
+
     // Pre-fetch all companies for display names
     const companiesSnap = await getDocs(collection(db, "accredited_companies"));
     companiesSnap.forEach(doc => {
@@ -36,7 +49,35 @@ onAuthStateChanged(auth, async (user) => {
     initDTRLogs();
 });
 
-function initDTRLogs() {
+async function initCompanyFilter() {
+    const filter = document.getElementById('companyFilter');
+    if (!filter) return;
+
+    try {
+        const companiesSnap = await getDocs(query(collection(db, "accredited_companies"), where("status", "==", "active")));
+        
+        filter.innerHTML = '<option value="all">All Companies</option>';
+        companiesSnap.forEach(doc => {
+            const option = document.createElement('option');
+            option.value = doc.id;
+            option.textContent = doc.data().name;
+            filter.appendChild(option);
+        });
+        
+        filter.value = selectedCompanyId;
+        filter.style.display = 'inline-block';
+
+        filter.addEventListener('change', (e) => {
+            selectedCompanyId = e.target.value;
+            localStorage.setItem('fleetonix_global_company', selectedCompanyId);
+            initDTRLogs();
+        });
+    } catch (error) {
+        console.error("Error loading companies:", error);
+    }
+}
+
+window.initDTRLogs = function() {
     if (!dtrLogsBody) return;
 
     const role = currentUserData.role || currentUserData.user_type;
@@ -47,8 +88,10 @@ function initDTRLogs() {
     
     // Construct query filters
     let q;
-    if ((role === 'company_admin' || role === 'admin') && companyId) {
+    if (role === 'company_admin' && companyId) {
         q = query(baseQuery, where("accredited_company_id", "==", companyId), orderBy("timestamp", "desc"), limit(100));
+    } else if ((role === 'super_admin' || role === 'admin') && selectedCompanyId !== 'all') {
+        q = query(baseQuery, where("accredited_company_id", "==", selectedCompanyId), orderBy("timestamp", "desc"), limit(100));
     } else {
         q = query(baseQuery, orderBy("timestamp", "desc"), limit(100));
     }

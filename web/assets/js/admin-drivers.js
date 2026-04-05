@@ -54,9 +54,21 @@ onAuthStateChanged(auth, async (user) => {
     initLayout('Driver Management', name);
 
     // Fetch companies
-    if (role === 'super_admin' || role === 'admin') {
+    let selectedCompanyId = localStorage.getItem('fleetonix_global_company') || 'all';
+    
+    // If company_admin, force their company
+    if (role === 'company_admin' && userData.accredited_company_id) {
+        selectedCompanyId = userData.accredited_company_id;
+    }
+
+    if (role === 'super_admin' || role === 'admin' || role === 'company_admin') {
         const companiesSnap = await getDocs(query(collection(db, "accredited_companies"), where("status", "==", "active")));
         const filter = document.getElementById('companyFilter');
+        
+        if (filter) {
+            filter.innerHTML = '<option value="all">All Companies</option>';
+        }
+
         companiesSnap.forEach(doc => {
             activeCompanies[doc.id] = doc.data().name;
             if (filter) {
@@ -66,7 +78,14 @@ onAuthStateChanged(auth, async (user) => {
                 filter.appendChild(option);
             }
         });
-        if (filter) filter.addEventListener('change', applyFilters);
+
+        if (filter) {
+            filter.value = selectedCompanyId;
+            filter.addEventListener('change', (e) => {
+                localStorage.setItem('fleetonix_global_company', e.target.value);
+                applyFilters();
+            });
+        }
     }
 
     initDriverList();
@@ -155,23 +174,16 @@ function renderDrivers(docs) {
         return;
     }
 
-    const now = Date.now();
-    const staleThreshold = 2 * 60 * 1000; // 2 minutes
-
     driverGrid.innerHTML = docs.map(d => {
         const driver = d.data();
         const id = d.id;
-        let status = driver.current_status || 'offline';
-        
-        // Accurate real-time staleness check
-        if (driver.last_active) {
-            const diff = now - (driver.last_active.seconds * 1000);
-            if (diff > staleThreshold) status = 'offline';
-        }
-        
-        const displayStatus = status.replace('_', ' ');
+        // Directly use Firestore's current_status — updated in real-time via onSnapshot
+        const status = driver.current_status || 'offline';
+        const displayStatus = status.replace(/_/g, ' ');
+        const isTimedIn = driver.is_currently_timed_in === true;
+
         return `
-            <div class="driver-card">
+            <div class="driver-card" id="dcard-${id}">
                 <div class="driver-status ${status}"></div>
                 <div class="driver-profile-header">
                     <div class="driver-avatar-large">
@@ -187,6 +199,7 @@ function renderDrivers(docs) {
                 </div>
                 <div class="driver-meta">
                     <span class="status-badge ${status}">${displayStatus}</span>
+                    ${isTimedIn ? `<span class="status-badge available" style="margin-left:4px; font-size:0.7em;"><i class="fas fa-clock"></i> Timed In</span>` : ''}
                     <div class="card-actions">
                         <button class="btn-icon edit" onclick="window.editDriver('${id}')" title="Edit Driver"><i class="fas fa-edit"></i></button>
                         <button class="btn-icon delete" onclick="window.deleteDriver('${id}')" title="Delete Driver"><i class="fas fa-trash"></i></button>

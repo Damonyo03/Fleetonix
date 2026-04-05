@@ -12,7 +12,7 @@ let allDriversData = {};
 let pendingBookingsMap = new Map();
 let currentDispatchBookingId = null;
 let currentUserData = null;
-let selectedCompanyId = 'all';
+let selectedCompanyId = localStorage.getItem('fleetonix_global_company') || 'all';
 let unsubscribeStats = [];
 let infoWindow = null;
 
@@ -41,6 +41,11 @@ onAuthStateChanged(auth, async (user) => {
         console.error("Access denied: Not an administrator.");
         window.location.href = '../login.html?error=unauthorized';
         return;
+    }
+
+    // If company_admin, force their company
+    if (role === 'company_admin' && userData.accredited_company_id) {
+        selectedCompanyId = userData.accredited_company_id;
     }
 
     currentUserData = userData;
@@ -79,16 +84,24 @@ async function initCompanyFilter() {
 
     try {
         const companiesSnap = await getDocs(query(collection(db, "accredited_companies"), where("status", "==", "active")));
+        
+        // Clear existing options except first
+        filter.innerHTML = '<option value="all">All Companies</option>';
+        
         companiesSnap.forEach(doc => {
             const option = document.createElement('option');
             option.value = doc.id;
             option.textContent = doc.data().name;
             filter.appendChild(option);
         });
+        
+        // Restore from storage
+        filter.value = selectedCompanyId;
         filter.style.display = 'block';
 
         filter.addEventListener('change', (e) => {
             selectedCompanyId = e.target.value;
+            localStorage.setItem('fleetonix_global_company', selectedCompanyId);
             refreshDashboardData();
             updateMapFilters();
         });
@@ -199,249 +212,165 @@ function initMap() {
     driversMap = new google.maps.Map(mapElement, mapOptions);
     infoWindow = new google.maps.InfoWindow();
 
-    // Listen to drivers for names and status
-    onSnapshot(collection(db, "drivers"), (snapshot) => {
-        snapshot.docs.forEach(docSnap => {
-            const data = docSnap.data();
-            const email = (data.driver_email || "").toLowerCase().trim();
-            
-            // Revert to using the Firestore document ID (Auth UID) as the primary key for synchronization.
-            const key = docSnap.id;
-            
-            if (!allDriversData[key]) {
-                allDriversData[key] = { id: key };
-            }
-            
-            // Merge metadata
-            Object.assign(allDriversData[key], {
+    // --- Helper: Unify Driver State Management ---
+    function updateDriverState(id, data, source) {
+        if (!allDriversData[id]) {
+            allDriversData[id] = { id: id, driver_name: 'Loading...' };
+        }
+        
+        // Merge data based on source
+        if (source === 'metadata') {
+            Object.assign(allDriversData[id], {
                 driver_name: data.driver_name,
                 current_status: data.current_status,
                 vehicle_assigned: data.vehicle_assigned,
-                driver_email: email,
-                accredited_company_id: data.accredited_company_id || ""
+                plate_number: data.plate_number,
+                driver_email: (data.driver_email || "").toLowerCase().trim(),
+                accredited_company_id: data.accredited_company_id || "",
+                profile_image_url: data.profile_image_url || ""
+            });
+        } else if (source === 'location') {
+            const existingStatus = allDriversData[id].current_status || 'offline';
+            Object.assign(allDriversData[id], {
+                current_latitude: data.current_latitude,
+                current_longitude: data.current_longitude,
+                current_speed: data.current_speed,
+                current_heading: data.current_heading,
+                wifi_ssid: data.wifi_ssid,
+                last_updated: data.last_updated,
+                // Promote to available if they are actively broadcasting location
+                current_status: existingStatus === 'offline' ? 'available' : existingStatus
+            });
+        }
+        
+        refreshMarker(id);
+        updateOnlineDriversList();
+        updateOnlineDisplay();
+    }
+
+    // --- Helper: Unified Marker & Info Window Logic ---
+    function refreshMarker(id) {
+        const d = allDriversData[id];
+        if (!d.current_latitude || !d.current_longitude) return;
+
+        const pos = { lat: d.current_latitude, lng: d.current_longitude };
+        const status = d.current_trip_phase || d.current_status || 'available';
+        const markerIcon = getMarkerIcon(status);
+        const matchesCompany = selectedCompanyId === 'all' || d.accredited_company_id === selectedCompanyId;
+
+        if (driverMarkers[id]) {
+            animateMarkerTo(driverMarkers[id], pos);
+            driverMarkers[id].setIcon(markerIcon);
+            driverMarkers[id].setOpacity(status === 'offline' ? 0.6 : 1.0);
+            driverMarkers[id].setVisible(matchesCompany);
+            driverMarkers[id].driverData = d;
+        } else {
+            const marker = new google.maps.Marker({
+                position: pos,
+                map: driversMap,
+                title: d.driver_name || 'Driver',
+                icon: markerIcon,
+                opacity: status === 'offline' ? 0.6 : 1.0,
+                visible: matchesCompany,
+                animation: google.maps.Animation.DROP
             });
 
-            // If a marker already exists for this driver, update its icon/info
-            if (driverMarkers[key]) {
-                const markerIcon = getMarkerIcon(data.current_status || 'available');
-                driverMarkers[key].setIcon(markerIcon);
-                
-                // Update marker metadata for info window
-                driverMarkers[key].driverData = data;
-                
-                // Set visibility based on company filter
-                const matchesCompany = selectedCompanyId === 'all' || data.accredited_company_id === selectedCompanyId;
-                driverMarkers[key].setVisible(matchesCompany);
+            marker.driverData = d;
+            marker.addListener('click', () => {
+                if (infoWindow) infoWindow.close();
+                infoWindow.setContent(getInfoWindowContent(marker.driverData));
+                infoWindow.open(driversMap, marker);
+            });
+            driverMarkers[id] = marker;
+        }
+    }
 
-                // Also update position if the drivers collection has it
-                if (data.current_latitude && data.current_longitude) {
-                    driverMarkers[key].setPosition({ lat: data.current_latitude, lng: data.current_longitude });
-                }
-            } else if (data.current_latitude && data.current_longitude) {
-                // If NO marker exists but we have location, create a persistent/offline marker
-                const status = data.current_status || 'offline';
-                const matchesCompany = selectedCompanyId === 'all' || data.accredited_company_id === selectedCompanyId;
-                const marker = new google.maps.Marker({
-                    position: { lat: data.current_latitude, lng: data.current_longitude },
-                    map: driversMap,
-                    title: data.driver_name || 'Driver',
-                    icon: getMarkerIcon(status),
-                    opacity: status === 'offline' ? 0.6 : 1.0,
-                    visible: matchesCompany
-                });
-                
-                marker.driverData = data; // Store data for info window
-                
-                // Click Listener: Show Driver Details Popup
-                marker.addListener('click', () => {
-                    if (infoWindow) infoWindow.close();
-                    
-                    const d = marker.driverData;
-                    const content = `
-                        <div class="map-info-window" style="color:white; padding:10px; min-width:180px;">
-                            <h4 style="margin:0 0 8px 0; color:var(--accent-blue); display:flex; align-items:center; gap:8px;">
-                                <i class="fas fa-user-circle"></i> ${d.driver_name || 'Fleet Driver'}
-                            </h4>
-                            <div style="font-size:0.85em; display:grid; gap:6px;">
-                                <div style="display:flex; align-items:center; gap:8px;">
-                                    <i class="fas fa-car" style="width:16px;"></i> ${d.vehicle_assigned || 'Pending Setup'}
-                                </div>
-                                <div style="display:flex; align-items:center; gap:8px;">
-                                    <i class="fas fa-id-card" style="width:16px;"></i> ${d.plate_number || 'TBD-0000'}
-                                </div>
-                                <div style="display:flex; align-items:center; gap:8px;">
-                                    <i class="fas fa-circle" style="width:16px; color:${d.current_status === 'available' ? '#10b981' : d.current_status === 'on_schedule' ? '#3b82f6' : '#94a3b8'};"></i> 
-                                    <span style="text-transform:capitalize;">${d.current_status || 'offline'}</span>
-                                </div>
-                                <div style="margin-top:8px; border-top:1px solid rgba(255,255,255,0.1); padding-top:8px; font-size:0.9em; opacity:0.8;">
-                                    <i class="fas fa-map-marker-alt"></i> Real-time Fleet Unit
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                    
-                    infoWindow.setContent(content);
-                    infoWindow.open(driversMap, marker);
-                });
-            }
-        });
-        updateOnlineDisplay();
-        updateOnlineDriversList();
-        window.allDriversData = allDriversData; // Expose for debugging
-        window.driverMarkers = driverMarkers;   // Expose for debugging
-    });
-
-    // Listen to driver_locations for real-time position
-    onSnapshot(collection(db, "driver_locations"), (snapshot) => {
-        snapshot.docChanges().forEach((change) => {
-            const driverLoc = change.doc.data();
-            const driverId = change.doc.id;
-            
+    // --- 1. Metadata Listener (docChanges for robust sync) ---
+    onSnapshot(collection(db, "drivers"), (snapshot) => {
+        snapshot.docChanges().forEach(change => {
+            const id = change.doc.id;
             if (change.type === "removed") {
-                if (driverMarkers[driverId]) {
-                    driverMarkers[driverId].setMap(null);
-                    delete driverMarkers[driverId];
+                if (driverMarkers[id]) {
+                    driverMarkers[id].setMap(null);
+                    delete driverMarkers[id];
                 }
-                delete allDriversData[driverId];
+                delete allDriversData[id];
+                updateOnlineDriversList();
                 updateOnlineDisplay();
                 return;
             }
-
-            // Resilient lookup: If driver metadata haven't loaded yet, create a placeholder
-            if (!allDriversData[driverId]) {
-                console.log(`Location received for unknown driver ID: ${driverId}. Creating placeholder.`);
-                allDriversData[driverId] = { 
-                    id: driverId,
-                    driver_name: 'Loading Driver...',
-                    current_status: 'available' 
-                };
-            }
-
-            // Safely merge ONLY location-specific telemetry fields
-            const { current_latitude, current_longitude, current_speed, current_heading, last_updated, wifi_ssid } = driverLoc;
-            const existingStatus = allDriversData[driverId].current_status || 'offline';
-            
-            Object.assign(allDriversData[driverId], {
-                current_latitude,
-                current_longitude,
-                current_speed,
-                current_heading,
-                wifi_ssid,
-                last_updated,
-                // Promote to 'available' if currently offline but broadcasting location
-                current_status: existingStatus === 'offline' ? 'available' : existingStatus
-            });
-
-            const driver = allDriversData[driverId];
-            if (driver.current_latitude && driver.current_longitude) {
-                const position = { lat: driver.current_latitude, lng: driver.current_longitude };
-                
-                // If the driver is actually online but we just got an update, ensure opacity is full
-                const status = driver.current_status || 'available';
-                const markerIcon = getMarkerIcon(driver.current_trip_phase || status);
-                
-                // Update Route Polyline
-                if (driver.current_route_polyline) {
-                    const path = google.maps.geometry.encoding.decodePath(driver.current_route_polyline);
-                    if (driverPolylines[driverId]) {
-                        driverPolylines[driverId].setPath(path);
-                    } else {
-                        driverPolylines[driverId] = new google.maps.Polyline({
-                            path: path,
-                            geodesic: true,
-                            strokeColor: '#3b82f6',
-                            strokeOpacity: 0.8,
-                            strokeWeight: 4,
-                            map: driversMap
-                        });
-                    }
-                } else if (driverPolylines[driverId]) {
-                    driverPolylines[driverId].setMap(null);
-                    delete driverPolylines[driverId];
-                }
-
-                if (driverMarkers[driverId]) {
-                    // Update existing marker with smooth animation
-                    animateMarkerTo(driverMarkers[driverId], position);
-                    driverMarkers[driverId].setIcon(markerIcon);
-                    
-                    // Fading logic: offline is most faded, others are full opacity
-                    let opacity = 1.0;
-                    if (status === 'offline') opacity = 0.6;
-                    driverMarkers[driverId].setOpacity(opacity);
-                } else {
-                    // Create new marker
-                    const marker = new google.maps.Marker({
-                        position: position,
-                        map: driversMap,
-                        title: driver.driver_name || 'Driver',
-                        icon: markerIcon,
-                        opacity: status === 'offline' ? 0.6 : 1.0,
-                        animation: google.maps.Animation.DROP
-                    });
-
-                    marker.addListener('click', () => {
-                        if (infoWindow) infoWindow.close();
-                        infoWindow.setContent(getInfoWindowContent(allDriversData[driverId] || driver));
-                        infoWindow.open(driversMap, marker);
-                    });
-
-                    driverMarkers[driverId] = marker;
-                }
-            }
+            updateDriverState(id, change.doc.data(), 'metadata');
         });
-        
-        updateOnlineDriversList(); 
-        
-        const activeCount = Object.values(allDriversData).filter(d => d.current_latitude && d.current_status !== 'offline').length;
-        const statusEl = document.getElementById('mapStatus');
-        if (statusEl) statusEl.innerText = `Live: ${activeCount} drivers online`;
-        
-        const activeDriversEl = document.getElementById('activeDrivers');
-        if (activeDriversEl) activeDriversEl.innerText = activeCount;
+    });
+
+    // --- 2. Real-time Location Listener ---
+    onSnapshot(collection(db, "driver_locations"), (snapshot) => {
+        snapshot.docChanges().forEach(change => {
+            const id = change.doc.id;
+            if (change.type === "removed") {
+                // We keep the marker if drivers doc still exists, just update position
+                if (allDriversData[id]) {
+                    allDriversData[id].current_latitude = null;
+                    allDriversData[id].current_longitude = null;
+                }
+                refreshMarker(id);
+                return;
+            }
+            updateDriverState(id, change.doc.data(), 'location');
+        });
     });
 
     function getInfoWindowContent(driver) {
-    const status = driver.current_trip_phase || driver.current_status || 'available';
-    const speedKmh = ((driver.current_speed || 0) * 3.6).toFixed(1);
-    const heading = Math.round(driver.current_heading || 0);
-    
-    return `
-        <div style="color: #333; padding: 8px; min-width: 180px; font-family: 'Inter', sans-serif;">
-            <strong style="display: block; margin-bottom: 8px; font-size: 15px; border-bottom: 1px solid #eee; padding-bottom: 4px;">
-                ${driver.driver_name || 'Driver'}
-            </strong>
-            <div style="margin-bottom: 6px;">
-                <span style="font-size: 12px; color: #666;">Status: </span>
-                <span style="color: ${getStatusColor(status)}; font-weight: 600; font-size: 12px;">${status.replace('_', ' ').toUpperCase()}</span>
+        const status = driver.current_trip_phase || driver.current_status || 'available';
+        const speedKmh = ((driver.current_speed || 0) * 3.6).toFixed(1);
+        const heading = Math.round(driver.current_heading || 0);
+        
+        return `
+            <div class="map-info-window" style="color: #333; padding: 12px; min-width: 220px; font-family: 'Inter', sans-serif;">
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; border-bottom:1px solid #eee; padding-bottom:8px;">
+                    <div style="width:40px; height:40px; border-radius:50%; background:var(--card-blue); display:flex; align-items:center; justify-content:center; overflow:hidden;">
+                        ${driver.profile_image_url ? `<img src="${driver.profile_image_url}" style="width:100%; height:100%; object-fit:cover;">` : `<i class="fas fa-user-circle" style="font-size:24px; color:var(--accent-teal);"></i>`}
+                    </div>
+                    <div>
+                        <strong style="display: block; font-size: 15px; color:var(--midnight);">${driver.driver_name || driver.driver_email || 'Fleet Driver'}</strong>
+                        <span style="font-size: 11px; color: #666;">ID: ${driver.id.substring(0,8)}...</span>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 10px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size: 11px; color: #888; text-transform:uppercase; letter-spacing:0.5px;">Current Status</span>
+                        <span style="color: ${getStatusColor(status)}; font-weight: 700; font-size: 11px; background:${getStatusColor(status)}15; padding:2px 8px; border-radius:10px;">${status.replace(/_/g, ' ').toUpperCase()}</span>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+                    <div style="font-size: 11px; color: #555; background:#f8fafc; padding:6px; border-radius:6px;">
+                        <i class="fas fa-tachometer-alt" style="color:var(--accent-blue); width:14px;"></i> <strong>${speedKmh}</strong> <small>km/h</small>
+                    </div>
+                    <div style="font-size: 11px; color: #555; background:#f8fafc; padding:6px; border-radius:6px;">
+                        <i class="fas fa-compass" style="color:var(--accent-blue); width:14px;"></i> <strong>${heading}°</strong> <small>HDG</small>
+                    </div>
+                    <div style="font-size: 11px; color: #555; background:#f8fafc; padding:6px; border-radius:6px; grid-column: 1 / span 2;">
+                        <i class="fas fa-car" style="color:var(--accent-teal); width:14px;"></i> ${driver.vehicle_assigned || 'No Vehicle'} · ${driver.plate_number || 'No Plate'}
+                    </div>
+                </div>
+
+                ${driver.trip_eta ? `
+                    <div style="font-size: 11px; color: #3b82f6; font-weight: 600; background: #eff6ff; padding: 6px; border-radius: 6px; border: 1px solid #dbeafe; margin-bottom:8px;">
+                        <i class="fas fa-clock"></i> ETA: ${driver.trip_eta} (${driver.trip_distance})
+                    </div>
+                ` : ''}
+
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; border-top:1px solid #f1f5f9; padding-top:8px;">
+                    <span style="font-size: 10px; color: #94a3b8;">${driver.wifi_ssid ? `<i class="fas fa-wifi"></i> ${driver.wifi_ssid}` : 'Satellite Sync'}</span>
+                    ${driver.last_updated ? `
+                        <span style="font-size: 9px; color: #94a3b8;">Updated: ${new Date(driver.last_updated.seconds * 1000).toLocaleTimeString()}</span>
+                    ` : ''}
+                </div>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 6px;">
-                <div style="font-size: 11px; color: #888;">
-                    <i class="fas fa-tachometer-alt" style="width: 14px;"></i> ${speedKmh} kmh
-                </div>
-                <div style="font-size: 11px; color: #888;">
-                    <i class="fas fa-compass" style="width: 14px;"></i> ${heading}°
-                </div>
-                <div style="font-size: 11px; color: #888;">
-                    <i class="fas fa-car" style="width: 14px;"></i> ${driver.vehicle_assigned || 'N/A'}
-                </div>
-                <div style="font-size: 11px; color: #888;" title="Network">
-                    <i class="fas fa-wifi" style="width: 14px;"></i> ${driver.wifi_ssid || 'No Data'}
-                </div>
-            </div>
-            ${driver.trip_eta ? `
-                <div style="font-size: 11px; color: #3b82f6; font-weight: 600; background: #eff6ff; padding: 4px; border-radius: 4px; border: 1px solid #dbeafe;">
-                    ETA: ${driver.trip_eta} (${driver.trip_distance})
-                </div>
-            ` : ''}
-            ${driver.last_updated ? `
-                <div style="font-size: 9px; color: #bbb; margin-top: 6px; text-align: right;">
-                    Sync: ${new Date(driver.last_updated.seconds * 1000).toLocaleTimeString()}
-                </div>
-            ` : ''}
-        </div>
-    `;
-}
+        `;
+    }
 
 // Cleanup "ghost" markers periodically (every 1 min)
     setInterval(() => {
@@ -480,41 +409,33 @@ function updateOnlineDriversList() {
     const listContainer = document.getElementById('onlineDriversList');
     const onlineCount = document.getElementById('onlineCount');
     if (!listContainer) return;
-
-    // Filter out ghost telemetry and stale sessions (2min inactivity = offline/ghost)
+    // Show all drivers from allDriversData — no location required to appear in list
     const now = Date.now();
-    const staleThreshold = 2 * 60 * 1000; // 2 minutes
-    const liveThreshold = 15 * 1000;      // 15 seconds for 'Live' pulse
-    
+    const staleThreshold = 10 * 60 * 1000; // 10 minutes of no GPS = consider stale
+    const liveThreshold = 30 * 1000;       // 30s = pulsing live dot
+
+    // Build list from allDriversData — already aggregated from both drivers + driver_locations snapshots
     const validDrivers = Object.values(allDriversData).filter(d => {
+        // Must have a name to show
         if (!d.driver_name || d.driver_name === 'Loading Driver...') return false;
-        
-        // If they have location, check for staleness
-        if (d.last_updated) {
-            const diff = now - (d.last_updated.seconds * 1000);
-            if (diff > staleThreshold) return false; // This is a ghost/inactive
-        } else {
-            // No location update at all? Probably not online ever.
-            return false;
-        }
-        
+
+        // If location data exists and it's stale, treat as offline (but still show)
+        // We don't hide them entirely — just their status reflects reality
         return true;
     });
 
     const sortedDrivers = validDrivers.sort((a, b) => {
         const statusA = a.current_status || 'offline';
         const statusB = b.current_status || 'offline';
-        
-        // Priority: In Progress/On Schedule -> Available -> Offline
+
         const getPriority = (s) => {
             if (s === 'on_schedule' || s === 'accepted' || s === 'pickup' || s === 'dropoff') return 1;
             if (s === 'available') return 2;
             return 3;
         };
-        
+
         const priA = getPriority(statusA);
         const priB = getPriority(statusB);
-        
         if (priA !== priB) return priA - priB;
         return (a.driver_name || '').localeCompare(b.driver_name || '');
     });
@@ -523,17 +444,21 @@ function updateOnlineDriversList() {
         const status = driver.current_status || 'offline';
         const phase = driver.current_trip_phase || (status === 'on_schedule' ? 'accepted' : '');
         const displayStatus = phase ? phase : status;
-        const statusLabel = displayStatus.replace('_', ' ');
-        
+        const statusLabel = displayStatus.replace(/_/g, ' ');
+
         const lastUpdateMs = driver.last_updated ? (driver.last_updated.seconds * 1000) : 0;
-        const isLive = (now - lastUpdateMs) < liveThreshold;
-        
+        const isLive = lastUpdateMs > 0 && (now - lastUpdateMs) < liveThreshold;
+
+        // Vehicle info for hover detail
+        const vehicleInfo = driver.vehicle_assigned ? `${driver.vehicle_assigned}${driver.plate_number ? ' · ' + driver.plate_number : ''}` : '';
+
         return `
-            <div class="driver-item ${status === 'offline' ? 'offline' : ''} ${isLive ? 'pulse' : ''}" onclick="focusDriver('${driver.id}')">
+            <div class="driver-item ${status === 'offline' ? 'offline' : ''} ${isLive ? 'pulse' : ''}" onclick="focusDriver('${driver.id}')" title="${vehicleInfo}">
                 <div class="status-dot ${displayStatus}"></div>
                 <div class="driver-info">
                     <div class="driver-name">${driver.driver_name || 'Unnamed Driver'}</div>
                     <div class="driver-status-text ${displayStatus}">${statusLabel}</div>
+                    ${vehicleInfo ? `<div style="font-size:0.7em; color:var(--text-muted); margin-top:2px;"><i class="fas fa-car" style="font-size:0.8em;"></i> ${vehicleInfo}</div>` : ''}
                 </div>
                 <div class="driver-badge-area">
                     ${status === 'available' ? `<span class="status-badge available ${isLive ? 'premium' : ''}" style="font-size: 0.65rem; padding: 2px 6px;">Available</span>` : ''}
@@ -543,10 +468,19 @@ function updateOnlineDriversList() {
             </div>
         `;
     }).join('') : '<div style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 0.85em;">No drivers found in fleet.</div>';
-    
-    // Total count of truly online/active drivers
+
+    // Online count = all non-offline drivers
     const onlineOnlyCount = validDrivers.filter(d => d.current_status && d.current_status !== 'offline').length;
     if (onlineCount) onlineCount.innerText = onlineOnlyCount;
+}
+
+function updateOnlineDisplay() {
+    const activeCount = Object.values(allDriversData).filter(d => d.current_latitude && d.current_status !== 'offline').length;
+    const statusEl = document.getElementById('mapStatus');
+    if (statusEl) statusEl.innerText = `Live: ${activeCount} drivers online`;
+    
+    const activeDriversEl = document.getElementById('activeDrivers');
+    if (activeDriversEl) activeDriversEl.innerText = activeCount;
 }
 
 window.focusDriver = function(driverId) {
