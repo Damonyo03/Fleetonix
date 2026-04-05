@@ -256,21 +256,62 @@ fun DriverDashboard(
     var showAccidentDialog by remember { mutableStateOf(false) }
     var isReportingAccident by remember { mutableStateOf(false) }
 
-    // Vehicle issue states
-    var showVehicleIssueDialog by remember { mutableStateOf(false) }
     var isReportingVehicleIssue by remember { mutableStateOf(false) }
+    
+    fun getAddressFromLocation(lat: Double, lng: Double): String {
+        return try {
+            val geocoder = android.location.Geocoder(context, java.util.Locale.getDefault())
+            val addresses = geocoder.getFromLocation(lat, lng, 1)
+            if (!addresses.isNullOrEmpty()) {
+                val addr = addresses[0]
+                val city = addr.locality ?: addr.subAdminArea ?: ""
+                val thoroughfare = addr.thoroughfare ?: ""
+                if (city.isNotEmpty() && thoroughfare.isNotEmpty()) "$thoroughfare, $city"
+                else city.ifEmpty { thoroughfare }.ifEmpty { "Lat: ${"%.4f".format(lat)}, Lng: ${"%.4f".format(lng)}" }
+            } else {
+                "Unknown Location"
+            }
+        } catch (e: Exception) {
+            "Lat: ${"%.4f".format(lat)}, Lng: ${"%.4f".format(lng)}"
+        }
+    }
 
     // DTR (Daily Time Record) states
     var isTimedIn by remember { mutableStateOf(false) }
-    var lastDtrAction by remember { mutableStateOf<String?>(null) }
+    var lastTimeInStr by remember { mutableStateOf<String?>(null) }
+    var lastTimeInObj by remember { mutableStateOf<LocalDateTime?>(null) }
+    var lastAddress by remember { mutableStateOf<String?>(null) }
+    var lastTotalHours by remember { mutableStateOf<Double?>(null) }
+    var lastIsOvertime by remember { mutableStateOf(false) }
     var isDtrLoading by remember { mutableStateOf(false) }
     var dtrCooldown by remember { mutableStateOf(false) }
+    var latestAckMessage by remember { mutableStateOf<String?>(null) }
+    var showReRoutePrompt by remember { mutableStateOf(false) }
+    var isReRouting by remember { mutableStateOf(false) }
 
     // Check DTR status on init
     LaunchedEffect(auth.currentUser?.uid) {
         val uid = auth.currentUser?.uid ?: return@LaunchedEffect
         db.collection("drivers").document(uid).get().addOnSuccessListener { doc ->
             isTimedIn = doc.getBoolean("is_currently_timed_in") ?: false
+            
+            // Also fetch the last time_in log for hour calculation
+            db.collection("dtr_logs")
+                .whereEqualTo("driver_uid", uid)
+                .whereEqualTo("action", "time_in")
+                .orderBy("timestamp", Query.Direction.DESCENDING)
+                .limit(1)
+                .get()
+                .addOnSuccessListener { logs ->
+                    val lastLog = logs.documents.firstOrNull()
+                    if (lastLog != null) {
+                        val ts = lastLog.getTimestamp("timestamp")
+                        if (ts != null) {
+                            lastTimeInObj = ts.toDate().toInstant().atZone(ZoneId.system_resource()).toLocalDateTime()
+                            lastTimeInStr = lastTimeInObj?.format(DateTimeFormatter.ofPattern("hh:mm a"))
+                        }
+                    }
+                }
         }
     }
 
@@ -818,12 +859,19 @@ fun DriverDashboard(
                         // TNVS Dynamic Route Trimming & ETA Calculation
                         if (polylinePoints.isNotEmpty()) {
                             val driverPosVec = LatLng(lat, lng)
+                            
+                            // Detect if off-route (> 50m)
+                            val distToPoly = GoogleMapsService.findMinimumDistanceToPolyline(driverPosVec, polylinePoints)
+                            if (distToPoly > 50f && !showReRoutePrompt && (tripPhase == "pickup" || tripPhase == "dropoff")) {
+                                showReRoutePrompt = true
+                            }
+                            
                             val trimmedPoly = GoogleMapsService.trimPolyline(driverPosVec, polylinePoints)
                             // Only force a compose recomp object change if size shrunk
                             if (trimmedPoly.size < polylinePoints.size) {
                                 polylinePoints = trimmedPoly
                             }
-
+                            
                             val remainDistMeters = GoogleMapsService.calculatePolylineDistance(polylinePoints)
                             tripDistance = if (remainDistMeters > 1000f) {
                                 "%.1f km".format(remainDistMeters / 1000f)
@@ -1429,30 +1477,53 @@ fun DriverDashboard(
                                                 val email = auth.currentUser?.email ?: ""
                                                 val now = LocalDateTime.now()
                                                 
-                                                // OT Calculation Logic
-                                                val isOvertime = now.hour >= 17 // Standard shift ends at 5 PM
-                                                
-                                                val logData = hashMapOf(
-                                                    "driver_uid" to uid,
-                                                    "driver_email" to email,
-                                                    "action" to "time_out",
-                                                    "timestamp" to FieldValue.serverTimestamp(),
-                                                    "latitude" to currentLatitude,
-                                                    "longitude" to currentLongitude,
-                                                    "device_time" to now.toString(),
-                                                    "is_overtime" to isOvertime
-                                                )
-                                                
-                                                db.collection("dtr_logs").add(logData).await()
-                                                // Use set+merge so it creates the doc if it doesn't exist
-                                                db.collection("drivers").document(uid)
-                                                    .set(mapOf(
-                                                        "is_currently_timed_in" to false,
-                                                        "current_status" to "offline"
-                                                    ), com.google.firebase.firestore.SetOptions.merge()).await()
-                                                
-                                                isTimedIn = false
-                                                tripActionSuccess = "Timed out successfully. Have a great rest!"
+                                                 val addr = getAddressFromLocation(currentLatitude, currentLongitude)
+                                                 val now = LocalDateTime.now()
+                                                 
+                                                 // OT Calculation Logic (threshold: 5:30 PM)
+                                                 val isOvertime = now.hour >= 17 && (now.hour > 17 || now.minute >= 30)
+                                                 
+                                                 // Total Hours Calculation
+                                                 var totalHours = 0.0
+                                                 lastTimeInObj?.let { start ->
+                                                     val duration = java.time.Duration.between(start, now)
+                                                     totalHours = duration.toMinutes() / 60.0
+                                                 }
+                                                 
+                                                 val logData = hashMapOf(
+                                                     "driver_uid" to uid,
+                                                     "driver_email" to email,
+                                                     "driver_name" to (session.user?.name ?: "Driver"),
+                                                     "action" to "time_out",
+                                                     "timestamp" to FieldValue.serverTimestamp(),
+                                                     "latitude" to currentLatitude,
+                                                     "longitude" to currentLongitude,
+                                                     "location_name" to addr,
+                                                     "device_time" to now.toString(),
+                                                     "total_hours" to totalHours,
+                                                     "is_overtime" to isOvertime
+                                                 )
+                                                 
+                                                 db.collection("dtr_logs").add(logData).await()
+                                                 // Use set+merge so it creates the doc if it doesn't exist
+                                                 db.collection("drivers").document(uid)
+                                                     .set(mapOf(
+                                                         "is_currently_timed_in" to false,
+                                                         "current_status" to "offline",
+                                                         "last_time_out" to FieldValue.serverTimestamp(),
+                                                         "last_total_hours" to totalHours,
+                                                         "last_is_overtime" to isOvertime,
+                                                         "last_location_name" to addr
+                                                     ), com.google.firebase.firestore.SetOptions.merge()).await()
+                                                 
+                                                 isTimedIn = false
+                                                 lastTotalHours = totalHours
+                                                 lastIsOvertime = isOvertime
+                                                 lastAddress = addr
+                                                 
+                                                 val h = totalHours.toInt()
+                                                 val m = ((totalHours - h) * 60).toInt()
+                                                 tripActionSuccess = "Timed out. Total Shift: ${h}h ${m}m ${if(isOvertime) "(OT Included)" else ""}"
                                                 
                                                 dtrCooldown = true
                                                 delay(5000)
@@ -1707,6 +1778,62 @@ fun DriverDashboard(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
+                        // Return to Route Prompt
+                        if (showReRoutePrompt && !isReRouting) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                                colors = CardDefaults.cardColors(containerColor = AccentOrange.copy(alpha = 0.9f)),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Icon(imageVector = Icons.Default.Info, contentDescription = null, tint = Midnight)
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text("Off Route Detected", color = Midnight, fontWeight = FontWeight.Bold)
+                                        Text("Would you like to recalculate your route?", color = Midnight.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    TextButton(onClick = { showReRoutePrompt = false }) {
+                                        Text("DISMISS", color = Midnight)
+                                    }
+                                    Button(
+                                        onClick = {
+                                            scope.launch {
+                                                isReRouting = true
+                                                try {
+                                                    val dest = if (tripPhase == "pickup") nextSchedule?.pickup_location else nextSchedule?.dropoff_location
+                                                    if (dest != null) {
+                                                        val originStr = "${currentLatitude},${currentLongitude}"
+                                                        val destStr = "${dest.latitude},${dest.longitude}"
+                                                        val resp = GoogleMapsService.api.getDirections(originStr, destStr, MapsKey)
+                                                        if (resp.status == "OK" && resp.routes.isNotEmpty()) {
+                                                            val encoded = resp.routes[0].overviewPolyline.points
+                                                            activePolylineEncoded = encoded
+                                                            polylinePoints = GoogleMapsService.decodePolyline(encoded)
+                                                            showReRoutePrompt = false
+                                                            tripActionSuccess = "Route recalculated successfully!"
+                                                        }
+                                                    }
+                                                } catch (e: Exception) {
+                                                    tripActionError = "Re-route failed: ${e.message}"
+                                                } finally {
+                                                    isReRouting = false
+                                                }
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Midnight),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        if (isReRouting) CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White)
+                                        else Text("RE-ROUTE", color = Color.White)
+                                    }
+                                }
+                            }
+                        }
+
+                        // Manage Trip Card
                         if (nextSchedule != null && isTripCompleted) {
                             Text(
                                 text = "Trip completed! Refresh to see new assignments.",

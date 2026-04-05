@@ -108,36 +108,38 @@ object GoogleMapsService {
     }
 
     /**
+     * Finds the minimum distance from a point to any point in a polyline.
+     */
+    fun findMinimumDistanceToPolyline(point: LatLng, polyline: List<LatLng>): Float {
+        if (polyline.isEmpty()) return Float.MAX_VALUE
+        var minDistance = Float.MAX_VALUE
+        val results = FloatArray(1)
+        for (p in polyline) {
+            android.location.Location.distanceBetween(point.latitude, point.longitude, p.latitude, p.longitude, results)
+            if (results[0] < minDistance) minDistance = results[0]
+        }
+        return minDistance
+    }
+
+    /**
      * Trims a polyline by finding the closest point to the driver's location
      * and dropping all points strictly before it.
      */
     fun trimPolyline(driverPos: LatLng, polyline: List<LatLng>): List<LatLng> {
         if (polyline.isEmpty()) return polyline
-        
         var minDistance = Float.MAX_VALUE
         var closestIdx = 0
-        
         val results = FloatArray(1)
-        
         for (i in polyline.indices) {
             val p = polyline[i]
-            android.location.Location.distanceBetween(
-                driverPos.latitude, driverPos.longitude,
-                p.latitude, p.longitude,
-                results
-            )
-            
+            android.location.Location.distanceBetween(driverPos.latitude, driverPos.longitude, p.latitude, p.longitude, results)
             if (results[0] < minDistance) {
                 minDistance = results[0]
                 closestIdx = i
             }
         }
-        
         // If driver is far off route (e.g. > 500 meters), don't aggressively trim
-        if (minDistance > 500f) {
-            return polyline
-        }
-
+        if (minDistance > 500f) return polyline
         return polyline.subList(closestIdx, polyline.size)
     }
     /**

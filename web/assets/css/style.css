@@ -31,6 +31,40 @@
     --border-color: #2d3447;
     --glow-blue: rgba(0, 212, 255, 0.3);
     --glow-green: rgba(0, 255, 136, 0.3);
+    --accent-orange: #ff9800;
+}
+
+/* Shake Animation for Accident Alerts */
+@keyframes shake {
+    0% { transform: translateX(0); }
+    25% { transform: translateX(-10px); }
+    50% { transform: translateX(10px); }
+    75% { transform: translateX(-10px); }
+    100% { transform: translateX(0); }
+}
+
+.shake-alert {
+    animation: shake 0.2s ease-in-out 0s 5;
+    border: 2px solid var(--accent-orange) !important;
+}
+
+/* Dropdown Readability Fixes */
+#companyFilter, 
+.company-select,
+select.form-control {
+    background-color: var(--bg-input) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border-color) !important;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-weight: 500;
+    cursor: pointer;
+    min-width: 150px;
+}
+
+#companyFilter option {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
 }
 
 body {

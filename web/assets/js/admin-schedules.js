@@ -36,9 +36,9 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     const adminRoles = ['admin', 'super_admin', 'company_admin'];
-    const role = userData?.user_type || userData?.role;
+    const userRoleType = userData?.user_type || userData?.role;
 
-    if (!userData || !adminRoles.includes(role)) {
+    if (!userData || !adminRoles.includes(userRoleType)) {
         console.error("Access Denied: Not an administrator.");
         window.location.href = '../login.html?error=unauthorized';
         return;
@@ -48,10 +48,37 @@ onAuthStateChanged(auth, async (user) => {
     const name = userData.full_name || user.email.split('@')[0];
     initLayout('Trip Schedules', name);
 
+    // Sync Global Filter
+    if (userRoleType === 'super_admin' || userRoleType === 'admin') {
+        initGlobalCompanyFilter();
+    }
+
     initScheduleList();
     initClearDataFeature();
     initExportFeature();
 });
+
+function initGlobalCompanyFilter() {
+    const filter = document.getElementById('companyFilter');
+    if (!filter) return;
+
+    let selectedId = localStorage.getItem('fleetonix_global_company') || 'all';
+    filter.value = selectedId;
+
+    filter.addEventListener('change', (e) => {
+        localStorage.setItem('fleetonix_global_company', e.target.value);
+        window.dispatchEvent(new Event('storage'));
+        initScheduleList();
+    });
+
+    window.addEventListener('storage', () => {
+        const newId = localStorage.getItem('fleetonix_global_company') || 'all';
+        if (filter.value !== newId) {
+            filter.value = newId;
+            initScheduleList();
+        }
+    });
+}
 
 function initExportFeature() {
     const btn = document.getElementById('exportAllBtn');
@@ -133,11 +160,13 @@ function initScheduleList() {
     const role = currentUserData.role || currentUserData.user_type;
     const companyId = currentUserData.accredited_company_id;
 
-    let q = query(collection(db, "schedules"), orderBy("created_at", "desc"));
-
-    // RBAC Filtering
+    // RBAC and Global Filter
+    const globalFilter = localStorage.getItem('fleetonix_global_company') || 'all';
+    
     if (role === 'company_admin' && companyId) {
         q = query(collection(db, "schedules"), where("accredited_company_id", "==", companyId), orderBy("created_at", "desc"));
+    } else if (globalFilter !== 'all') {
+        q = query(collection(db, "schedules"), where("accredited_company_id", "==", globalFilter), orderBy("created_at", "desc"));
     }
 
     onSnapshot(q, (snapshot) => {

@@ -70,6 +70,8 @@ async function initCompanyFilter() {
         filter.addEventListener('change', (e) => {
             selectedCompanyId = e.target.value;
             localStorage.setItem('fleetonix_global_company', selectedCompanyId);
+            // Broadcast change to other tabs/modules
+            window.dispatchEvent(new Event('storage'));
             initDTRLogs();
         });
     } catch (error) {

@@ -149,6 +149,20 @@ function initStats() {
         document.getElementById('totalDrivers').innerText = drivers;
         document.getElementById('totalClients').innerText = clients;
     });
+    
+    // Listen for new accidents
+    const accidentsQuery = query(collection(db, "accidents"), where("status", "==", "pending"));
+    const unsubAccidents = onSnapshot(accidentsQuery, (snapshot) => {
+        if (!snapshot.empty) {
+            snapshot.docChanges().forEach((change) => {
+                if (change.type === "added") {
+                    triggerAccidentAlert(change.doc.data(), change.doc.id);
+                }
+            });
+        }
+    });
+
+    unsubscribeStats.push(unsubUsers, unsubAccidents);
 
     const unsubBookings = onSnapshot(bookingsQuery, (snapshot) => {
         const pendingBadge = document.getElementById('pendingBookings');

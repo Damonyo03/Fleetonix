@@ -59,6 +59,7 @@ onAuthStateChanged(auth, async (user) => {
     // If company_admin, force their company
     if (role === 'company_admin' && userData.accredited_company_id) {
         selectedCompanyId = userData.accredited_company_id;
+        localStorage.setItem('fleetonix_global_company', selectedCompanyId);
     }
 
     if (role === 'super_admin' || role === 'admin' || role === 'company_admin') {
@@ -99,24 +100,49 @@ onAuthStateChanged(auth, async (user) => {
 async function repairMissingDriverProfiles() {
     console.log("Analyzing driver database integrity...");
     try {
-        const usersSnap = await getDocs(query(collection(db, "users"), where("role", "==", "driver")));
         const driversSnap = await getDocs(collection(db, "drivers"));
-        const existingDriverIds = new Set(driversSnap.docs.map(d => d.id));
+        const usersSnap = await getDocs(query(collection(db, "users"), where("role", "==", "driver")));
         
-        let repairCount = 0;
-        for (const userDoc of usersSnap.docs) {
-            if (!existingDriverIds.has(userDoc.id)) {
-                console.log(`Incomplete Profile detected for: ${userDoc.data().full_name}. Repairing...`);
-                const data = userDoc.data();
-                await setDoc(doc(db, "drivers", userDoc.id), {
-                    driver_name: data.full_name || "Repair Entry",
-                    driver_email: data.email || "",
-                    accredited_company_id: data.accredited_company_id || "",
+        let driverEmails = new Map();
+        let duplicatesFound = 0;
+
+        // 1. Identify and remove duplicates from 'drivers' collection
+        for (const d of driversSnap.docs) {
+            const data = d.data();
+            const email = data.driver_email?.toLowerCase()?.trim();
+            if (!email) continue;
+
+            if (driverEmails.has(email)) {
+                // Duplicate found! 
+                const existing = driverEmails.get(email);
+                console.warn(`Removing duplicate ghost driver: ${email} (ID: ${d.id})`);
+                await deleteDoc(doc(db, "drivers", d.id));
+                duplicatesFound++;
+            } else {
+                driverEmails.set(email, { id: d.id, data });
+            }
+        }
+
+        if (duplicatesFound > 0) {
+            console.log(`Cleaned up ${duplicatesFound} duplicate driver accounts.`);
+        }
+
+        // 2. Repair missing profiles from 'users' collection
+        for (const u of usersSnap.docs) {
+            const userData = u.data();
+            const email = userData.email?.toLowerCase();
+            
+            if (email && !driverEmails.has(email)) {
+                console.log(`Repairing missing driver profile for: ${email}`);
+                await setDoc(doc(db, "drivers", u.id), {
+                    driver_name: userData.full_name || "New Driver",
+                    driver_email: email,
+                    accredited_company_id: userData.accredited_company_id || "unassigned",
                     current_status: "offline",
-                    vehicle_assigned: "Pending Setup",
-                    plate_number: "TBD-0000",
-                    is_repaired: true,
-                    created_at: serverTimestamp()
+                    vehicle_assigned: "Pending Assignment",
+                    plate_number: "N/A",
+                    created_at: serverTimestamp(),
+                    is_currently_timed_in: false
                 });
                 repairCount++;
             }
@@ -125,8 +151,8 @@ async function repairMissingDriverProfiles() {
             console.log(`Database Integrity Shield: ${repairCount} driver profiles restored.`);
             alert(`System Integrity Alert: ${repairCount} missing driver profiles have been automatically restored. Mobile app functionality is now active for these users.`);
         }
-    } catch (error) {
-        console.error("Integrity shield error:", error);
+    } catch (e) {
+        console.error("Database integrity check failed:", e);
     }
 }
 

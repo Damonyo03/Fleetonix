@@ -137,23 +137,33 @@
         async function initCompanies() {
             const companySelect = document.getElementById('accredited_company_id');
             try {
-                // Simplified query (removed orderBy) to ensure it works without manual index configuration
+                // Style the select for better readability
+                companySelect.style.backgroundColor = '#252b42';
+                companySelect.style.color = '#ffffff';
+                companySelect.style.border = '1px solid #2d3447';
+
                 const companiesSnap = await getDocs(query(collection(db, "accredited_companies"), where("status", "==", "active")));
                 
                 if (companiesSnap.empty) {
-                    console.warn("No active companies found in 'accredited_companies' collection.");
+                    console.warn("No active companies found.");
+                    const opt = document.createElement('option');
+                    opt.textContent = "No companies available";
+                    opt.disabled = true;
+                    companySelect.appendChild(opt);
                     return;
                 }
 
+                companySelect.innerHTML = '<option value="">-- Select company --</option>';
                 companiesSnap.forEach(doc => {
                     const data = doc.data();
                     activeCompanies[doc.id] = data.name;
                     const option = document.createElement('option');
                     option.value = doc.id;
                     option.textContent = data.name;
+                    option.style.backgroundColor = '#1a1f3a';
+                    option.style.color = '#ffffff';
                     companySelect.appendChild(option);
                 });
-                console.log(`Loaded ${companiesSnap.size} accredited companies.`);
             } catch (error) {
                 console.error("Error fetching companies:", error);
             }
