@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.prototype.fleetonix.ui.theme.*
 import kotlinx.coroutines.tasks.await
@@ -33,6 +34,10 @@ fun DriverProfile(
     onBack: () -> Unit
 ) {
     val db = FirebaseFirestore.getInstance()
+    val auth = remember { FirebaseAuth.getInstance() }
+    // Use Firebase Auth UID as the definitive document key
+    val authUid = auth.currentUser?.uid
+    val authEmail = auth.currentUser?.email ?: session.user?.email
     var phoneNumber by remember { mutableStateOf("Loading...") }
     var isLoading by remember { mutableStateOf(true) }
     
@@ -46,23 +51,33 @@ fun DriverProfile(
     var liveStatus by remember { mutableStateOf(session.driver?.currentStatus ?: "offline") }
 
     val user = session.user
-    val driverId = session.user?.id
+    // Use Auth UID first, fall back to session user id
+    val driverId = authUid ?: session.user?.id
 
-    // 1. Listen for USER metadata (Phone)
-    LaunchedEffect(user?.email) {
-        if (user?.email != null) {
-            db.collection("users")
-                .whereEqualTo("email", user.email)
-                .limit(1)
+    // 1. Listen for USER metadata (Phone) - use UID for accuracy
+    LaunchedEffect(authUid) {
+        if (authUid != null) {
+            db.collection("users").document(authUid)
                 .addSnapshotListener { snapshot, e ->
-                    if (e != null) {
-                        return@addSnapshotListener
-                    }
-                    if (snapshot != null && !snapshot.isEmpty) {
-                        val userData = snapshot.documents[0]
-                        phoneNumber = userData.getString("phone") ?: "Not Provided"
-                        val newName = userData.getString("full_name") ?: ""
+                    if (e != null) return@addSnapshotListener
+                    if (snapshot != null && snapshot.exists()) {
+                        phoneNumber = snapshot.getString("phone") ?: "Not Provided"
+                        val newName = snapshot.getString("full_name") ?: ""
                         if (newName.isNotEmpty()) liveDriverName = newName
+                    } else {
+                        // Fallback: query by email
+                        if (authEmail != null) {
+                            db.collection("users")
+                                .whereEqualTo("email", authEmail)
+                                .limit(1)
+                                .addSnapshotListener { snap, err ->
+                                    if (err != null || snap == null || snap.isEmpty) return@addSnapshotListener
+                                    val userData = snap.documents[0]
+                                    phoneNumber = userData.getString("phone") ?: "Not Provided"
+                                    val newName = userData.getString("full_name") ?: ""
+                                    if (newName.isNotEmpty()) liveDriverName = newName
+                                }
+                        }
                     }
                 }
         }

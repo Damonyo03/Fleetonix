@@ -45,38 +45,53 @@ fun TripHistoryScreen(
     var selectedTicket by remember { mutableStateOf<TripHistoryItem?>(null) }
 
     LaunchedEffect(Unit) {
+        val uid = auth.currentUser?.uid ?: return@LaunchedEffect
         val email = auth.currentUser?.email ?: return@LaunchedEffect
+
+        // Primary: filter by driver_uid (Auth UID) - most reliable
         val listenerReg = db.collection("trip_tickets")
-            .whereEqualTo("driver_email", email.lowercase().trim())
+            .whereEqualTo("driver_uid", uid)
             .orderBy("created_at", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
-                    android.util.Log.e("TripHistory", "Error listening to history", error)
-                    isLoading = false
+                    android.util.Log.e("TripHistory", "UID query error, trying email fallback", error)
+                    // Fallback: filter by driver_email
+                    db.collection("trip_tickets")
+                        .whereEqualTo("driver_email", email.lowercase().trim())
+                        .orderBy("created_at", Query.Direction.DESCENDING)
+                        .addSnapshotListener { snap2, err2 ->
+                            if (err2 != null) {
+                                android.util.Log.e("TripHistory", "Email fallback also failed", err2)
+                                isLoading = false
+                                return@addSnapshotListener
+                            }
+                            if (snap2 != null) {
+                                tickets = snap2.documents.mapNotNull { doc ->
+                                    buildTripItem(doc)
+                                }
+                                isLoading = false
+                            }
+                        }
                     return@addSnapshotListener
                 }
-                
+
                 if (snapshot != null) {
-                    tickets = snapshot.documents.map { doc ->
-                        val data = doc.data ?: emptyMap()
-                        val createdAt = doc.getTimestamp("created_at")?.toDate() ?: Date()
-                        val ldt = LocalDateTime.ofInstant(createdAt.toInstant(), ZoneId.systemDefault())
-                        
-                        TripHistoryItem(
-                            id = doc.id,
-                            clientName = data["client_name"] as? String ?: "Unknown",
-                            driverName = data["driver_name"] as? String ?: "Driver",
-                            totalKm = (data["total_km"] as? Number)?.toDouble() ?: 0.0,
-                            departureTime = data["time_of_departure"] as? String ?: "--:--",
-                            arrivalTime = data["time_of_arrival"] as? String ?: "--:--",
-                            pickup = data["pickup_location"] as? String ?: "Unknown",
-                            dropoff = data["dropoff_location"] as? String ?: "Unknown",
-                            polyline = data["route_polyline"] as? String ?: "",
-                            date = ldt,
-                            plate = data["vehicle_plate"] as? String ?: "N/A"
-                        )
+                    val results = snapshot.documents.mapNotNull { doc -> buildTripItem(doc) }
+                    if (results.isEmpty()) {
+                        // Fallback to email query if UID yields nothing (for legacy records)
+                        db.collection("trip_tickets")
+                            .whereEqualTo("driver_email", email.lowercase().trim())
+                            .orderBy("created_at", Query.Direction.DESCENDING)
+                            .addSnapshotListener { snap2, _ ->
+                                if (snap2 != null) {
+                                    tickets = snap2.documents.mapNotNull { doc -> buildTripItem(doc) }
+                                    isLoading = false
+                                }
+                            }
+                    } else {
+                        tickets = results
+                        isLoading = false
                     }
-                    isLoading = false
                 }
             }
     }
@@ -207,3 +222,27 @@ data class TripHistoryItem(
     val date: LocalDateTime,
     val plate: String
 )
+
+@RequiresApi(Build.VERSION_CODES.O)
+fun buildTripItem(doc: com.google.firebase.firestore.DocumentSnapshot): TripHistoryItem? {
+    return try {
+        val data = doc.data ?: return null
+        val createdAt = doc.getTimestamp("created_at")?.toDate() ?: java.util.Date()
+        val ldt = LocalDateTime.ofInstant(createdAt.toInstant(), java.time.ZoneId.systemDefault())
+        TripHistoryItem(
+            id = doc.id,
+            clientName = data["client_name"] as? String ?: "Unknown",
+            driverName = data["driver_name"] as? String ?: "Driver",
+            totalKm = (data["total_km"] as? Number)?.toDouble() ?: 0.0,
+            departureTime = data["time_of_departure"] as? String ?: "--:--",
+            arrivalTime = data["time_of_arrival"] as? String ?: "--:--",
+            pickup = data["pickup_location"] as? String ?: "Unknown",
+            dropoff = data["dropoff_location"] as? String ?: "Unknown",
+            polyline = data["route_polyline"] as? String ?: "",
+            date = ldt,
+            plate = data["vehicle_plate"] as? String ?: "N/A"
+        )
+    } catch (e: Exception) {
+        null
+    }
+}
