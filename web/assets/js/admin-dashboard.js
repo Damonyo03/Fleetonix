@@ -421,23 +421,26 @@ function initMap() {
 // Cleanup "ghost" markers periodically (every 1 min)
     setInterval(() => {
         const now = Date.now();
-        const tenMins = 10 * 60 * 1000; 
+        const staleThreshold = 2 * 60 * 1000; // 2 minutes (Reduced from 10m for accuracy)
         
         Object.keys(driverMarkers).forEach(id => {
             const data = allDriversData[id];
             if (data && data.last_updated) {
                 const diff = now - (data.last_updated.seconds * 1000);
                 
-                // If status is online but no update for 10 mins, hide it (Ghost)
-                if (diff > tenMins) {
-                    console.log(`Hiding ghost/stale marker for ${id} (no update for 10m)`);
-                    driverMarkers[id].setMap(null);
+                // If no update for 2 mins, mark as offline/stale
+                if (diff > staleThreshold) {
+                    console.log(`Marking ghost/stale marker for ${id} (no update for 2m)`);
+                    driverMarkers[id].setIcon(getMarkerIcon('offline'));
+                    driverMarkers[id].setOpacity(0.3);
                     if (driverPolylines[id]) driverPolylines[id].setMap(null);
                 } else {
                     // Restore if it's within the window
+                    const status = data.current_status || 'available';
+                    driverMarkers[id].setIcon(getMarkerIcon(status));
+                    driverMarkers[id].setOpacity(status === 'offline' ? 0.3 : 1.0);
                     if (driverMarkers[id].getMap() === null) {
                         driverMarkers[id].setMap(driversMap);
-                        if (driverPolylines[id]) driverPolylines[id].setMap(driversMap);
                     }
                 }
             }
@@ -453,9 +456,10 @@ function updateOnlineDriversList() {
     const onlineCount = document.getElementById('onlineCount');
     if (!listContainer) return;
 
-    // Filter out ghost telemetry and stale sessions (10min inactivity = offline/ghost)
+    // Filter out ghost telemetry and stale sessions (2min inactivity = offline/ghost)
     const now = Date.now();
-    const tenMins = 10 * 60 * 1000;
+    const staleThreshold = 2 * 60 * 1000; // 2 minutes
+    const liveThreshold = 15 * 1000;      // 15 seconds for 'Live' pulse
     
     const validDrivers = Object.values(allDriversData).filter(d => {
         if (!d.driver_name || d.driver_name === 'Loading Driver...') return false;
@@ -463,7 +467,7 @@ function updateOnlineDriversList() {
         // If they have location, check for staleness
         if (d.last_updated) {
             const diff = now - (d.last_updated.seconds * 1000);
-            if (diff > tenMins) return false; // This is a ghost/inactive
+            if (diff > staleThreshold) return false; // This is a ghost/inactive
         } else {
             // No location update at all? Probably not online ever.
             return false;
@@ -496,15 +500,18 @@ function updateOnlineDriversList() {
         const displayStatus = phase ? phase : status;
         const statusLabel = displayStatus.replace('_', ' ');
         
+        const lastUpdateMs = driver.last_updated ? (driver.last_updated.seconds * 1000) : 0;
+        const isLive = (now - lastUpdateMs) < liveThreshold;
+        
         return `
-            <div class="driver-item ${status === 'offline' ? 'offline' : ''}" onclick="focusDriver('${driver.id}')">
+            <div class="driver-item ${status === 'offline' ? 'offline' : ''} ${isLive ? 'pulse' : ''}" onclick="focusDriver('${driver.id}')">
                 <div class="status-dot ${displayStatus}"></div>
                 <div class="driver-info">
                     <div class="driver-name">${driver.driver_name || 'Unnamed Driver'}</div>
                     <div class="driver-status-text ${displayStatus}">${statusLabel}</div>
                 </div>
                 <div class="driver-badge-area">
-                    ${status === 'available' ? '<span class="status-badge available" style="font-size: 0.65rem; padding: 2px 6px;">Available</span>' : ''}
+                    ${status === 'available' ? `<span class="status-badge available ${isLive ? 'premium' : ''}" style="font-size: 0.65rem; padding: 2px 6px;">Available</span>` : ''}
                     ${['on_schedule', 'accepted', 'pickup', 'dropoff', 'in_progress'].includes(displayStatus) ? `<span class="status-badge ${displayStatus}" style="font-size: 0.65rem; padding: 2px 6px;">${statusLabel}</span>` : ''}
                     ${status === 'offline' ? '<span class="status-badge offline" style="font-size: 0.65rem; padding: 2px 6px;">Offline</span>' : ''}
                 </div>
@@ -540,15 +547,15 @@ function getMarkerIcon(status) {
 
 function getStatusColor(status) {
     const colors = {
-        'available': '#10b981',
-        'on_schedule': '#3b82f6',
-        'accepted': '#3b82f6',
-        'pickup': '#8b5cf6',
-        'dropoff': '#f97316',
-        'in_progress': '#8b5cf6', // Legacy mapping
-        'offline': '#6b7280'
+        'available': '#00ff88',  // Vibrant Neon Green
+        'on_schedule': '#00d4ff', // Electric Blue
+        'accepted': '#00d4ff',
+        'pickup': '#7000ff',     // Royal Purple
+        'dropoff': '#ffcc00',    // Bright Gold
+        'in_progress': '#7000ff', 
+        'offline': '#4a5568'      // Deep Grey
     };
-    return colors[status] || '#6b7280';
+    return colors[status] || '#4a5568';
 }
 
 function renderPendingBookingsWidget(snapshot) {

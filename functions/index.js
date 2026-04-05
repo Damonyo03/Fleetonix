@@ -10,7 +10,7 @@
 
 const {setGlobalOptions} = require("firebase-functions");
 const {onRequest} = require("firebase-functions/v2/https");
-const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
+const {onDocumentUpdated, onDocumentCreated, onDocumentDeleted} = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 const nodemailer = require("nodemailer");
@@ -339,7 +339,7 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
       await admin.firestore().collection("drivers").doc(email.toLowerCase().trim()).set({
         driver_name: fullName,
         driver_email: email.toLowerCase().trim(),
-        accredited_company_id: req.body.accredited_company_id || "",
+        accredited_company_id: req.body.accredited_company_id || "", // FIXED: Ensuring trigger picks this up
         current_status: "offline",
         created_at: admin.firestore.FieldValue.serverTimestamp(),
         updated_at: admin.firestore.FieldValue.serverTimestamp(),
@@ -671,7 +671,7 @@ exports.completeRegistration = onRequest({ cors: true }, async (req, res) => {
       await admin.firestore().collection("drivers").doc(email.toLowerCase().trim()).set({
         driver_name: userData.full_name,
         driver_email: email.toLowerCase().trim(),
-        accredited_company_id: userData.accredited_company_id || "",
+        accredited_company_id: userData.accredited_company_id || "", // FIXED: Ensuring trigger picks this up
         current_status: "offline",
         created_at: admin.firestore.FieldValue.serverTimestamp(),
         updated_at: admin.firestore.FieldValue.serverTimestamp(),
@@ -683,5 +683,83 @@ exports.completeRegistration = onRequest({ cors: true }, async (req, res) => {
   } catch (error) {
     logger.error("Error in completeRegistration", error);
     res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * AUTOMATED COUNTERS: Driver triggers for accredited_companies list
+ */
+
+// 1. Increment total_drivers on company list
+exports.onDriverCreated = onDocumentCreated("drivers/{driverId}", async (event) => {
+  const data = event.data.data();
+  const companyId = data.accredited_company_id;
+  
+  if (companyId) {
+    const companyRef = admin.firestore().collection("accredited_companies").doc(companyId);
+    try {
+      await admin.firestore().runTransaction(async (t) => {
+        const doc = await t.get(companyRef);
+        if (doc.exists) {
+          const currentCount = doc.data().total_drivers || 0;
+          t.update(companyRef, { total_drivers: currentCount + 1, updated_at: admin.firestore.FieldValue.serverTimestamp() });
+        }
+      });
+      logger.info(`Automated: Incremented total_drivers for company ${companyId}`);
+    } catch (e) {
+      logger.error(`Error incrementing driver count for company ${companyId}`, e);
+    }
+  }
+});
+
+// 2. Decrement total_drivers on company list
+exports.onDriverDeleted = onDocumentDeleted("drivers/{driverId}", async (event) => {
+  const data = event.data.data();
+  const companyId = data.accredited_company_id;
+  
+  if (companyId) {
+    const companyRef = admin.firestore().collection("accredited_companies").doc(companyId);
+    try {
+      await admin.firestore().runTransaction(async (t) => {
+        const doc = await t.get(companyRef);
+        if (doc.exists) {
+          const currentCount = doc.data().total_drivers || 0;
+          const newCount = Math.max(0, currentCount - 1);
+          t.update(companyRef, { total_drivers: newCount, updated_at: admin.firestore.FieldValue.serverTimestamp() });
+        }
+      });
+      logger.info(`Automated: Decremented total_drivers for company ${companyId}`);
+    } catch (e) {
+      logger.error(`Error decrementing driver count for company ${companyId}`, e);
+    }
+  }
+});
+
+// 3. Update total_drivers when company changes for a driver
+exports.onDriverCompanyUpdated = onDocumentUpdated("drivers/{driverId}", async (event) => {
+  const before = event.data.before.data();
+  const after = event.data.after.data();
+
+  if (before.accredited_company_id !== after.accredited_company_id) {
+    const oldId = before.accredited_company_id;
+    const newId = after.accredited_company_id;
+    const db = admin.firestore();
+
+    if (oldId) {
+      const oldRef = db.collection("accredited_companies").doc(oldId);
+      await db.runTransaction(async (t) => {
+        const doc = await t.get(oldRef);
+        if (doc.exists) t.update(oldRef, { total_drivers: Math.max(0, (doc.data().total_drivers || 0) - 1) });
+      });
+    }
+
+    if (newId) {
+      const newRef = db.collection("accredited_companies").doc(newId);
+      await db.runTransaction(async (t) => {
+        const doc = await t.get(newRef);
+        if (doc.exists) t.update(newRef, { total_drivers: (doc.data().total_drivers || 0) + 1 });
+      });
+    }
+    logger.info(`Automated: Migrated driver count from ${oldId} to ${newId}`);
   }
 });

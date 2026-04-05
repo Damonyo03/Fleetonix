@@ -155,10 +155,20 @@ function renderDrivers(docs) {
         return;
     }
 
+    const now = Date.now();
+    const staleThreshold = 2 * 60 * 1000; // 2 minutes
+
     driverGrid.innerHTML = docs.map(d => {
         const driver = d.data();
         const id = d.id;
-        const status = driver.current_status || 'offline';
+        let status = driver.current_status || 'offline';
+        
+        // Accurate real-time staleness check
+        if (driver.last_active) {
+            const diff = now - (driver.last_active.seconds * 1000);
+            if (diff > staleThreshold) status = 'offline';
+        }
+        
         const displayStatus = status.replace('_', ' ');
         return `
             <div class="driver-card">
@@ -284,17 +294,6 @@ if (addDriverBtn) {
                     status: "active",
                     created_at: serverTimestamp()
                 });
-
-                // Update Company Driver Counter if applicable
-                if (companyId) {
-                    const companyDoc = await getDoc(doc(db, "accredited_companies", companyId));
-                    if (companyDoc.exists()) {
-                        await updateDoc(doc(db, "accredited_companies", companyId), {
-                            total_drivers: (companyDoc.data().total_drivers || 0) + 1,
-                            updated_at: serverTimestamp()
-                        });
-                    }
-                }
 
                 await signOut(secondaryAuth);
 
