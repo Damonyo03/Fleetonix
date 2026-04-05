@@ -85,21 +85,34 @@ fun RegisterScreen(
     // Fetch companies on launch
     LaunchedEffect(Unit) {
         val db = FirebaseFirestore.getInstance()
+        android.util.Log.d("RegisterScreen", "Fetching companies from accredited_companies...")
+        
+        // Fetch ALL companies and filter client-side to be case-insensitive
         db.collection("accredited_companies")
-            .whereEqualTo("status", "ACTIVE")
             .get()
             .addOnSuccessListener { result ->
                 val list = result.documents.mapNotNull { doc ->
-                    val name = doc.getString("name") ?: doc.getString("company_name") ?: "" // FIXED: Check for both fields
-                    if (name.isNotBlank()) AccreditedCompany(id = doc.id, name = name) else null
+                    val status = doc.getString("status") ?: ""
+                    // Case-insensitive check for active status
+                    if (status.equals("active", ignoreCase = true) || status.equals("ACTIVE", ignoreCase = true)) {
+                        val name = doc.getString("name") ?: doc.getString("company_name") ?: ""
+                        if (name.isNotBlank()) {
+                            android.util.Log.d("RegisterScreen", "Found Active Company: $name (ID: ${doc.id})")
+                            AccreditedCompany(id = doc.id, name = name)
+                        } else null
+                    } else {
+                        android.util.Log.d("RegisterScreen", "Skipping Inactive/Unstructured Company: ${doc.id} (Status: $status)")
+                        null
+                    }
                 }
                 companies = list
                 if (list.isEmpty()) {
-                    android.util.Log.e("RegisterScreen", "No active companies found in Firestore.")
+                    android.util.Log.e("RegisterScreen", "CRITICAL: No active companies found in Firestore matching status 'active'!")
                 }
             }
-            .addOnFailureListener {
-                errorMessage = "Failed to load companies. Please check your connection."
+            .addOnFailureListener { e ->
+                android.util.Log.e("RegisterScreen", "FIRESTORE ERROR: ${e.message}", e)
+                errorMessage = "Failed to load companies: ${e.localizedMessage}"
             }
     }
 
