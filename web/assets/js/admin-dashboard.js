@@ -14,6 +14,7 @@ let currentDispatchBookingId = null;
 let currentUserData = null;
 let selectedCompanyId = 'all';
 let unsubscribeStats = [];
+let infoWindow = null;
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -196,6 +197,7 @@ function initMap() {
     if (!mapElement) return;
     
     driversMap = new google.maps.Map(mapElement, mapOptions);
+    infoWindow = new google.maps.InfoWindow();
 
     // Listen to drivers for names and status
     onSnapshot(collection(db, "drivers"), (snapshot) => {
@@ -224,6 +226,9 @@ function initMap() {
                 const markerIcon = getMarkerIcon(data.current_status || 'available');
                 driverMarkers[key].setIcon(markerIcon);
                 
+                // Update marker metadata for info window
+                driverMarkers[key].driverData = data;
+                
                 // Set visibility based on company filter
                 const matchesCompany = selectedCompanyId === 'all' || data.accredited_company_id === selectedCompanyId;
                 driverMarkers[key].setVisible(matchesCompany);
@@ -245,17 +250,42 @@ function initMap() {
                     visible: matchesCompany
                 });
                 
-                // Add info window logic (simplified or reuse a function)
-                // For brevity, I'll just store it; a real implementation would add the listener too
-                driverMarkers[key] = marker;
+                marker.driverData = data; // Store data for info window
                 
-                const infoWindow = new google.maps.InfoWindow({ content: getInfoWindowContent(data) });
+                // Click Listener: Show Driver Details Popup
                 marker.addListener('click', () => {
-                    infoWindow.setContent(getInfoWindowContent(allDriversData[key] || data));
+                    if (infoWindow) infoWindow.close();
+                    
+                    const d = marker.driverData;
+                    const content = `
+                        <div class="map-info-window" style="color:white; padding:10px; min-width:180px;">
+                            <h4 style="margin:0 0 8px 0; color:var(--accent-blue); display:flex; align-items:center; gap:8px;">
+                                <i class="fas fa-user-circle"></i> ${d.driver_name || 'Fleet Driver'}
+                            </h4>
+                            <div style="font-size:0.85em; display:grid; gap:6px;">
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <i class="fas fa-car" style="width:16px;"></i> ${d.vehicle_assigned || 'Pending Setup'}
+                                </div>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <i class="fas fa-id-card" style="width:16px;"></i> ${d.plate_number || 'TBD-0000'}
+                                </div>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <i class="fas fa-circle" style="width:16px; color:${d.current_status === 'available' ? '#10b981' : d.current_status === 'on_schedule' ? '#3b82f6' : '#94a3b8'};"></i> 
+                                    <span style="text-transform:capitalize;">${d.current_status || 'offline'}</span>
+                                </div>
+                                <div style="margin-top:8px; border-top:1px solid rgba(255,255,255,0.1); padding-top:8px; font-size:0.9em; opacity:0.8;">
+                                    <i class="fas fa-map-marker-alt"></i> Real-time Fleet Unit
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    infoWindow.setContent(content);
                     infoWindow.open(driversMap, marker);
                 });
             }
         });
+        updateOnlineDisplay();
         updateOnlineDriversList();
         window.allDriversData = allDriversData; // Expose for debugging
         window.driverMarkers = driverMarkers;   // Expose for debugging
@@ -268,14 +298,12 @@ function initMap() {
             const driverId = change.doc.id;
             
             if (change.type === "removed") {
-                // Instead of hiding the marker, we mark it as offline and keep it visible but faded
-                if (allDriversData[driverId]) {
-                    allDriversData[driverId].current_status = 'offline';
-                    if (driverMarkers[driverId]) {
-                        driverMarkers[driverId].setIcon(getMarkerIcon('offline'));
-                        driverMarkers[driverId].setOpacity(0.4); // Very faded for removed docs
-                    }
+                if (driverMarkers[driverId]) {
+                    driverMarkers[driverId].setMap(null);
+                    delete driverMarkers[driverId];
                 }
+                delete allDriversData[driverId];
+                updateOnlineDisplay();
                 return;
             }
 
@@ -352,12 +380,9 @@ function initMap() {
                         animation: google.maps.Animation.DROP
                     });
 
-                    const infoWindow = new google.maps.InfoWindow({
-                        content: getInfoWindowContent(driver)
-                    });
-
                     marker.addListener('click', () => {
-                        infoWindow.setContent(getInfoWindowContent(allDriversData[driverId]));
+                        if (infoWindow) infoWindow.close();
+                        infoWindow.setContent(getInfoWindowContent(allDriversData[driverId] || driver));
                         infoWindow.open(driversMap, marker);
                     });
 
@@ -900,3 +925,19 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
+
+// FIXED: Sync Badge with actual online drivers query
+function updateOnlineDisplay() {
+    const onlineBadge = document.querySelector('.badge.live');
+    if (!onlineBadge) return;
+    
+    // Count drivers who are available or on_schedule
+    let onlineCount = 0;
+    Object.values(allDriversData).forEach(d => {
+        if (d.current_status === 'available' || d.current_status === 'on_schedule') {
+            onlineCount++;
+        }
+    });
+    
+    onlineBadge.innerHTML = `<i class="fas fa-circle pulse" style="color:#10b981; font-size:0.6em;"></i> LIVE: ${onlineCount} DRIVERS ONLINE`;
+}

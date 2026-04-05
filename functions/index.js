@@ -383,30 +383,26 @@ exports.adminDeleteUser = onRequest({ cors: true }, async (req, res) => {
 
     // 2. Delete from Users Collection
     await admin.firestore().collection("users").doc(uid).delete();
+    // 3. Delete from Drivers & Locations Collection (Try both UID and Email for cleanup)
+    const driversRef = admin.firestore().collection("drivers");
+    const locationsRef = admin.firestore().collection("driver_locations");
 
-    // 3. Special handling for drivers collection (using email as ID per legacy schema)
+    // Delete by UID (Primary)
+    await driversRef.doc(uid).delete();
+    await locationsRef.doc(uid).delete();
+
+    // Delete by Email (Cleanup for legacy/duplicate records)
     if (email) {
       const emailLower = email.toLowerCase().trim();
-      await admin.firestore().collection("drivers").doc(emailLower).delete();
-      await admin.firestore().collection("driver_locations").doc(emailLower).delete();
-    } else {
-      // Try to find driver by UID if email not provided
-      const driverSnap = await admin.firestore().collection("drivers").doc(uid).get();
-      if (driverSnap.exists) {
-        const d = driverSnap.data();
-        if (d.driver_email) {
-          await admin.firestore().collection("driver_locations").doc(d.driver_email.toLowerCase().trim()).delete();
-        }
-        await admin.firestore().collection("drivers").doc(uid).delete();
-      }
+      await driversRef.doc(emailLower).delete();
+      await locationsRef.doc(emailLower).delete();
     }
 
-    // 4. Create System Notification
+    // Attempt to notify system via activity log
     await admin.firestore().collection("notifications").add({
+      title: "Account Purged",
+      message: `System successfully purged ${email || 'user'} (${uid}). Real-time fleet metrics updated.`,
       type: "system",
-      title: "User Account Purged",
-      message: `Super Admin permanently deleted user account: ${email || uid}`,
-      status: "unread",
       priority: "high",
       timestamp: admin.firestore.FieldValue.serverTimestamp()
     });
