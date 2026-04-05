@@ -388,7 +388,7 @@ exports.adminDeleteUser = onRequest({ cors: true }, async (req, res) => {
     if (email) {
       const emailLower = email.toLowerCase().trim();
       await admin.firestore().collection("drivers").doc(emailLower).delete();
-      await admin.firestore().collection("driver_locations").doc(emailLower).delete(); // FIXED: Purge location
+      await admin.firestore().collection("driver_locations").doc(emailLower).delete();
     } else {
       // Try to find driver by UID if email not provided
       const driverSnap = await admin.firestore().collection("drivers").doc(uid).get();
@@ -400,6 +400,16 @@ exports.adminDeleteUser = onRequest({ cors: true }, async (req, res) => {
         await admin.firestore().collection("drivers").doc(uid).delete();
       }
     }
+
+    // 4. Create System Notification
+    await admin.firestore().collection("notifications").add({
+      type: "system",
+      title: "User Account Purged",
+      message: `Super Admin permanently deleted user account: ${email || uid}`,
+      status: "unread",
+      priority: "high",
+      timestamp: admin.firestore.FieldValue.serverTimestamp()
+    });
 
     logger.info(`Admin successfully purged user: ${uid}`);
     res.json({success: true, message: "User account purged successfully."});

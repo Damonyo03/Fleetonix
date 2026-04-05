@@ -416,19 +416,6 @@ window.deleteDriver = async (id) => {
                 try { await deleteDoc(doc(db, "users", id)); } catch(e){}
             }
 
-            // 2. Recalibrate Organizational Counters
-            const companyId = driver.accredited_company_id;
-            if (companyId) {
-                const companyRef = doc(db, "accredited_companies", companyId);
-                const companySnap = await getDoc(companyRef);
-                if (companySnap.exists()) {
-                    await updateDoc(companyRef, {
-                        total_drivers: Math.max(0, (companySnap.data().total_drivers || 0) - 1),
-                        updated_at: serverTimestamp()
-                    });
-                }
-            }
-
             // 3. Activity Audit
             await addDoc(collection(db, "activity"), {
                 type: 'system',
