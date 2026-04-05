@@ -29,12 +29,25 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 function loadTickets() {
+    const role = currentUserData.role || currentUserData.user_type;
+    const companyId = currentUserData.accredited_company_id;
+    
     // Listen real-time to completed schedules
-    const q = query(
-        collection(db, "schedules"),
-        where("status", "==", "completed"),
-        orderBy("completed_at", "desc")
-    );
+    let q;
+    if ((role === 'company_admin' || role === 'admin') && companyId) {
+        q = query(
+            collection(db, "schedules"),
+            where("status", "==", "completed"),
+            where("accredited_company_id", "==", companyId),
+            orderBy("completed_at", "desc")
+        );
+    } else {
+        q = query(
+            collection(db, "schedules"),
+            where("status", "==", "completed"),
+            orderBy("completed_at", "desc")
+        );
+    }
 
     // Fallback: also catch trips where trip_phase is completed
     onSnapshot(q, (snapshot) => {
@@ -45,7 +58,15 @@ function loadTickets() {
     }, async (error) => {
         // Fallback if index not ready - fetch without orderBy
         console.warn("Primary query failed, trying fallback:", error.message);
-        const q2 = query(collection(db, "schedules"), where("status", "==", "completed"));
+        let q2;
+        if ((role === 'company_admin' || role === 'admin') && companyId) {
+            q2 = query(collection(db, "schedules"), 
+                where("status", "==", "completed"),
+                where("accredited_company_id", "==", companyId)
+            );
+        } else {
+            q2 = query(collection(db, "schedules"), where("status", "==", "completed"));
+        }
         onSnapshot(q2, (snapshot) => {
             allTickets = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
             // Sort client-side

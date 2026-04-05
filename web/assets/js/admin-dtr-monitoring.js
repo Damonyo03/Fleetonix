@@ -47,7 +47,7 @@ function initDTRLogs() {
     
     // Construct query filters
     let q;
-    if (role === 'company_admin' && companyId) {
+    if ((role === 'company_admin' || role === 'admin') && companyId) {
         q = query(baseQuery, where("accredited_company_id", "==", companyId), orderBy("timestamp", "desc"), limit(100));
     } else {
         q = query(baseQuery, orderBy("timestamp", "desc"), limit(100));

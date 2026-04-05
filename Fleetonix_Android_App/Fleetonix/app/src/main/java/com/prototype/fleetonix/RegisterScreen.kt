@@ -86,7 +86,7 @@ fun RegisterScreen(
     LaunchedEffect(Unit) {
         val db = FirebaseFirestore.getInstance()
         db.collection("accredited_companies")
-            .whereEqualTo("status", "active")
+            .whereEqualTo("status", "ACTIVE")
             .get()
             .addOnSuccessListener { result ->
                 val list = result.documents.mapNotNull { doc ->
