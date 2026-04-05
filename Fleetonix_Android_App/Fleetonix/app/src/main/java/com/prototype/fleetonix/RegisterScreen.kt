@@ -90,10 +90,13 @@ fun RegisterScreen(
             .get()
             .addOnSuccessListener { result ->
                 val list = result.documents.mapNotNull { doc ->
-                    val name = doc.getString("name") ?: ""
-                    AccreditedCompany(id = doc.id, name = name)
+                    val name = doc.getString("name") ?: doc.getString("company_name") ?: "" // FIXED: Check for both fields
+                    if (name.isNotBlank()) AccreditedCompany(id = doc.id, name = name) else null
                 }
                 companies = list
+                if (list.isEmpty()) {
+                    android.util.Log.e("RegisterScreen", "No active companies found in Firestore.")
+                }
             }
             .addOnFailureListener {
                 errorMessage = "Failed to load companies. Please check your connection."

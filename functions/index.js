@@ -386,11 +386,17 @@ exports.adminDeleteUser = onRequest({ cors: true }, async (req, res) => {
 
     // 3. Special handling for drivers collection (using email as ID per legacy schema)
     if (email) {
-      await admin.firestore().collection("drivers").doc(email.toLowerCase().trim()).delete();
+      const emailLower = email.toLowerCase().trim();
+      await admin.firestore().collection("drivers").doc(emailLower).delete();
+      await admin.firestore().collection("driver_locations").doc(emailLower).delete(); // FIXED: Purge location
     } else {
       // Try to find driver by UID if email not provided
       const driverSnap = await admin.firestore().collection("drivers").doc(uid).get();
       if (driverSnap.exists) {
+        const d = driverSnap.data();
+        if (d.driver_email) {
+          await admin.firestore().collection("driver_locations").doc(d.driver_email.toLowerCase().trim()).delete();
+        }
         await admin.firestore().collection("drivers").doc(uid).delete();
       }
     }
@@ -471,9 +477,10 @@ exports.adminClearData = onRequest({ cors: true }, async (req, res) => {
     // 1. Define ALL collections to wipe
     const allCollections = [
       "users", "drivers", "bookings", "schedules", "activity", "accidents", 
-      "vehicle_issues", "registration_otps", "otps", "accredited_companies", 
+      "vehicle_issues", "registration_otps", "otps", 
       "dtr_logs", "vehicle_logs", "driver_locations", "trip_tickets", "otp_codes"
     ];
+    // NOTE: accredited_companies is PRESERVED so registration works.
 
     // 2. Perform deletion in batches for every collection
     for (const col of allCollections) {
@@ -490,7 +497,7 @@ exports.adminClearData = onRequest({ cors: true }, async (req, res) => {
       logger.info(`Cleared collection: ${col}`);
     }
 
-    // 3. Delete all Auth Users
+    // 3. Delete all Auth Users (EXCEPT THE NEW SUPER ADMIN)
     let users = await auth.listUsers(1000);
     while (users.users.length > 0) {
       const uids = users.users.map((u) => u.uid);
