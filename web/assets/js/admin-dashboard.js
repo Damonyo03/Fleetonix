@@ -499,15 +499,15 @@ function refreshMarker(id) {
     const dtr = driverDTRStatus[email];
     const isOnDuty = dtr ? dtr.action === 'time_in' : false;
     
-    const isRecentlyActive = !isNaN(lastActive) && (now - lastActive) < (5 * 60 * 1000);
-    const isOnline = isRecentlyActive || ( !isNaN(lastActive) && (now - lastActive) < tenMins && isOnDuty );
+    const isRecentlyActive = !isNaN(lastActive) && (now - lastActive) < (15 * 60 * 1000); // Relaxed to 15 mins for better reliability
+    const isOnline = isRecentlyActive || isOnDuty || status !== 'offline';
     const isAccident = d.current_status === 'accident' || d.is_accident === true;
 
     if (driverMarkers[id]) {
         animateMarkerTo(driverMarkers[id], pos);
         driverMarkers[id].setIcon(markerIcon);
         driverMarkers[id].setOpacity(status === 'offline' ? 0.6 : 1.0);
-        driverMarkers[id].setVisible(isOnline);
+        driverMarkers[id].setVisible(isOnline || status !== 'offline');
         
         // Accident Blinking (using BOUNCE as a visual cue)
         if (isAccident) {

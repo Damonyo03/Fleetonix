@@ -54,6 +54,17 @@ if (bookingForm) {
         const return_to_pickup = document.getElementById('return_to_pickup').checked;
         const special_instructions = document.getElementById('special_instructions').value;
 
+        // 3:00 PM Cutoff Check (Only for Tomorrow)
+        const now = new Date();
+        const tomorrow = new Date();
+        tomorrow.setDate(now.getDate() + 1);
+        const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+        if (pickup_date === tomorrowStr && now.getHours() >= 15) {
+            alert("Cut-off Reached: Next-day schedules must be requested before 3:00 PM. Please contact support for emergency assists.");
+            return;
+        }
+
         // Basic validation
         if (pickup_lat === 0 || pickup_lng === 0 || dropoff_lat === 0 || dropoff_lng === 0) {
             alert("Please select valid addresses from the search suggestions.");
@@ -66,10 +77,9 @@ if (bookingForm) {
         try {
             const bookingData = sanitizeFirestoreData({
                 client_id: auth.currentUser.uid,
-                client_name: currentUserData ? currentUserData.full_name : auth.currentUser.email,
-                client_email: auth.currentUser.email,
-                client_phone: currentUserData?.phone,
-                company_name: currentUserData?.company_name,
+                client_name: currentUserData ? currentUserData.full_name : auth.currentUser.email.split('@')[0],
+                contractor: 'Jettsan',
+                isOfficial: false,
                 pickup_location,
                 pickup_latitude: pickup_lat,
                 pickup_longitude: pickup_lng,

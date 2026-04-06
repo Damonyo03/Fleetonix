@@ -14,9 +14,7 @@ export function sanitizeFirestoreData(data, defaults = {}) {
     
     // Default values for common fields to ensure they exist for Android/Web
     const globalDefaults = {
-        client_phone: "",
-        client_email: "",
-        company_name: "N/A",
+        company_name: "Jettsan",
         client_name: "N/A",
         pickup_location: "N/A",
         dropoff_location: "N/A",
@@ -42,7 +40,7 @@ export function sanitizeFirestoreData(data, defaults = {}) {
         if (cleanData[key] === undefined) {
             // Only add if it's a field we commonly expect to see
             // (Avoiding bloat, but ensuring existence for Android models)
-            if (['client_phone', 'client_email', 'status', 'trip_phase'].includes(key)) {
+            if (['status', 'trip_phase'].includes(key)) {
                 cleanData[key] = globalDefaults[key];
             }
         }

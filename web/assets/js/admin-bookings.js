@@ -109,7 +109,7 @@ async function showCreateBookingModal(clients) {
             <label for="modal_client">Select Client</label>
             <select id="modal_client" class="form-input">
                 <option value="">-- Choose a Client --</option>
-                ${clients.map(c => `<option value="${c.id}" data-name="${c.full_name}" data-email="${c.email}" data-company-id="${c.accredited_company_id || ''}">${c.full_name} (${c.email})</option>`).join('')}
+                ${clients.map(c => `<option value="${c.id}" data-name="${c.full_name}" data-company-id="${c.accredited_company_id || ''}">${c.full_name}</option>`).join('')}
             </select>
         </div>
 
@@ -196,19 +196,38 @@ async function showCreateBookingModal(clients) {
         const clientSelect = document.getElementById('modal_client');
         const selectedOption = clientSelect?.options[clientSelect.selectedIndex];
 
+        const pickupDateInput = document.getElementById('pickup_date').value;
+        const now = new Date();
+        const tomorrow = new Date();
+        tomorrow.setDate(now.getDate() + 1);
+        const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+        const isAdmin = currentUserData?.role === 'admin' || currentUserData?.role === 'super_admin';
+
+        // 3:00 PM Cutoff Check (Only for Tomorrow)
+        if (pickupDateInput === tomorrowStr && now.getHours() >= 15) {
+            if (isAdmin) {
+                const confirmOverride = confirm("NOTICE: The 3:00 PM cutoff for tomorrow's schedules has passed. Proceed with this emergency entry?");
+                if (!confirmOverride) {
+                    const sb = document.querySelector('.save-modal');
+                    if (sb) { sb.disabled = false; sb.innerText = 'Save Booking'; }
+                    return;
+                }
+            } else {
+                alert("Cut-off Reached: Next-day schedules must be requested before 3:00 PM.");
+                const sb = document.querySelector('.save-modal');
+                if (sb) { sb.disabled = false; sb.innerText = 'Save Booking'; }
+                return;
+            }
+        }
+
         const clientId = isExisting ? (clientSelect?.value || '') : 'guest';
         const clientName = isExisting
             ? (selectedOption?.getAttribute('data-name') || selectedOption?.text || '')
             : document.getElementById('modal_guest_name').value;
-        const clientEmail = isExisting
-            ? (selectedOption?.getAttribute('data-email') || '')
-            : document.getElementById('modal_guest_email').value;
-        const clientCompanyId = isExisting
-            ? (selectedOption?.getAttribute('data-company-id') || '')
-            : (currentUserData.accredited_company_id || ''); 
 
         if (isExisting && !clientId) throw new Error("Please select a registered client.");
-        if (!isExisting && (!clientName || !clientEmail)) throw new Error("Please enter Guest name and email.");
+        if (!isExisting && !clientName) throw new Error("Please enter a passenger name.");
 
         const pickup = document.getElementById('pickup_location').value.trim();
         const dropoff = document.getElementById('dropoff_location').value.trim();
@@ -217,24 +236,6 @@ async function showCreateBookingModal(clients) {
         const date = document.getElementById('pickup_date').value;
         const time = document.getElementById('pickup_time').value;
         if (!date || !time) throw new Error("Please enter a date and time.");
-
-        // 3:00 PM Cut-off Logic for next-day schedules
-        const selectedDate = new Date(date);
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        tomorrow.setHours(0,0,0,0);
-        
-        if (selectedDate.getTime() === tomorrow.getTime()) {
-            const now = new Date();
-            if (now.getHours() >= 15) {
-                const isAdmin = currentUserData?.role === 'admin' || currentUserData?.role === 'super_admin';
-                if (!isAdmin) {
-                    throw new Error("Cut-off Reached: Next-day schedules must be requested before 3:00 PM.");
-                } else {
-                    console.warn("Cut-off passed, but user is Admin. Proceeding.");
-                }
-            }
-        }
 
         const driverId = document.getElementById('modal_driver').value;
         const autoDispatch = document.getElementById('modal_auto_dispatch').checked;
@@ -253,12 +254,11 @@ async function showCreateBookingModal(clients) {
             booking_id: bookingId,
             client_id: clientId,
             client_name: clientName,
-            // client_email/phone removed for privacy
             contractor: 'Jettsan',
-            isOfficial: false, // Default to false until Posted
+            isOfficial: false,
 
             pickup_points: pickupPoints,
-            pickup_location: pickupPoints[0].name, // Keep for legacy compatibility
+            pickup_location: pickupPoints[0].name,
             pickup_latitude: pickupPoints[0].latitude,
             pickup_longitude: pickupPoints[0].longitude,
 
@@ -282,19 +282,14 @@ async function showCreateBookingModal(clients) {
         // 1. Save Booking
         await setDoc(doc(db, "bookings", bookingId), data);
 
-        // 2. If Auto-Dispatch and Driver selected, create Schedule and update Driver status
+        // 2. Schedule Creation (if dispatched)
         if (autoDispatch && driverId) {
             const driverSelect = document.getElementById('modal_driver');
-            const driverName = driverSelect.options[driverSelect.selectedIndex].text.replace('🟢 ', '');
+            const driverName = driverSelect.options[driverSelect.selectedIndex].text.replace('🟢 ', '').replace('⚪ ', '');
             
-            // Get driver details
-            const [driverUserDoc, driverDoc] = await Promise.all([
-                getDoc(doc(db, "users", driverId)),
-                getDoc(doc(db, "drivers", driverId))
-            ]);
-            
-            const driverEmail = driverUserDoc.exists() ? (driverUserDoc.data().email || "") : "";
+            const driverDoc = await getDoc(doc(db, "drivers", driverId));
             const dData = driverDoc.exists() ? driverDoc.data() : {};
+            const driverEmail = dData.driver_email || "";
 
             const scheduleData = sanitizeFirestoreData({
                 booking_id: bookingId,
@@ -302,9 +297,6 @@ async function showCreateBookingModal(clients) {
                 schedule_id: generateNumericId(),
                 client_id: clientId,
                 client_name: clientName,
-                client_email: clientEmail,
-                accredited_company_id: clientCompanyId,
-                company_name: isExisting ? '' : (document.getElementById('modal_company')?.value || ''),
                 driver_id: driverId,
                 driver_email: driverEmail.toLowerCase().trim(),
                 driver_name: driverName,
@@ -331,22 +323,18 @@ async function showCreateBookingModal(clients) {
             await addDoc(collection(db, "schedules"), scheduleData);
 
             // Update driver status
-            const driverQuery = query(collection(db, "drivers"), where("driver_email", "==", driverEmail));
-            const driverSnap = await getDocs(driverQuery);
-            if (!driverSnap.empty) {
-                await updateDoc(driverSnap.docs[0].ref, {
-                    current_status: "on_schedule",
-                    current_trip_id: bookingId,
-                    current_trip_phase: "pending",
-                    updated_at: serverTimestamp()
-                });
-            }
-            // 3. Create Notification for Client
+            await updateDoc(doc(db, "drivers", driverId), {
+                current_status: "on_schedule",
+                current_trip_id: bookingId,
+                current_trip_phase: "pending",
+                updated_at: serverTimestamp()
+            });
+
+            // 3. Notification (Minimized)
             await addDoc(collection(db, "notifications"), {
                 user_id: clientId,
-                user_email: clientEmail,
                 title: 'Driver Assigned',
-                message: `Professional Driver ${driverName} (${dData.vehicle_assigned || dData.car_details || "Vehicle Assigned"}) has been assigned to your booking #${bookingId}.`,
+                message: `Driver ${driverName} has been assigned to your booking #${bookingId}.`,
                 type: 'assignment',
                 is_read: false,
                 booking_id: bookingId,
@@ -358,7 +346,7 @@ async function showCreateBookingModal(clients) {
         await addDoc(collection(db, "activity"), {
             type: 'system',
             title: 'New Booking Created',
-            message: `Admin created a booking for ${data.client_name} (ID: ${bookingId})`,
+            message: `Admin created a booking for ${clientName} (ID: ${bookingId})`,
             timestamp: serverTimestamp()
         });
 
@@ -523,7 +511,7 @@ window.viewBookingDetails = async (id) => {
     const b = bookingDoc.data();
     showModal('view-booking-modal', `Booking #${id}`, `
         <div style="display:grid; gap:10px;">
-            <div><strong>Client:</strong> ${b.client_name || 'N/A'} (${b.client_email || 'N/A'})</div>
+            <div><strong>Client:</strong> ${b.client_name || 'N/A'}</div>
             <div><strong>Pickup:</strong> ${b.pickup_location || 'N/A'}</div>
             <div><strong>Dropoff:</strong> ${b.dropoff_location || 'N/A'}</div>
             <div><strong>Date/Time:</strong> ${b.pickup_date || ''} ${b.pickup_time || ''}</div>
@@ -651,12 +639,11 @@ window.assignDriver = async (id) => {
             dropoff_location: booking.dropoff_location,
             dropoff_latitude: booking.dropoff_latitude || 0,
             dropoff_longitude: booking.dropoff_longitude || 0,
-            company_name: booking.company_name || '',
+            company_name: 'Jettsan', // Hardcoded for NSCRP
             client_name: booking.client_name || '',
-            client_phone: booking.client_phone || '',
-            client_email: booking.client_email || '',
             return_to_pickup: booking.return_to_pickup || false,
             special_instructions: booking.special_instructions || '',
+            isOfficial: false, // Must be posted via dashboard to become official
             created_at: serverTimestamp(),
             updated_at: serverTimestamp()
         });

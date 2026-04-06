@@ -2103,26 +2103,10 @@ fun DriverDashboard(
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // Left icon: Call Client
-                                FilledIconButton(
-                                    onClick = {
-                                        val phone = nextSchedule?.client?.phone
-                                        if (!phone.isNullOrBlank()) {
-                                            val intent = Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:$phone"))
-                                            context.startActivity(intent)
-                                        }
-                                    },
-                                    modifier = Modifier.size(54.dp),
-                                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = AccentTeal),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Icon(Icons.Default.Phone, contentDescription = "Call Client", tint = Color.White)
-                                }
-
-                                // Right info: Trip Info
+                                // Client info only (Privacy mode)
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = nextSchedule?.client?.name ?: "Client Assignment",
+                                        text = nextSchedule?.client_name ?: "Passenger Assignment",
                                         color = TextPrimary,
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold
@@ -2405,9 +2389,9 @@ fun DriverDashboard(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text("Client: ${nextSchedule?.client?.name ?: "Fleet Assign"}", color = Color.White, fontWeight = FontWeight.Bold)
-                                    Text("Pickup: ${nextSchedule?.pickup_location?.address}", color = TextSecondary)
-                                    Text("Dropoff: ${nextSchedule?.dropoff_location?.address}", color = TextSecondary)
+                                    Text("Passenger: ${nextSchedule?.client_name ?: "Fleet Assign"}", color = Color.White, fontWeight = FontWeight.Bold)
+                                    Text("Pickup: ${nextSchedule?.pickup_location?.address ?: "Pending"}", color = TextSecondary)
+                                    Text("Dropoff: ${nextSchedule?.dropoff_location?.address ?: "Pending"}", color = TextSecondary)
                                 }
                             }
                             if (!isJobAcceptable) {
@@ -2564,7 +2548,7 @@ fun DriverDashboard(
                                 "driver_uid" to (auth.currentUser?.uid ?: ""),
                                 "driver_email" to (auth.currentUser?.email?.lowercase()?.trim() ?: ""),
                                 "driver_name" to liveDriverName,
-                                "client_name" to (nextSchedule?.client?.name ?: "Unknown"),
+                                "client_name" to (nextSchedule?.client_name ?: "Unknown"),
                                 "vehicle_plate" to (session.driver?.plateNumber ?: ""),
                                 "pickup_location" to (nextSchedule?.pickup_location?.address ?: "Unknown"),
                                 "dropoff_location" to (nextSchedule?.dropoff_location?.address ?: "Unknown"),
@@ -2640,6 +2624,12 @@ fun DriverDashboard(
                             
                             // 1. Automated Time In (DTR) if not already
                             if (!isTimedIn) {
+                                // Enforce 26-hour monthly OT cap
+                                if (monthlyOTHours >= 26.0) {
+                                    tripActionError = "Daily Time Record Blocked: Monthly Overtime Cap (26h) reached. Please contact your supervisor."
+                                    return@launch
+                                }
+
                                 val addr = getAddressFromLocation(currentLatitude, currentLongitude)
                                 val logData = hashMapOf(
                                     "driver_uid" to uid,
@@ -2651,7 +2641,7 @@ fun DriverDashboard(
                                     "longitude" to currentLongitude,
                                     "location_name" to addr,
                                     "device_time" to LocalDateTime.now().toString(),
-                                    "is_overtime" to false
+                                    "is_overtime" to false // Initial login is standard
                                 )
                                 db.collection("dtr_logs").add(logData).await()
                                 db.collection("drivers").document(uid).update("is_currently_timed_in", true).await()
