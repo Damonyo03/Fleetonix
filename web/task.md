@@ -1,0 +1,15 @@
+- [x] **Authentication & OTP Fixes**
+    - [x] Update `otp_verify.js`: Fix OTP concatenation, implement resend logic (timer reset), and add visual feedback listeners.
+    - [x] Update `forgot_password.html`: Center OTP inputs, ensure responsiveness, and link functionality.
+- [x] **Admin Dashboard Overhaul**
+    - [x] Update `dashboard.html`: Show `companyFilter`, add containers for average trip duration and total bookings.
+    - [x] Update `admin-dashboard.js`:
+        - [x] Fix `initCompanyFilter` and filtering logic for stats (`initStats`).
+        - [x] Update `activeSchedules` and `pendingBookings` listeners for real-time status.
+        - [x] Implement calculation and display for "Extended Insights" (Avg trip duration, Daily/Monthly bookings).
+        - [x] Filter fleet map markers to show only "Online" drivers (recent heartbeat).
+        - [x] Standardize marker colors: Green for Available, Blue for On Trip.
+        - [x] Replace "Recent Pending Bookings" with "Recent Completed Bookings" widget.
+- [/] **Verification**
+    - [ ] Verify OTP UI and functionality.
+    - [ ] Verify Admin Dashboard filtering and live data updates.

@@ -84,7 +84,7 @@
                         <p id="welcomeMessage">Real-time status of your global operations.</p>
                     </div>
                     <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-                        <select id="companyFilter" class="btn btn-secondary" style="display:none; min-width:200px; text-align:left;">
+                        <select id="companyFilter" class="btn btn-secondary" style="min-width:200px; text-align:left;">
                             <option value="all">Global View (All Partners)</option>
                         </select>
                         <button class="btn btn-primary" id="newAdminBookingBtn">
@@ -118,6 +118,22 @@
                 </button>
 
                 <div class="grid grid-cols-2 secondary-stats" id="secondaryStats">
+                    <div class="glass-card">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="color:var(--text-secondary); font-size:0.875rem;">Average Trip Duration</span>
+                            <i class="fas fa-history" style="color:var(--accent-blue);"></i>
+                        </div>
+                        <div style="font-size:1.5rem; font-weight:700;" id="avgTripDuration">0 <small style="font-size:0.8rem; font-weight:400;">mins</small></div>
+                        <p style="color:var(--text-muted); font-size:0.75rem;">Based on today's trips</p>
+                    </div>
+                    <div class="glass-card">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="color:var(--text-secondary); font-size:0.875rem;">Monthly Bookings</span>
+                            <i class="fas fa-chart-line" style="color:var(--accent-green);"></i>
+                        </div>
+                        <div style="font-size:1.5rem; font-weight:700;" id="monthlyBookings">0</div>
+                        <p style="color:var(--text-muted); font-size:0.75rem;">Current month total</p>
+                    </div>
                     <div class="glass-card">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
                             <span style="color:var(--text-secondary); font-size:0.875rem;">Total Assets</span>
@@ -160,13 +176,14 @@
                     </div>
                 </div>
 
-                <!-- Small Bookings List -->
+                <!-- Recent Completed Bookings -->
                 <div class="table-container" style="margin-top: 32px;">
                     <div style="padding:20px; border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center;">
-                        <h3 style="font-size:1rem; font-weight:700;">Recent Pending Bookings</h3>
+                        <h3 style="font-size:1rem; font-weight:700;">Recent Completed Trips</h3>
+                        <span class="badge badge-success">Latest Arrivals</span>
                     </div>
-                    <div id="pendingBookingsWidget">
-                        <div style="text-align:center; padding:40px; color:var(--text-muted);">No bookings requiring immediate attention.</div>
+                    <div id="completedBookingsWidget">
+                        <div style="text-align:center; padding:40px; color:var(--text-muted);">No completed trips recorded today.</div>
                     </div>
                 </div>
 
