@@ -436,7 +436,6 @@ fun DriverDashboard(
     var isStartingTrip by remember { mutableStateOf(false) }
     var isMarkingPickup by remember { mutableStateOf(false) }
     var isMarkingDropoff by remember { mutableStateOf(false) }
-    var showSignatureDialog by remember { mutableStateOf(false) }
     var endOdometerValue by remember { mutableStateOf(0.0) }
     var isMarkingReturnPickup by remember { mutableStateOf(false) }
     var isCompletingTrip by remember { mutableStateOf(false) }
@@ -1014,8 +1013,8 @@ fun DriverDashboard(
 
             when (tripPhase) {
                 "pickup", "return_pickup" -> {
-                    val lat = schedule.pickup_location?.latitude
-                    val lng = schedule.pickup_location?.longitude
+                    val lat = schedule.pickup_location?.firstOrNull()?.latitude
+                    val lng = schedule.pickup_location?.firstOrNull()?.longitude
                     if (lat != null && lng != null && lat != 0.0 && lng != 0.0) {
                         intent.action = LocationService.ACTION_SET_GEOFENCE
                         intent.putExtra(LocationService.EXTRA_GEOFENCE_ID, docId)
@@ -2616,8 +2615,8 @@ fun DriverDashboard(
                 isStarting = isStarting,
                 onConfirm = { mileage ->
                     showOdometerDialog = false
-                    val sId = nextSchedule?.docId ?: return@OdometerDialog
-                    val curUid = auth.currentUser?.uid ?: return@OdometerDialog
+                    val docId = nextSchedule?.docId ?: return@OdometerDialog
+                    val uid = auth.currentUser?.uid ?: return@OdometerDialog
                     scope.launch {
                         try {
                             isMarkingPickup = true
@@ -2902,7 +2901,6 @@ fun OdometerDialog(
     }
 }
 
-@Composable
 @Composable
 fun SignatureDialog(
     tripId: String,

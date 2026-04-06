@@ -236,3 +236,22 @@ data class VehicleIssueData(
     @SerializedName("driver_id") val driverId: String? = null,
     @SerializedName("reported_at") val reportedAt: String? = null
 )
+// Registration Models
+data class RegistrationOTPRequest(val email: String)
+data class RegistrationOTPResponse(val success: Boolean, val message: String? = null)
+
+data class UserRegistrationData(
+    val full_name: String,
+    val password: String,
+    val phone: String? = null,
+    val role: String,
+    @SerializedName("accredited_company_id") val accredited_company_id: String? = "jettsan"
+)
+
+data class CompleteRegistrationRequest(
+    val email: String,
+    val otp: String,
+    val userData: UserRegistrationData
+)
+
+data class CompleteRegistrationResponse(val success: Boolean, val message: String? = null)

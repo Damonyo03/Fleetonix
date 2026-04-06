@@ -1,0 +1,62 @@
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:processDebugGoogleServices UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :app:mergeDebugNativeLibs UP-TO-DATE
+> Task :app:stripDebugDebugSymbols UP-TO-DATE
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :app:writeDebugAppMetadata UP-TO-DATE
+> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+
+> Task :app:compileDebugKotlin
+w: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/fleetonix/AuthFlow.kt:71:26 'val LocalLifecycleOwner: ProvidableCompositionLocal<LifecycleOwner>' is deprecated. Moved to lifecycle-runtime-compose library in androidx.lifecycle.compose package.
+w: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/fleetonix/DTRHistoryScreen.kt:64:44 'val Icons.Filled.ArrowBack: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.ArrowBack.
+w: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/fleetonix/DriverDashboard.kt:114:17 'fun Divider(modifier: Modifier = ..., thickness: Dp = ..., color: Color = ...): Unit' is deprecated. Renamed to HorizontalDivider.
+w: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/fleetonix/DriverDashboard.kt:282:38 'fun getFromLocation(p0: Double, p1: Double, p2: Int): (MutableList<Address!>?..List<Address!>?)' is deprecated. Deprecated in Java.
+w: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/fleetonix/DriverDashboard.kt:2064:66 Condition is always 'true'.
+w: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/fleetonix/DriverProfile.kt:115:44 'val Icons.Filled.ArrowBack: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.ArrowBack.
+w: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/fleetonix/GoogleMapsService.kt:66:38 'fun toInt(): Int' is deprecated. Conversion of Char to Number is deprecated. Use Char.code property instead.
+w: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/fleetonix/GoogleMapsService.kt:76:38 'fun toInt(): Int' is deprecated. Conversion of Char to Number is deprecated. Use Char.code property instead.
+w: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/fleetonix/LocationGate.kt:46:26 'val LocalLifecycleOwner: ProvidableCompositionLocal<LifecycleOwner>' is deprecated. Moved to lifecycle-runtime-compose library in androidx.lifecycle.compose package.
+w: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/fleetonix/LocationService.kt:168:54 'val connectionInfo: WifiInfo!' is deprecated. Deprecated in Java.
+w: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/fleetonix/LocationService.kt:198:17 'fun stopForeground(p0: Boolean): Unit' is deprecated. Deprecated in Java.
+w: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/fleetonix/MainActivity.kt:38:26 'val LocalLifecycleOwner: ProvidableCompositionLocal<LifecycleOwner>' is deprecated. Moved to lifecycle-runtime-compose library in androidx.lifecycle.compose package.
+w: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/fleetonix/TripHistoryScreen.kt:99:44 'val Icons.Filled.ArrowBack: ImageVector' is deprecated. Use the AutoMirrored version at Icons.AutoMirrored.Filled.ArrowBack.
+
+> Task :app:compileDebugJavaWithJavac
+> Task :app:processDebugJavaRes
+> Task :app:dexBuilderDebug
+> Task :app:mergeProjectDexDebug
+> Task :app:mergeDebugJavaResource
+> Task :app:packageDebug
+> Task :app:createDebugApkListingFileRedirect
+> Task :app:assembleDebug
+
+BUILD SUCCESSFUL in 1m 4s
+37 actionable tasks: 8 executed, 29 up-to-date

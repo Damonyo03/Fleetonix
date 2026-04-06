@@ -68,19 +68,4 @@ interface DriverApi {
     suspend fun completeRegistration(@Body request: CompleteRegistrationRequest): CompleteRegistrationResponse
 }
 
-// Registration Models
 
-data class UserRegistrationData(
-    val full_name: String,
-    val password: String,
-    val phone: String? = null,
-    val role: String
-)
-
-data class CompleteRegistrationRequest(
-    val email: String,
-    val otp: String,
-    val userData: UserRegistrationData
-)
-
-data class CompleteRegistrationResponse(val success: Boolean, val message: String? = null)

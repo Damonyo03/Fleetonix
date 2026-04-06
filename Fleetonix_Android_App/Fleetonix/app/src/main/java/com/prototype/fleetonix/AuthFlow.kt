@@ -186,11 +186,11 @@ fun AuthFlow() {
                             status = data["status"] as? String,
                             schedule_date = data["schedule_date"] as? String,
                             scheduled_time = data["schedule_time"] as? String,
-                            pickup_location = DriverScheduleLocation(
+                            pickup_location = listOf(DriverScheduleLocation(
                                 address = data["pickup_location"] as? String,
                                 latitude = (data["pickup_latitude"] as? Number)?.toDouble(),
                                 longitude = (data["pickup_longitude"] as? Number)?.toDouble()
-                            ),
+                            )),
                             dropoff_location = DriverScheduleLocation(
                                 address = data["dropoff_location"] as? String,
                                 latitude = (data["dropoff_latitude"] as? Number)?.toDouble(),
