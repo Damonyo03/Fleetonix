@@ -48,37 +48,13 @@ onAuthStateChanged(auth, async (user) => {
     const name = userData.full_name || user.email.split('@')[0];
     initLayout('Trip Schedules', name);
 
-    // Sync Global Filter
-    if (userRoleType === 'super_admin' || userRoleType === 'admin') {
-        initGlobalCompanyFilter();
-    }
+    initScheduleList();
 
     initScheduleList();
     initClearDataFeature();
     initExportFeature();
 });
 
-function initGlobalCompanyFilter() {
-    const filter = document.getElementById('companyFilter');
-    if (!filter) return;
-
-    let selectedId = localStorage.getItem('fleetonix_global_company') || 'all';
-    filter.value = selectedId;
-
-    filter.addEventListener('change', (e) => {
-        localStorage.setItem('fleetonix_global_company', e.target.value);
-        window.dispatchEvent(new Event('storage'));
-        initScheduleList();
-    });
-
-    window.addEventListener('storage', () => {
-        const newId = localStorage.getItem('fleetonix_global_company') || 'all';
-        if (filter.value !== newId) {
-            filter.value = newId;
-            initScheduleList();
-        }
-    });
-}
 
 function initExportFeature() {
     const btn = document.getElementById('exportAllBtn');
@@ -157,18 +133,7 @@ function initClearDataFeature() {
 }
 
 function initScheduleList() {
-    const role = currentUserData.role || currentUserData.user_type;
-    const companyId = currentUserData.accredited_company_id;
-
-    // RBAC and Global Filter
-    const globalFilter = localStorage.getItem('fleetonix_global_company') || 'all';
-    
-    if (role === 'company_admin' && companyId) {
-        q = query(collection(db, "schedules"), where("accredited_company_id", "==", companyId), orderBy("created_at", "desc"));
-    } else if (globalFilter !== 'all') {
-        q = query(collection(db, "schedules"), where("accredited_company_id", "==", globalFilter), orderBy("created_at", "desc"));
-    }
-
+    const q = query(collection(db, "schedules"), orderBy("created_at", "desc"));
     onSnapshot(q, (snapshot) => {
         allSchedules = snapshot.docs;
         renderSchedules(allSchedules);
@@ -206,8 +171,8 @@ function renderSchedules(docs) {
         return `
             <tr>
                 <td>${sched.driver_name || 'N/A'}</td>
-                <td>${sched.company_name || 'N/A'}</td>
-                <td>${sched.pickup_location || (sched.pickup ? sched.pickup.address : 'N/A')}</td>
+                <td>${sched.isOfficial ? '<span class="status-badge available">Official</span>' : '<span class="status-badge info">Fleet Assign</span>'}</td>
+                <td>${sched.pickup_location?.address || (Array.isArray(sched.pickup_location) ? sched.pickup_location[0]?.address : sched.pickup_location) || 'N/A'}</td>
                 <td>${sched.schedule_time || 'N/A'}</td>
                 <td>${statusHtml}</td>
                 <td class="table-actions">

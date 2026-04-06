@@ -54,10 +54,12 @@ fun TripHistoryScreen(
         // Listen to BOTH UID and Email queries to ensure no records (like the 14.07km one) are missed
         val uidQuery = db.collection("trip_tickets")
             .whereEqualTo("driver_uid", uid)
+            .whereEqualTo("isOfficial", true)
             .orderBy("created_at", Query.Direction.DESCENDING)
 
         val emailQuery = db.collection("trip_tickets")
             .whereEqualTo("driver_email", emailPruned)
+            .whereEqualTo("isOfficial", true)
             .orderBy("created_at", Query.Direction.DESCENDING)
 
         val uidListener = uidQuery.addSnapshotListener { snapshot, _ ->

@@ -162,6 +162,7 @@ fun AuthFlow() {
 
         val listener = db.collection("schedules")
             .whereEqualTo("driver_email", email)
+            .whereEqualTo("isOfficial", true)
             .addSnapshotListener { snapshot, error ->
                 feedLoading = false
                 if (error != null) {

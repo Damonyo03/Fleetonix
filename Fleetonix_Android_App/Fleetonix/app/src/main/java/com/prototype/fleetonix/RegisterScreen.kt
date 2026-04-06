@@ -74,47 +74,9 @@ fun RegisterScreen(
     var isLoading by rememberSaveable { mutableStateOf(false) }
     var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
     
-    // Company Selection State
-    var companies by remember { mutableStateOf<List<AccreditedCompany>>(emptyList()) }
-    var selectedCompany by remember { mutableStateOf<AccreditedCompany?>(null) }
-    var isCompanyExpanded by remember { mutableStateOf(false) }
-    
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
 
-    // Fetch companies on launch
-    LaunchedEffect(Unit) {
-        val db = FirebaseFirestore.getInstance()
-        android.util.Log.d("RegisterScreen", "Fetching companies from accredited_companies...")
-        
-        // Fetch ALL companies and filter client-side to be case-insensitive
-        db.collection("accredited_companies")
-            .get()
-            .addOnSuccessListener { result ->
-                val list = result.documents.mapNotNull { doc ->
-                    val status = doc.getString("status") ?: ""
-                    // Case-insensitive check for active status
-                    if (status.equals("active", ignoreCase = true) || status.equals("ACTIVE", ignoreCase = true)) {
-                        val name = doc.getString("name") ?: doc.getString("company_name") ?: ""
-                        if (name.isNotBlank()) {
-                            android.util.Log.d("RegisterScreen", "Found Active Company: $name (ID: ${doc.id})")
-                            AccreditedCompany(id = doc.id, name = name)
-                        } else null
-                    } else {
-                        android.util.Log.d("RegisterScreen", "Skipping Inactive/Unstructured Company: ${doc.id} (Status: $status)")
-                        null
-                    }
-                }
-                companies = list
-                if (list.isEmpty()) {
-                    android.util.Log.e("RegisterScreen", "CRITICAL: No active companies found in Firestore matching status 'active'!")
-                }
-            }
-            .addOnFailureListener { e ->
-                android.util.Log.e("RegisterScreen", "FIRESTORE ERROR: ${e.message}", e)
-                errorMessage = "Failed to load companies: ${e.localizedMessage}"
-            }
-    }
 
     fun attemptSendOTP() {
         val trimmedFullName = fullName.trim()
@@ -133,10 +95,6 @@ fun RegisterScreen(
             errorMessage = "Password must be at least 6 characters"
             return
         }
-        if (selectedCompany == null) {
-            errorMessage = "Please select your company"
-            return
-        }
 
         scope.launch {
             try {
@@ -151,7 +109,7 @@ fun RegisterScreen(
                         full_name = trimmedFullName,
                         password = password,
                         phone = trimmedPhone.ifBlank { null },
-                        accredited_company_id = selectedCompany?.id,
+                        accredited_company_id = "jettsan",
                         role = selectedRole
                     )
                     onOTPSent(userData, trimmedEmail)
@@ -232,47 +190,6 @@ fun RegisterScreen(
                 colors = textFieldColors()
             )
 
-            // Accredited Company Selection
-            Text(
-                text = "Accredited Company",
-                color = TextSecondary,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Start
-            )
-            ExposedDropdownMenuBox(
-                expanded = isCompanyExpanded,
-                onExpandedChange = { isCompanyExpanded = !isCompanyExpanded },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                OutlinedTextField(
-                    value = selectedCompany?.name ?: "",
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Select Company") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isCompanyExpanded) },
-                    colors = textFieldColors(),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .menuAnchor(MenuAnchorType.PrimaryNotEditable, true)
-                )
-
-                ExposedDropdownMenu(
-                    expanded = isCompanyExpanded,
-                    onDismissRequest = { isCompanyExpanded = false },
-                    modifier = Modifier.background(CardBlue)
-                ) {
-                    companies.forEach { company ->
-                        DropdownMenuItem(
-                            text = { Text(company.name, color = TextPrimary) },
-                            onClick = {
-                                selectedCompany = company
-                                isCompanyExpanded = false
-                            }
-                        )
-                    }
-                }
-            }
 
             Text(
                 text = "I am registering as a:",

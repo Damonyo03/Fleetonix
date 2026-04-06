@@ -12,7 +12,6 @@ const dtrLogsBody = document.getElementById('dtrLogsBody');
 const dateFilter = document.getElementById('dateFilter');
 let currentUserData = null;
 let activeCompanies = {};
-let selectedCompanyId = localStorage.getItem('fleetonix_global_company') || 'all';
 
 // Set default date to today
 const today = new Date().toISOString().split('T')[0];
@@ -35,10 +34,7 @@ onAuthStateChanged(auth, async (user) => {
         selectedCompanyId = currentUserData.accredited_company_id;
     }
 
-    // Initialize Company Filter for Super Admins
-    if (role === 'super_admin' || role === 'admin') {
-        initCompanyFilter();
-    }
+    // DTR logs initialized for NSCRP
 
     // Pre-fetch all companies for display names
     const companiesSnap = await getDocs(collection(db, "accredited_companies"));
@@ -49,35 +45,6 @@ onAuthStateChanged(auth, async (user) => {
     initDTRLogs();
 });
 
-async function initCompanyFilter() {
-    const filter = document.getElementById('companyFilter');
-    if (!filter) return;
-
-    try {
-        const companiesSnap = await getDocs(query(collection(db, "accredited_companies"), where("status", "==", "active")));
-        
-        filter.innerHTML = '<option value="all">All Companies</option>';
-        companiesSnap.forEach(doc => {
-            const option = document.createElement('option');
-            option.value = doc.id;
-            option.textContent = doc.data().name;
-            filter.appendChild(option);
-        });
-        
-        filter.value = selectedCompanyId;
-        filter.style.display = 'inline-block';
-
-        filter.addEventListener('change', (e) => {
-            selectedCompanyId = e.target.value;
-            localStorage.setItem('fleetonix_global_company', selectedCompanyId);
-            // Broadcast change to other tabs/modules
-            window.dispatchEvent(new Event('storage'));
-            initDTRLogs();
-        });
-    } catch (error) {
-        console.error("Error loading companies:", error);
-    }
-}
 
 window.initDTRLogs = function() {
     if (!dtrLogsBody) return;
@@ -88,15 +55,7 @@ window.initDTRLogs = function() {
 
     let baseQuery = collection(db, "dtr_logs");
     
-    // Construct query filters
-    let q;
-    if (role === 'company_admin' && companyId) {
-        q = query(baseQuery, where("accredited_company_id", "==", companyId), orderBy("timestamp", "desc"), limit(100));
-    } else if ((role === 'super_admin' || role === 'admin') && selectedCompanyId !== 'all') {
-        q = query(baseQuery, where("accredited_company_id", "==", selectedCompanyId), orderBy("timestamp", "desc"), limit(100));
-    } else {
-        q = query(baseQuery, orderBy("timestamp", "desc"), limit(100));
-    }
+    let q = query(baseQuery, orderBy("timestamp", "desc"), limit(100));
 
     onSnapshot(q, (snapshot) => {
         const docs = snapshot.docs;
@@ -130,7 +89,7 @@ function renderLogs(docs) {
         return `
             <tr>
                 <td style="font-weight: 600;">${log.driver_name || 'Driver'}</td>
-                <td><span style="font-size: 0.85em; color: var(--text-muted);">${companyName}</span></td>
+                <td><span style="font-size: 0.85em; color: var(--text-muted);">Jettsan</span></td>
                 <td>
                     <span class="status-pill status-${log.action}">${actionLabel}</span>
                     ${log.is_overtime ? '<span class="ot-badge">OVERTIME</span>' : ''}

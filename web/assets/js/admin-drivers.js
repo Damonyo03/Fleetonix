@@ -40,7 +40,7 @@ onAuthStateChanged(auth, async (user) => {
         }
     }
 
-    const adminRoles = ['admin', 'super_admin', 'company_admin'];
+    const adminRoles = ['admin', 'super_admin'];
     const role = userData?.user_type || userData?.role;
 
     if (!userData || !adminRoles.includes(role)) {
@@ -53,41 +53,7 @@ onAuthStateChanged(auth, async (user) => {
     const name = userData.full_name || user.email.split('@')[0];
     initLayout('Driver Management', name);
 
-    // Fetch companies
-    let selectedCompanyId = localStorage.getItem('fleetonix_global_company') || 'all';
-    
-    // If company_admin, force their company
-    if (role === 'company_admin' && userData.accredited_company_id) {
-        selectedCompanyId = userData.accredited_company_id;
-        localStorage.setItem('fleetonix_global_company', selectedCompanyId);
-    }
-
-    if (role === 'super_admin' || role === 'admin' || role === 'company_admin') {
-        const companiesSnap = await getDocs(query(collection(db, "accredited_companies"), where("status", "==", "active")));
-        const filter = document.getElementById('companyFilter');
-        
-        if (filter) {
-            filter.innerHTML = '<option value="all">All Companies</option>';
-        }
-
-        companiesSnap.forEach(doc => {
-            activeCompanies[doc.id] = doc.data().name;
-            if (filter) {
-                const option = document.createElement('option');
-                option.value = doc.id;
-                option.textContent = doc.data().name;
-                filter.appendChild(option);
-            }
-        });
-
-        if (filter) {
-            filter.value = selectedCompanyId;
-            filter.addEventListener('change', (e) => {
-                localStorage.setItem('fleetonix_global_company', e.target.value);
-                applyFilters();
-            });
-        }
-    }
+    initDriverList();
 
     initDriverList();
     
@@ -137,7 +103,7 @@ async function repairMissingDriverProfiles() {
                 await setDoc(doc(db, "drivers", u.id), {
                     driver_name: userData.full_name || "New Driver",
                     driver_email: email,
-                    accredited_company_id: userData.accredited_company_id || "unassigned",
+                    accredited_company_id: "jettsan",
                     current_status: "offline",
                     vehicle_assigned: "Pending Assignment",
                     plate_number: "N/A",
@@ -162,10 +128,7 @@ function initDriverList() {
 
     let driverQuery = collection(db, "drivers");
 
-    // RBAC Filtering
-    if (role === 'company_admin' && companyId) {
-        driverQuery = query(collection(db, "drivers"), where("accredited_company_id", "==", companyId));
-    }
+    // RBAC Filtering removed for NSCRP
 
     onSnapshot(driverQuery, (snapshot) => {
         allDrivers = snapshot.docs;
@@ -180,7 +143,6 @@ function applyFilters() {
     if (!driverGrid) return;
     const searchTerm = driverSearch.value.toLowerCase();
     const status = statusFilter.value;
-    const company = document.getElementById('companyFilter')?.value || 'all';
 
     const filtered = allDrivers.filter(d => {
         const data = d.data();
@@ -188,8 +150,7 @@ function applyFilters() {
                              (data.plate_number || '').toLowerCase().includes(searchTerm) || 
                              (data.vehicle_assigned || '').toLowerCase().includes(searchTerm);
         const matchesStatus = status === 'all' || data.current_status === status;
-        const matchesCompany = company === 'all' || data.accredited_company_id === company;
-        return matchesSearch && matchesStatus && matchesCompany;
+        return matchesSearch && matchesStatus;
     });
     renderDrivers(filtered);
 }
@@ -278,14 +239,6 @@ if (addDriverBtn) {
                 <label>Password (At least 6 characters)</label>
                 <input type="password" id="modal_password" class="form-input" required minlength="6">
             </div>
-            ${(currentUserData.role === 'super_admin' || currentUserData.role === 'admin') ? `
-            <div class="form-group">
-                <label>Accredited Company</label>
-                <select id="modal_accredited_company_id" class="form-input" required>
-                    <option value="">-- Select Company --</option>
-                    ${Object.entries(activeCompanies).map(([id, name]) => `<option value="${id}">${name}</option>`).join('')}
-                </select>
-            </div>` : ''}
         `;
 
         showModal('driver-modal', 'Add New Driver', content, async () => {
@@ -305,10 +258,7 @@ if (addDriverBtn) {
                 const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
                 const driverId = userCredential.user.uid;
 
-                const role = currentUserData.role || currentUserData.user_type;
-                const companyId = (role === 'super_admin' || role === 'admin') 
-                    ? document.getElementById('modal_accredited_company_id').value 
-                    : currentUserData.accredited_company_id;
+                const companyId = "jettsan";
 
                 await setDoc(doc(db, "drivers", driverId), {
                     driver_name: name,

@@ -8,7 +8,7 @@ let markers = {};
 let polylines = {};
 let activeDriverEmails = new Set();
 let driverDTRStatus = {}; // email -> { action: 'time_in'|'time_out', timestamp: JS Date }
-let currentUserCompanyId = null;
+let activeDriverEmails = new Set();
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -17,11 +17,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     try {
-        // Fetch User Profile to get Company ID
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
             const userData = userDoc.data();
-            currentUserCompanyId = userData.accredited_company_id;
             initLayout('Dashboard', userData.full_name);
         } else {
             initLayout('Dashboard', user.email.split('@')[0]);
@@ -44,10 +40,7 @@ function initDTRStatusSync() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Only listen to logs for the client's company
-    const dtrQuery = currentUserCompanyId 
-        ? query(collection(db, "dtr_logs"), where("timestamp", ">=", today), where("accredited_company_id", "==", currentUserCompanyId))
-        : query(collection(db, "dtr_logs"), where("timestamp", ">=", today));
+    const dtrQuery = query(collection(db, "dtr_logs"), where("timestamp", ">=", today));
     
     onSnapshot(dtrQuery, (snapshot) => {
         snapshot.docChanges().forEach(change => {
@@ -289,36 +282,28 @@ function initStats() {
     const activeBaseQuery = collection(db, "schedules");
 
     // Pending Bookings
-    let pendingQ = query(baseQuery, where("status", "==", "pending"));
-    if (currentUserCompanyId) pendingQ = query(pendingQ, where("accredited_company_id", "==", currentUserCompanyId));
-    else pendingQ = query(pendingQ, where("client_email", "==", userEmail));
+    let pendingQ = query(baseQuery, where("status", "==", "pending"), where("client_email", "==", userEmail));
     
     onSnapshot(pendingQ, (snap) => {
         document.getElementById('pendingBookings').innerText = snap.size;
     });
 
     // Active Schedules
-    let activeQ = query(activeBaseQuery, where("trip_phase", "!=", "completed"));
-    if (currentUserCompanyId) activeQ = query(activeQ, where("accredited_company_id", "==", currentUserCompanyId));
-    else activeQ = query(activeQ, where("client_email", "==", userEmail));
+    let activeQ = query(activeBaseQuery, where("trip_phase", "!=", "completed"), where("client_email", "==", userEmail));
 
     onSnapshot(activeQ, (snap) => {
         document.getElementById('activeSchedules').innerText = snap.size;
     });
 
     // Total Bookings
-    let totalQ = collection(db, "bookings");
-    if (currentUserCompanyId) totalQ = query(totalQ, where("accredited_company_id", "==", currentUserCompanyId));
-    else totalQ = query(totalQ, where("client_email", "==", userEmail));
+    let totalQ = query(collection(db, "bookings"), where("client_email", "==", userEmail));
 
     onSnapshot(totalQ, (snap) => {
         document.getElementById('totalBookings').innerText = snap.size;
     });
     
     // Completed Trips
-    let completedQ = query(collection(db, "bookings"), where("status", "==", "completed"));
-    if (currentUserCompanyId) completedQ = query(completedQ, where("accredited_company_id", "==", currentUserCompanyId));
-    else completedQ = query(completedQ, where("client_email", "==", userEmail));
+    let completedQ = query(collection(db, "bookings"), where("status", "==", "completed"), where("client_email", "==", userEmail));
 
     onSnapshot(completedQ, (snap) => {
         document.getElementById('completedBookings').innerText = snap.size;

@@ -12,7 +12,6 @@ const db = getFirestore(app);
 
 let allUsers = [];
 let currentUserRole = null;
-let currentAccreditedCompanyId = null;
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -36,7 +35,6 @@ onAuthStateChanged(auth, async (user) => {
     const adminRoles = ['admin', 'super_admin', 'company_admin'];
     const role = userData?.user_type || userData?.role;
     currentUserRole = role;
-    currentAccreditedCompanyId = userData.accredited_company_id || null;
 
     if (!userData || !adminRoles.includes(role)) {
         console.error("Access Denied: Not an administrator.");
@@ -61,30 +59,15 @@ onAuthStateChanged(auth, async (user) => {
     // Create User Button
     document.getElementById('createUserBtn')?.addEventListener('click', showCreateUserModal);
     
-    // Populate Companies Filter
-    initCompanyFilter();
+    // Initialize UI without company filters
+    if (document.getElementById('companyFilter')) {
+        document.getElementById('companyFilter').style.display = 'none';
+    }
 });
 
-async function initCompanyFilter() {
-    const filter = document.getElementById('companyFilter');
-    if (!filter) return;
-
-    try {
-        const companiesSnap = await getDocs(query(collection(db, "accredited_companies"), where("status", "==", "active")));
-        companiesSnap.forEach(doc => {
-            const option = document.createElement('option');
-            option.value = doc.id;
-            option.textContent = doc.data().name;
-            filter.appendChild(option);
-        });
-    } catch (error) {
-        console.error("Error loading companies for filter:", error);
-    }
-}
 
 function applyFilters() {
     const role   = document.getElementById('roleFilter')?.value || 'all';
-    const company = document.getElementById('companyFilter')?.value || 'all';
     const search = (document.getElementById('searchInput')?.value || '').toLowerCase();
 
     let filtered = allUsers;
@@ -94,14 +77,6 @@ function applyFilters() {
             return uRole === role;
         });
     }
-    if (company !== 'all') {
-        filtered = filtered.filter(u => u.accredited_company_id === company);
-    }
-    if (search) filtered = filtered.filter(u =>
-        (u.full_name || '').toLowerCase().includes(search) ||
-        (u.email || '').toLowerCase().includes(search) ||
-        (u.company_name || '').toLowerCase().includes(search)
-    );
     renderUsers(filtered);
 }
 
@@ -227,10 +202,6 @@ async function showCreateUserModal() {
                     ${roleOptions}
                 </select>
             </div>
-            <div class="form-group">
-                <label>Company/Organization</label>
-                <input type="text" id="modal_company" class="form-input" placeholder="Optional">
-            </div>
         </div>
     `;
 
@@ -254,7 +225,7 @@ async function showCreateUserModal() {
                     password: password,
                     fullName: fullName,
                     role: role,
-                    companyName: companyName || ""
+                    companyName: "Jettsan"
                 })
             });
 
@@ -265,18 +236,7 @@ async function showCreateUserModal() {
 
             alert(`User account for ${fullName} created successfully!`);
 
-            // Increment Company Staff Counter if applicable
-            if (companyName) {
-                const companySnap = await getDocs(query(collection(db, "accredited_companies"), where("name", "==", companyName)));
-                if (!companySnap.empty) {
-                    const companyId = companySnap.docs[0].id;
-                    const companyDoc = companySnap.docs[0].data();
-                    await updateDoc(doc(db, "accredited_companies", companyId), {
-                        total_staff: (companyDoc.total_staff || 0) + 1,
-                        updated_at: serverTimestamp()
-                    });
-                }
-            }
+            // Removed company-specific counter logic for NSCRP
         } catch (err) {
             console.error("User creation error:", err);
             throw new Error(err.message);
@@ -322,30 +282,7 @@ window.deleteUser = async (id) => {
             throw new Error(result.message || "Failed to purge user account.");
         }
 
-        // 2. Recalibrate Organizational Counters
-        const role = user.role || user.user_type || 'client';
-        const companyId = user.accredited_company_id;
-
-        if (companyId) {
-            const companyRef = doc(db, "accredited_companies", companyId);
-            const companySnap = await getDoc(companyRef);
-            
-            if (companySnap.exists()) {
-                const updateData = {};
-                if (role === 'driver') {
-                    updateData.total_drivers = Math.max(0, (companySnap.data().total_drivers || 0) - 1);
-                } else if (role === 'staff' || role === 'admin') {
-                    updateData.total_staff = Math.max(0, (companySnap.data().total_staff || 0) - 1);
-                }
-                
-                if (Object.keys(updateData).length > 0) {
-                    await updateDoc(companyRef, {
-                        ...updateData,
-                        updated_at: serverTimestamp()
-                    });
-                }
-            }
-        }
+        // Removed company-specific counter logic for NSCRP
 
         // 3. Activity Audit
         await addDoc(collection(db, "activity"), {

@@ -56,6 +56,7 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
+    implementation(libs.firebase.storage)
     implementation("androidx.compose.material:material-icons-extended:1.7.0")
     implementation(libs.coil.compose)
     implementation("com.google.android.gms:play-services-location:21.3.0")

@@ -686,3 +686,81 @@ body {
 .metric-box { background: rgba(255,255,255,0.03); padding: 10px; border-radius: var(--radius-md); border: 1px solid var(--border-color); }
 .metric-label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; }
 .metric-value { font-size: 1rem; font-weight: 700; color: var(--text-primary); }
+
+/* ── Special Animations ───────────────────────────────────────────────────── */
+@keyframes premiumPulse {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 212, 255, 0.4); }
+    50% { transform: scale(1.05); box-shadow: 0 0 20px rgba(0, 212, 255, 0.6); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 212, 255, 0.4); }
+}
+
+.premium-pulsing {
+    animation: premiumPulse 2s infinite ease-in-out;
+    background: var(--grad-primary) !important;
+    color: var(--bg-primary) !important;
+    border: none !important;
+    font-weight: 800 !important;
+}
+/* ── Live Map Enhancements ────────────────────────────────────────────────── */
+@keyframes marker-accident-blink {
+    0% { background-color: #ff4d4d; box-shadow: 0 0 15px #ff4d4d; }
+    50% { background-color: #ffcc00; box-shadow: 0 0 25px #ffcc00; }
+    100% { background-color: #ff4d4d; box-shadow: 0 0 15px #ff4d4d; }
+}
+
+.accident-marker-container {
+    position: absolute;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 3px solid #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: marker-accident-blink 0.8s infinite;
+    cursor: pointer;
+    transform: translate(-50%, -50%);
+    z-index: 1001;
+}
+
+.accident-marker-inner {
+    color: #fff;
+    font-size: 16px;
+    font-weight: 900;
+}
+
+/* Numbered Stops (Circles) */
+.stop-marker-numbered {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    background: var(--bg-primary);
+    border: 2px solid var(--accent-blue);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-blue);
+    font-size: 12px;
+    font-weight: 800;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+    transform: translate(-50%, -50%);
+    z-index: 998;
+}
+
+/* Finish Line (Checkered Flag) */
+.finish-marker-checkered {
+    position: absolute;
+    width: 32px;
+    height: 32px;
+    background: #fff;
+    border: 2px solid #000;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    z-index: 999;
+}

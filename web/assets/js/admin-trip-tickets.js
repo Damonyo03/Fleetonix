@@ -15,7 +15,6 @@ const db = getFirestore(app);
 let allTickets = [];
 let uniqueDrivers = new Set();
 let currentUserData = null; // Store admin user data for RBAC
-let selectedCompanyId = localStorage.getItem('fleetonix_global_company') || 'all';
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -32,46 +31,9 @@ onAuthStateChanged(auth, async (user) => {
 
     const role = userData?.role || userData?.user_type;
     
-    // If company_admin, force their company
-    if (role === 'company_admin' && userData.accredited_company_id) {
-        selectedCompanyId = userData.accredited_company_id;
-    }
-
-    // Initialize Company Filter for Super Admins
-    if (role === 'super_admin' || role === 'admin') {
-        initCompanyFilter();
-    }
-
     loadTickets();
 });
 
-async function initCompanyFilter() {
-    const filter = document.getElementById('companyFilter');
-    if (!filter) return;
-
-    try {
-        const companiesSnap = await getDocs(query(collection(db, "accredited_companies"), where("status", "==", "active")));
-        
-        filter.innerHTML = '<option value="all">All Companies</option>';
-        companiesSnap.forEach(doc => {
-            const option = document.createElement('option');
-            option.value = doc.id;
-            option.textContent = doc.data().name;
-            filter.appendChild(option);
-        });
-        
-        filter.value = selectedCompanyId;
-        filter.style.display = 'inline-block';
-
-        filter.addEventListener('change', (e) => {
-            selectedCompanyId = e.target.value;
-            localStorage.setItem('fleetonix_global_company', selectedCompanyId);
-            loadTickets();
-        });
-    } catch (error) {
-        console.error("Error loading companies:", error);
-    }
-}
 
 function loadTickets() {
     if (!currentUserData) {
@@ -88,18 +50,6 @@ function loadTickets() {
         tripTicketsQuery = query(
             collection(db, "trip_tickets"),
             where("driver_id", "==", currentUserData.uid),
-            orderBy("created_at", "desc")
-        );
-    } else if (role === 'company_admin' && companyId) {
-        tripTicketsQuery = query(
-            collection(db, "trip_tickets"),
-            where("accredited_company_id", "==", companyId),
-            orderBy("created_at", "desc")
-        );
-    } else if ((role === 'super_admin' || role === 'admin') && selectedCompanyId !== 'all') {
-        tripTicketsQuery = query(
-            collection(db, "trip_tickets"),
-            where("accredited_company_id", "==", selectedCompanyId),
             orderBy("created_at", "desc")
         );
     } else {
@@ -144,18 +94,6 @@ function loadTickets() {
                 collection(db, "schedules"),
                 where("status", "==", "completed"),
                 where("driver_id", "==", currentUserData.uid)
-            );
-        } else if (role === 'company_admin' && companyId) {
-            schedulesQuery = query(
-                collection(db, "schedules"),
-                where("status", "==", "completed"),
-                where("accredited_company_id", "==", companyId)
-            );
-        } else if ((role === 'super_admin' || role === 'admin') && selectedCompanyId !== 'all') {
-            schedulesQuery = query(
-                collection(db, "schedules"),
-                where("status", "==", "completed"),
-                where("accredited_company_id", "==", selectedCompanyId)
             );
         } else {
             schedulesQuery = query(

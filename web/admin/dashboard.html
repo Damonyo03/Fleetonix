@@ -84,10 +84,9 @@
                         <h1>Fleet Overview</h1>
                         <p id="welcomeMessage">Real-time status of your global operations.</p>
                     </div>
-                    <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-                        <select id="companyFilter" class="btn btn-secondary" style="min-width:200px; text-align:left;">
-                            <option value="all">Global View (All Partners)</option>
-                        </select>
+                        <button class="btn btn-secondary" id="postScheduleBtn" disabled title="Schedule posting is only available between 5:30 PM and 6:00 PM.">
+                            <i class="fas fa-paper-plane"></i> Post Schedule
+                        </button>
                         <button class="btn btn-primary" id="newAdminBookingBtn">
                             <i class="fas fa-plus"></i> New Booking
                         </button>

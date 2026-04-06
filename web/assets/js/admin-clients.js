@@ -17,7 +17,7 @@ const clientTableBody = document.getElementById('clientTableBody');
 const clientSearch = document.getElementById('clientSearch');
 
 let currentUserData = null;
-let activeCompanies = {};
+let activeCompanies = {}; // Legacy, kept for structure
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -30,28 +30,13 @@ onAuthStateChanged(auth, async (user) => {
     const name = currentUserData.full_name || user.email.split('@')[0];
     initLayout('Client Management', name);
 
-    // Fetch companies if super_admin
-    const role = currentUserData.role || currentUserData.user_type;
-    if (role === 'super_admin' || role === 'admin') {
-        const companiesSnap = await getDocs(query(collection(db, "accredited_companies"), where("status", "==", "active")));
-        companiesSnap.forEach(doc => {
-            activeCompanies[doc.id] = doc.data().name;
-        });
-    }
+    // Client list initialized for NSCRP
 
     initClientList();
 });
 
 function initClientList() {
-    const role = currentUserData.role || currentUserData.user_type;
-    const companyId = currentUserData.accredited_company_id;
-
     let q = query(collection(db, "users"), where("user_type", "==", "client"));
-
-    // RBAC Filtering for Company Admins
-    if (role === 'company_admin' && companyId) {
-        q = query(collection(db, "users"), where("user_type", "==", "client"), where("accredited_company_id", "==", companyId));
-    }
 
     onSnapshot(q, (snapshot) => {
         allClients = snapshot.docs;
@@ -86,7 +71,7 @@ function renderClients(docs) {
         const id = d.id;
         return `
             <tr>
-                <td>${client.company_name || 'N/A'}</td>
+                <td>Jettsan</td>
                 <td>${client.full_name || 'N/A'}</td>
                 <td>${client.email}</td>
                 <td>${client.address || 'N/A'}</td>
@@ -106,11 +91,8 @@ window.editClient = async (id) => {
 
     const content = `
         <div class="form-group">
-            <label>Accredited Company</label>
-            <select id="modal_accredited_company_id" class="form-input" required>
-                <option value="">-- Select Company --</option>
-                ${Object.entries(activeCompanies).map(([id, name]) => `<option value="${id}" ${client.accredited_company_id === id ? 'selected' : ''}>${name}</option>`).join('')}
-            </select>
+            <label>Contractor</label>
+            <input type="text" class="form-input" value="Jettsan" disabled>
         </div>
         <div class="form-group">
             <label>Contact Person</label>
@@ -126,8 +108,8 @@ window.editClient = async (id) => {
         const companyId = document.getElementById('modal_accredited_company_id').value;
         const companyName = activeCompanies[companyId] || "";
         await updateDoc(doc(db, "users", id), {
-            accredited_company_id: companyId,
-            company_name: companyName,
+            accredited_company_id: "jettsan",
+            company_name: "Jettsan",
             full_name: document.getElementById('modal_full_name').value,
             address: document.getElementById('modal_address').value
         });
@@ -150,11 +132,8 @@ if (addClientBtn) {
     addClientBtn.onclick = () => {
         const content = `
             <div class="form-group">
-                <label>Accredited Company</label>
-                <select id="modal_accredited_company_id" class="form-input" required>
-                    <option value="">-- Select Company --</option>
-                    ${Object.entries(activeCompanies).map(([id, name]) => `<option value="${id}">${name}</option>`).join('')}
-                </select>
+                <label>Contractor</label>
+                <input type="text" class="form-input" value="Jettsan" disabled>
             </div>
             <div class="form-group">
                 <label>Contact Person (Full Name)</label>
@@ -187,14 +166,14 @@ if (addClientBtn) {
             }
 
             try {
-                const companyId = document.getElementById('modal_accredited_company_id').value;
-                const companyName = activeCompanies[companyId] || "";
+                const companyId = "jettsan";
+                const companyName = "Jettsan";
                 const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
                 const clientId = userCredential.user.uid;
 
                 await setDoc(doc(db, "users", clientId), {
-                    accredited_company_id: companyId,
-                    company_name: companyName,
+                    accredited_company_id: "jettsan",
+                    company_name: "Jettsan",
                     full_name: name,
                     address: address,
                     email: email,

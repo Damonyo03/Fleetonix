@@ -59,18 +59,20 @@ data class DriverSchedule(
     @SerializedName("schedule_time") val scheduled_time: String? = null,
     @SerializedName("trip_phase") val trip_phase: String? = null, 
     @SerializedName("status") val status: String? = null,
-    @SerializedName("isOfficial") val isOfficial: Boolean? = false,
-    @SerializedName("return_to_pickup") val return_to_pickup: Boolean? = false,
+    @SerializedName("isOfficial") val isOfficial: Boolean = false,
+    @SerializedName("return_to_pickup") val return_to_pickup: Boolean = false,
     @SerializedName("return_pickup_time") val return_pickup_time: String? = null,
     
-    // Multi-point pickups
+    // Multi-point pickups (NSCRP Update: pickup_location is now an array)
     @SerializedName("pickup_points") val pickup_points: List<PickupPoint>? = null,
-    @SerializedName("pickup_location") val pickup_location: DriverScheduleLocation? = null,
+    @SerializedName("pickup_location") val pickup_location: List<DriverScheduleLocation>? = null,
     @SerializedName("dropoff_location") val dropoff_location: DriverScheduleLocation? = null,
     
-    // Odometer & Authorization
-    @SerializedName("start_odometer") val start_odometer: Double? = null,
-    @SerializedName("end_odometer") val end_odometer: Double? = null,
+    // Odometer & Authorization (NSCRP Update)
+    @SerializedName("odometer_start") val odometer_start: Double? = null,
+    @SerializedName("odometer_end") val odometer_end: Double? = null,
+    @SerializedName("overtime_hours") val overtime_hours: Double? = null,
+    @SerializedName("passenger_signature_url") val passenger_signature_url: String? = null,
     @SerializedName("signature_url") val signature_url: String? = null,
     @SerializedName("refusal_reason") val refusal_reason: String? = null,
     

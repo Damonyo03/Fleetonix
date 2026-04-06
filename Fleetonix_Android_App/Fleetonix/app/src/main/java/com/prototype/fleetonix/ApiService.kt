@@ -69,20 +69,11 @@ interface DriverApi {
 }
 
 // Registration Models
-data class RegistrationOTPRequest(val email: String)
-data class RegistrationOTPResponse(val success: Boolean, val message: String? = null)
-
-data class AccreditedCompany(
-    val id: String = "",
-    val name: String = "",
-    val status: String = "active"
-)
 
 data class UserRegistrationData(
     val full_name: String,
     val password: String,
     val phone: String? = null,
-    val accredited_company_id: String? = null,
     val role: String
 )
 

@@ -40,6 +40,7 @@ import com.google.android.gms.maps.model.*
 import com.google.maps.android.compose.*
 import java.time.*
 import java.time.format.*
+import com.google.firebase.storage.FirebaseStorage
 
 @Composable
 fun StatCard(title: String, value: String, accentColor: Color, modifier: Modifier = Modifier) {
@@ -256,8 +257,7 @@ fun DriverDashboard(
 
     // Live Metadata States
     var liveDriverName by remember { mutableStateOf(session.user?.name ?: "Driver") }
-    var liveCompanyId by remember { mutableStateOf(session.driver?.id ?: "") } // This usually maps to company or fallback
-    var accreditedCompanyId by remember { mutableStateOf<String?>(null) }
+    var accreditedCompanyId = "jettsan"
 
     // Accident report states
     var showAccidentDialog by remember { mutableStateOf(false) }
@@ -436,6 +436,8 @@ fun DriverDashboard(
     var isStartingTrip by remember { mutableStateOf(false) }
     var isMarkingPickup by remember { mutableStateOf(false) }
     var isMarkingDropoff by remember { mutableStateOf(false) }
+    var showSignatureDialog by remember { mutableStateOf(false) }
+    var endOdometerValue by remember { mutableStateOf(0.0) }
     var isMarkingReturnPickup by remember { mutableStateOf(false) }
     var isCompletingTrip by remember { mutableStateOf(false) }
     
@@ -580,7 +582,7 @@ fun DriverDashboard(
         val origin = "$currentLatitude,$currentLongitude"
         val destination = when (tripPhase) {
             "pending", "assigned", "accepted", "moving_to_pickup", "return_pickup" -> 
-                if (schedule.pickup_location?.latitude != null) "${schedule.pickup_location.latitude},${schedule.pickup_location.longitude}" else null
+                if (schedule.pickup_location?.firstOrNull()?.latitude != null) "${schedule.pickup_location.firstOrNull()!!.latitude},${schedule.pickup_location.firstOrNull()!!.longitude}" else null
             "picked_up", "moving_to_dropoff", "dropoff" -> 
                 if (schedule.dropoff_location?.latitude != null) "${schedule.dropoff_location.latitude},${schedule.dropoff_location.longitude}" else null
             else -> null
@@ -1471,7 +1473,7 @@ fun DriverDashboard(
                                                     "driver_uid" to uid,
                                                     "driver_email" to email,
                                                     "driver_name" to liveDriverName,
-                                                    "accredited_company_id" to (accreditedCompanyId ?: ""),
+                                                    "accredited_company_id" to "jettsan",
                                                     "action" to "time_in",
                                                     "timestamp" to FieldValue.serverTimestamp(),
                                                     "latitude" to currentLatitude,
@@ -1541,7 +1543,7 @@ fun DriverDashboard(
                                                      "driver_uid" to uid,
                                                      "driver_email" to email,
                                                      "driver_name" to liveDriverName,
-                                                     "accredited_company_id" to (accreditedCompanyId ?: ""),
+                                                     "accredited_company_id" to "jettsan",
                                                      "action" to "time_out",
                                                      "timestamp" to FieldValue.serverTimestamp(),
                                                      "latitude" to currentLatitude,
@@ -1742,7 +1744,7 @@ fun DriverDashboard(
                                         onClick = {
                                             val dest = polylinePoints.last()
                                             val address = if (tripPhase == "pickup" || tripPhase == "pending") 
-                                                nextSchedule?.pickup_location?.address ?: "" 
+                                                nextSchedule?.pickup_location?.firstOrNull()?.address ?: "" 
                                             else 
                                                 nextSchedule?.dropoff_location?.address ?: ""
                                             openExternalMaps(context, dest.latitude, dest.longitude, address)
@@ -1892,7 +1894,7 @@ fun DriverDashboard(
                                             scope.launch {
                                                 isReRouting = true
                                                 try {
-                                                    val dest = if (tripPhase == "pickup") nextSchedule?.pickup_location else nextSchedule?.dropoff_location
+                                                    val dest = if (tripPhase == "pickup") nextSchedule?.pickup_location?.firstOrNull() else nextSchedule?.dropoff_location
                                                     if (dest != null) {
                                                         val originStr = "${currentLatitude},${currentLongitude}"
                                                         val destStr = "${dest.latitude},${dest.longitude}"
@@ -2025,7 +2027,7 @@ fun DriverDashboard(
                                                 "driver_name" to liveDriverName,
                                                 "client_name" to (nextSchedule?.client?.name ?: "Unknown"),
                                                 "vehicle_plate" to (session.driver?.plateNumber ?: ""),
-                                                "pickup_location" to (nextSchedule?.pickup_location?.address ?: "Unknown"),
+                                                "pickup_location" to (nextSchedule?.pickup_location?.firstOrNull()?.address ?: "Unknown"),
                                                 "dropoff_location" to (nextSchedule?.dropoff_location?.address ?: "Unknown"),
                                                 "time_of_departure" to "", 
                                                 "time_of_arrival" to "",
@@ -2390,7 +2392,7 @@ fun DriverDashboard(
                             ) {
                                 Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Text("Passenger: ${nextSchedule?.client_name ?: "Fleet Assign"}", color = Color.White, fontWeight = FontWeight.Bold)
-                                    Text("Pickup: ${nextSchedule?.pickup_location?.address ?: "Pending"}", color = TextSecondary)
+                                    Text("Pickup: ${nextSchedule?.pickup_location?.firstOrNull()?.address ?: "Pending"}", color = TextSecondary)
                                     Text("Dropoff: ${nextSchedule?.dropoff_location?.address ?: "Pending"}", color = TextSecondary)
                                 }
                             }
@@ -2440,7 +2442,7 @@ fun DriverDashboard(
                                                     "driver_name" to liveDriverName,
                                                     "client_name" to (nextSchedule?.client?.name ?: "Unknown"),
                                                     "vehicle_plate" to (session.driver?.plateNumber ?: ""),
-                                                    "pickup_location" to (nextSchedule?.pickup_location?.address ?: "Unknown"),
+                                                    "pickup_location" to (nextSchedule?.pickup_location?.firstOrNull()?.address ?: "Unknown"),
                                                     "dropoff_location" to (nextSchedule?.dropoff_location?.address ?: "Unknown"),
                                                     "time_of_departure" to "",
                                                     "time_of_arrival" to "",
@@ -2550,7 +2552,7 @@ fun DriverDashboard(
                                 "driver_name" to liveDriverName,
                                 "client_name" to (nextSchedule?.client_name ?: "Unknown"),
                                 "vehicle_plate" to (session.driver?.plateNumber ?: ""),
-                                "pickup_location" to (nextSchedule?.pickup_location?.address ?: "Unknown"),
+                                "pickup_location" to (nextSchedule?.pickup_location?.firstOrNull()?.address ?: "Unknown"),
                                 "dropoff_location" to (nextSchedule?.dropoff_location?.address ?: "Unknown"),
                                 "time_of_departure" to (pickedUpAt ?: ""),
                                 "time_of_arrival" to (completedAt ?: ""),
@@ -2614,11 +2616,11 @@ fun DriverDashboard(
                 isStarting = isStarting,
                 onConfirm = { mileage ->
                     showOdometerDialog = false
+                    val sId = nextSchedule?.docId ?: return@OdometerDialog
+                    val curUid = auth.currentUser?.uid ?: return@OdometerDialog
                     scope.launch {
                         try {
                             isMarkingPickup = true
-                            val docId = nextSchedule?.docId ?: return@launch
-                            val uid = auth.currentUser?.uid ?: return@launch
                             
                             // 1. Automated Time In (DTR) if not already
                             if (!isTimedIn) {
@@ -2648,14 +2650,19 @@ fun DriverDashboard(
                             
                             // 2. Update Schedule with Odometer
                             val updateData = if (isStarting) {
-                                mapOf("start_odometer" to mileage, "trip_phase" to "picked_up", "picked_up_at" to FieldValue.serverTimestamp())
+                                mapOf("odometer_start" to mileage, "trip_phase" to "picked_up", "picked_up_at" to FieldValue.serverTimestamp())
                             } else {
-                                mapOf("end_odometer" to mileage)
+                                endOdometerValue = mileage
+                                showSignatureDialog = true
+                                emptyMap<String, Any>()
                             }
-                            db.collection("schedules").document(docId).update(updateData).await()
                             
-                            // 3. Update Driver's Current Mileage
-                            db.collection("drivers").document(uid).update("current_mileage", mileage).await()
+                            if (isStarting) {
+                                db.collection("schedules").document(docId).update(updateData).await()
+                                // 3. Update Driver's Current Mileage
+                                db.collection("drivers").document(uid).update("current_mileage", mileage).await()
+                                tripActionSuccess = "Trip started! Please drive safely to the destination."
+                            }
                             lastVehicleMileage = mileage
                             
                             if (!isStarting) {
@@ -2676,20 +2683,27 @@ fun DriverDashboard(
 
         // NSCRP: Signature / Refusal Dialog
         if (showSignatureDialog) {
+            val tId = nextSchedule?.docId ?: ""
             SignatureDialog(
+                tripId = tId,
                 onConfirm = { signatureUrl ->
                     showSignatureDialog = false
+                    val dId = nextSchedule?.docId ?: return@SignatureDialog
                     scope.launch {
                         try {
                             isCompletingTrip = true
-                            val docId = nextSchedule?.docId ?: return@launch
-                            db.collection("schedules").document(docId).update(
-                                "signature_url", signatureUrl,
+                            db.collection("schedules").document(dId).update(
+                                "passenger_signature_url", signatureUrl,
+                                "odometer_end", endOdometerValue,
                                 "trip_phase", "completed",
                                 "status", "completed",
                                 "completed_at", FieldValue.serverTimestamp()
                             ).await()
-                            tripActionSuccess = "Trip verified with signature and completed!"
+                            
+                            // Auto-trigger completion ticket
+                            targetTripId = dId
+                            showTripTicket = true
+                            tripActionSuccess = "Trip verified and completed!"
                         } catch (e: Exception) {
                             tripActionError = "Completion failed: ${e.message}"
                         } finally {
@@ -2699,17 +2713,22 @@ fun DriverDashboard(
                 },
                 onRefuse = { reason ->
                     showSignatureDialog = false
+                    val dId = nextSchedule?.docId ?: return@SignatureDialog
                     scope.launch {
                         try {
                             isCompletingTrip = true
-                            val docId = nextSchedule?.docId ?: return@launch
-                            db.collection("schedules").document(docId).update(
+                            db.collection("schedules").document(dId).update(
                                 "refusal_reason", reason,
+                                "odometer_end", endOdometerValue,
                                 "trip_phase", "completed",
                                 "status", "completed",
                                 "completed_at", FieldValue.serverTimestamp()
                             ).await()
-                            tripActionSuccess = "Trip completed with signature refusal recorded."
+                            
+                            // Auto-trigger completion ticket
+                            targetTripId = dId
+                            showTripTicket = true
+                            tripActionSuccess = "Refusal documented. Trip completed."
                         } catch (e: Exception) {
                             tripActionError = "Completion failed: ${e.message}"
                         } finally {
@@ -2884,66 +2903,140 @@ fun OdometerDialog(
 }
 
 @Composable
+@Composable
 fun SignatureDialog(
+    tripId: String,
     onConfirm: (String) -> Unit,
     onRefuse: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     var refusalReasonVal by remember { mutableStateOf("") }
     var showRefusalField by remember { mutableStateOf(false) }
+    var isSubmitting by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    
+    val paths = remember { mutableStateListOf<PathState>() }
+    val scope = rememberCoroutineScope()
 
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
-        Surface(shape = RoundedCornerShape(24.dp), color = CardBlue) {
-            Column(modifier = androidx.compose.ui.Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("CLIENT VERIFICATION", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+    androidx.compose.ui.window.Dialog(onDismissRequest = { if (!isSubmitting) onDismiss() }) {
+        Surface(
+            shape = RoundedCornerShape(24.dp), 
+            color = CardBlue,
+            modifier = Modifier.fillMaxWidth().padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp), 
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("CLIENT VERIFICATION", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color.White)
                 
                 if (!showRefusalField) {
+                    Text("Please ask the passenger to sign below:", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                    
                     Box(
-                        modifier = androidx.compose.ui.Modifier
+                        modifier = Modifier
                             .fillMaxWidth()
-                            .height(200.dp)
-                            .background(Color.White, RoundedCornerShape(8.dp))
-                            .border(1.dp, Color.Gray, RoundedCornerShape(8.dp)),
-                        contentAlignment = Alignment.Center
+                            .height(250.dp)
+                            .background(Color.White, RoundedCornerShape(12.dp))
+                            .border(2.dp, AccentTeal.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
                     ) {
-                        Text("Digital Signature Canvas", color = Color.Gray)
+                        SignaturePad(
+                            paths = paths,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        
+                        if (paths.isEmpty()) {
+                            Text("Draw signature here", color = Color.LightGray, modifier = Modifier.align(Alignment.Center))
+                        }
                     }
 
-                    Row(modifier = androidx.compose.ui.Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = { onConfirm("placeholder_signature_url") },
-                            modifier = androidx.compose.ui.Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(
+                            onClick = { paths.clear() },
+                            enabled = !isSubmitting && paths.isNotEmpty()
                         ) {
-                            Text("SAVE SIGNATURE", color = Midnight)
+                            Text("Clear", color = AccentOrange)
                         }
-                        
-                        OutlinedButton(
+                        Spacer(Modifier.weight(1f))
+                        TextButton(
                             onClick = { showRefusalField = true },
-                            modifier = androidx.compose.ui.Modifier.weight(1f)
+                            enabled = !isSubmitting
                         ) {
-                            Text("REFUSE TO SIGN", color = AccentOrange)
+                            Text("Passenger Refused", color = Color.White.copy(alpha = 0.7f))
                         }
                     }
+
+                    Button(
+                        onClick = {
+                            if (paths.isEmpty()) {
+                                error = "Signature is required"
+                                return@Button
+                            }
+                            scope.launch {
+                                try {
+                                    isSubmitting = true
+                                    error = null
+                                    val bitmap = FirebaseStorageHelper.createBitmapFromPaths(paths, 800, 500)
+                                    val url = FirebaseStorageHelper.uploadSignature(bitmap, tripId)
+                                    onConfirm(url)
+                                } catch (e: Exception) {
+                                    error = "Upload failed: ${e.message}"
+                                } finally {
+                                    isSubmitting = false
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
+                        enabled = !isSubmitting && paths.isNotEmpty()
+                    ) {
+                        if (isSubmitting) CircularProgressIndicator(color = Midnight, modifier = Modifier.size(24.dp))
+                        else Text("SAVE SIGNATURE", fontWeight = FontWeight.Bold, color = Midnight)
+                    }
                 } else {
+                    Text("REFUSAL TO SIGN", color = AccentOrange, fontWeight = FontWeight.Bold)
+                    Text("Please provide the reason for refusal:", color = TextSecondary)
+                    
                     OutlinedTextField(
                         value = refusalReasonVal,
                         onValueChange = { refusalReasonVal = it },
-                        label = { Text("Reason for Refusal") },
-                        modifier = androidx.compose.ui.Modifier.fillMaxWidth()
+                        label = { Text("Refusal Reason") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = AccentOrange,
+                            cursorColor = AccentOrange
+                        )
                     )
                     
+                    if (error != null) {
+                        Text(error!!, color = Color.Red, style = MaterialTheme.typography.bodySmall)
+                    }
+
                     Button(
-                        onClick = { onRefuse(refusalReasonVal) },
-                        modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                        onClick = {
+                            if (refusalReasonVal.trim().isEmpty()) {
+                                error = "Reason is mandatory"
+                                return@Button
+                            }
+                            onRefuse(refusalReasonVal)
+                        },
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = AccentOrange)
                     ) {
-                        Text("SUBMIT REFUSAL", color = Color.White)
+                        Text("SUBMIT REFUSAL", fontWeight = FontWeight.Bold)
                     }
                     
-                    TextButton(onClick = { showRefusalField = false }) {
-                        Text("Back to Signature", color = TextSecondary)
+                    TextButton(onClick = { showRefusalField = false; error = null }) {
+                        Text("Back to Signature", color = Color.White.copy(alpha = 0.6f))
                     }
+                }
+                
+                if (error != null && !showRefusalField) {
+                    Text(error!!, color = Color.Red, style = MaterialTheme.typography.bodySmall)
                 }
             }
         }

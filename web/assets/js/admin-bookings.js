@@ -44,7 +44,7 @@ onAuthStateChanged(auth, async (user) => {
         }
     }
 
-    const adminRoles = ['admin', 'super_admin', 'company_admin'];
+    const adminRoles = ['admin', 'super_admin'];
     const role = userData?.user_type || userData?.role;
 
     if (!userData || !adminRoles.includes(role)) {
@@ -177,6 +177,11 @@ async function showCreateBookingModal(clients) {
             <textarea id="special_instructions" class="form-input" rows="2" placeholder="e.g. Near the main gate..."></textarea>
         </div>
 
+        <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px; background: rgba(0, 212, 255, 0.05); padding: 12px; border-radius: 8px; border: 1px dashed var(--accent-blue);">
+            <input type="checkbox" id="modal_is_official" style="width: auto;">
+            <label for="modal_is_official" style="margin: 0; cursor: pointer; color: var(--accent-blue); font-weight: 700;">Official Trip (NSCRP Requirement)</label>
+        </div>
+
         <div class="form-group">
             <label for="modal_driver">Assign Driver (Optional)</label>
             <select id="modal_driver" class="form-input">
@@ -247,6 +252,8 @@ async function showCreateBookingModal(clients) {
             order: i + 1
         }));
 
+        const isOfficial = document.getElementById('modal_is_official').checked;
+
         if (pickupPoints.some(p => !p.name)) throw new Error("Please fill in all pickup locations.");
 
         const bookingId = generateNumericId().toString();
@@ -255,7 +262,7 @@ async function showCreateBookingModal(clients) {
             client_id: clientId,
             client_name: clientName,
             contractor: 'Jettsan',
-            isOfficial: false,
+            isOfficial: isOfficial,
 
             pickup_points: pickupPoints,
             pickup_location: pickupPoints[0].name,
@@ -316,6 +323,7 @@ async function showCreateBookingModal(clients) {
                 passengers: parseInt(document.getElementById('passengers').value) || 1,
                 return_to_pickup: document.getElementById('return_to_pickup').checked,
                 special_instructions: document.getElementById('special_instructions').value || '',
+                isOfficial: isOfficial,
                 created_at: serverTimestamp(),
                 updated_at: serverTimestamp()
             });
@@ -639,11 +647,11 @@ window.assignDriver = async (id) => {
             dropoff_location: booking.dropoff_location,
             dropoff_latitude: booking.dropoff_latitude || 0,
             dropoff_longitude: booking.dropoff_longitude || 0,
-            company_name: 'Jettsan', // Hardcoded for NSCRP
+            company_name: 'Jettsan',
             client_name: booking.client_name || '',
             return_to_pickup: booking.return_to_pickup || false,
             special_instructions: booking.special_instructions || '',
-            isOfficial: false, // Must be posted via dashboard to become official
+            isOfficial: booking.isOfficial || false,
             created_at: serverTimestamp(),
             updated_at: serverTimestamp()
         });

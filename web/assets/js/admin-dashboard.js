@@ -1,6 +1,6 @@
 import { auth, db } from "./firebase-init.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { collection, query, where, onSnapshot, getDocs, doc, getDoc, updateDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { collection, query, where, onSnapshot, getDocs, doc, getDoc, updateDoc, addDoc, serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { initLayout } from "./modules/ui.js";
 import { sanitizeFirestoreData, generateNumericId } from "./modules/data.js";
 
@@ -8,15 +8,59 @@ import { sanitizeFirestoreData, generateNumericId } from "./modules/data.js";
 let driversMap = null;
 let driverMarkers = {};
 let driverPolylines = {};
+let driverStopMarkers = {}; // driverId -> [MapOverlay]
 let allDriversData = {}; // Stores combined metadata + live location
 let emailToUidMap = {}; // Maps driver_email -> UID for fast lookup
 let pendingBookingsMap = new Map();
 let currentDispatchBookingId = null;
-let currentUserData = null;
-let selectedContractorId = 'Jettsan'; // Defaulting to Jettsan for NSCRP
 let unsubscribeStats = [];
 let infoWindow = null;
 let driverDTRStatus = {}; // email -> { action: 'time_in'|'time_out', timestamp: JS Date }
+
+// Live Map Assets
+let accidentOverlays = {}; // driverId -> AccidentOverlay
+let activeSchedulesData = {}; // driverId -> { stops: [], final: {}, tripId: "" }
+let driverPaths = {}; // driverId -> [{lat, lng}]
+
+class MapOverlay extends google.maps.OverlayView {
+    constructor(position, content, className) {
+        super();
+        this.position = position;
+        this.content = content;
+        this.className = className;
+        this.div = null;
+    }
+
+    onAdd() {
+        this.div = document.createElement('div');
+        this.div.className = this.className;
+        this.div.style.position = 'absolute';
+        this.div.innerHTML = this.content;
+        const panes = this.getPanes();
+        panes.overlayMouseTarget.appendChild(this.div);
+    }
+
+    draw() {
+        const overlayProjection = this.getProjection();
+        const sw = overlayProjection.fromLatLngToDivPixel(this.position);
+        if (sw && this.div) {
+            this.div.style.left = sw.x + 'px';
+            this.div.style.top = sw.y + 'px';
+        }
+    }
+
+    onRemove() {
+        if (this.div) {
+            this.div.parentNode.removeChild(this.div);
+            this.div = null;
+        }
+    }
+
+    setPosition(pos) {
+        this.position = pos;
+        this.draw();
+    }
+}
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -53,10 +97,7 @@ onAuthStateChanged(auth, async (user) => {
     initLayout('Dashboard', name);
     document.getElementById('welcomeMessage').innerText = `Welcome back, ${name}! Here's what's happening with your fleet.`;
 
-    // Restricted access logic for Jettsan
-    if (userRole === 'super_admin' || userRole === 'admin') {
-        // initCompanyFilter(); - Removed for single-tenant
-    }
+    // Dashboard initialized for NSCRP Jettsan
 
     // Start Live Listeners
     refreshDashboardData();
@@ -129,14 +170,15 @@ function initPostingFeature() {
             }
 
             const batchCount = snap.size;
-            let updated = 0;
+            const batch = writeBatch(db);
+            snap.docs.forEach(d => {
+                batch.update(d.ref, { 
+                    isOfficial: true,
+                    posted_at: serverTimestamp()
+                });
+            });
             
-            const promises = snap.docs.map(d => updateDoc(d.ref, { 
-                isOfficial: true,
-                posted_at: serverTimestamp()
-            }));
-            
-            await Promise.all(promises);
+            await batch.commit();
             
             alert(`SUCCESS: ${batchCount} schedules have been posted and are now LIVE for drivers.`);
             postBtn.innerHTML = '<i class="fas fa-check-circle"></i> Official Posted';
@@ -164,38 +206,6 @@ function initDashboardUI() {
     }
 }
 
-async function initCompanyFilter() {
-    const filter = document.getElementById('companyFilter');
-    if (!filter) return;
-
-    try {
-        const companiesSnap = await getDocs(query(collection(db, "accredited_companies"), where("status", "==", "active")));
-        
-        // Clear existing options except first
-        filter.innerHTML = '<option value="all">Global View (All Partners)</option>';
-        
-        companiesSnap.forEach(doc => {
-            const data = doc.data();
-            const option = document.createElement('option');
-            option.value = doc.id;
-            option.textContent = data.name || data.company_name || 'Unnamed Partner';
-            filter.appendChild(option);
-        });
-        
-        // Restore from storage
-        filter.value = selectedCompanyId;
-        filter.style.display = 'block';
-
-        filter.addEventListener('change', (e) => {
-            selectedCompanyId = e.target.value;
-            localStorage.setItem('fleetonix_global_company', selectedCompanyId);
-            refreshDashboardData();
-            updateMapFilters();
-        });
-    } catch (error) {
-        console.error("Error loading companies for filter:", error);
-    }
-}
 
 function refreshDashboardData() {
     unsubscribeStats.forEach(unsub => unsub());
@@ -249,18 +259,10 @@ function updateMapFilters() {
 }
 
 function initStats() {
-    // Real-time stats from Firestore
     let usersQuery = collection(db, "users");
     let bookingsQuery = query(collection(db, "bookings"), where("status", "==", "pending"));
     let schedulesQuery = collection(db, "schedules");
     let completedSchedulesQuery = query(collection(db, "schedules"), where("status", "==", "completed"));
-
-    if (selectedCompanyId !== 'all') {
-        usersQuery = query(usersQuery, where("accredited_company_id", "==", selectedCompanyId));
-        bookingsQuery = query(bookingsQuery, where("accredited_company_id", "==", selectedCompanyId));
-        schedulesQuery = query(schedulesQuery, where("accredited_company_id", "==", selectedCompanyId));
-        completedSchedulesQuery = query(completedSchedulesQuery, where("accredited_company_id", "==", selectedCompanyId));
-    }
 
     const unsubUsers = onSnapshot(usersQuery, (snapshot) => {
         const drivers = snapshot.docs.filter(d => (d.data().user_type === 'driver' || d.data().role === 'driver')).length;
@@ -291,11 +293,30 @@ function initStats() {
         if (pendingBadge) pendingBadge.innerText = snapshot.size;
     });
 
-    // Active Trips: status in ['started', 'in_progress']
-    const activeTripsQuery = query(schedulesQuery, where("status", "in", ["started", "in_progress"]));
+    // Active Trips: status in ['started', 'in_progress', 'pickup', 'dropoff']
+    const activeTripsQuery = query(schedulesQuery, where("status", "in", ["started", "in_progress", "pickup", "dropoff"]));
     const unsubSchedules = onSnapshot(activeTripsQuery, (snapshot) => {
         const activeSchedulesEl = document.getElementById('activeSchedules');
         if (activeSchedulesEl) activeSchedulesEl.innerText = snapshot.size;
+
+        snapshot.docChanges().forEach(change => {
+            const data = change.doc.data();
+            const driverId = data.driver_id;
+            if (!driverId) return;
+
+            if (change.type === "removed") {
+                delete activeSchedulesData[driverId];
+            } else {
+                activeSchedulesData[driverId] = {
+                    stops: Array.isArray(data.pickup_location) ? data.pickup_location : (data.pickup_location ? [data.pickup_location] : []),
+                    final: data.dropoff_location,
+                    tripId: change.doc.id,
+                    status: data.status
+                };
+            }
+            // Trigger marker refresh to update polylines/stops
+            if (driverMarkers[driverId]) refreshMarker(driverId);
+        });
     });
 
     // Extended Insights & Recent Completed Bookings
@@ -502,22 +523,104 @@ function refreshMarker(id) {
     const isRecentlyActive = !isNaN(lastActive) && (now - lastActive) < (15 * 60 * 1000); // Relaxed to 15 mins for better reliability
     const isOnline = isRecentlyActive || isOnDuty || status !== 'offline';
     const isAccident = d.current_status === 'accident' || d.is_accident === true;
+    const isCompleted = d.current_trip_phase === 'completed' || d.current_status === 'completed';
+
+    // Automated Cleanup for Completed Trips
+    if (isCompleted) {
+        if (driverPolylines[id]) { driverPolylines[id].setMap(null); delete driverPolylines[id]; }
+        if (driverPaths[id]) delete driverPaths[id];
+        if (accidentOverlays[id]) { accidentOverlays[id].setMap(null); delete accidentOverlays[id]; }
+        if (driverStopMarkers[id]) {
+            driverStopMarkers[id].forEach(m => m.setMap(null));
+            delete driverStopMarkers[id];
+        }
+    }
 
     if (driverMarkers[id]) {
         animateMarkerTo(driverMarkers[id], pos);
         driverMarkers[id].setIcon(markerIcon);
         driverMarkers[id].setOpacity(status === 'offline' ? 0.6 : 1.0);
-        driverMarkers[id].setVisible(isOnline || status !== 'offline');
+        // Hide standard marker if accident is active (since we show a blinking overlay instead)
+        driverMarkers[id].setVisible((isOnline || status !== 'offline') && !isAccident && !isCompleted);
         
-        // Accident Blinking (using BOUNCE as a visual cue)
-        if (isAccident) {
-            if (!driverMarkers[id].isBlinking) {
-                driverMarkers[id].setAnimation(google.maps.Animation.BOUNCE);
-                driverMarkers[id].isBlinking = true;
+        // Accident Blinking Implementation (CSS Animation via MapOverlay)
+        if (isAccident && !isCompleted) {
+            if (!accidentOverlays[id]) {
+                accidentOverlays[id] = new MapOverlay(
+                    pos, 
+                    '<div class="accident-marker-inner">!</div>', 
+                    'accident-marker-container'
+                );
+                accidentOverlays[id].setMap(driversMap);
+            } else {
+                accidentOverlays[id].setPosition(pos);
             }
-        } else {
-            driverMarkers[id].setAnimation(null);
-            driverMarkers[id].isBlinking = false;
+        } else if (accidentOverlays[id]) {
+            accidentOverlays[id].setMap(null);
+            delete accidentOverlays[id];
+        }
+
+        // Telemetry Polyline Implementation
+        if (!isCompleted && (status === 'in_progress' || status === 'pickup' || status === 'dropoff')) {
+            if (!driverPaths[id]) driverPaths[id] = [];
+            
+            const lastPoint = driverPaths[id][driverPaths[id].length - 1];
+            if (!lastPoint || (lastPoint.lat !== pos.lat || lastPoint.lng !== pos.lng)) {
+                driverPaths[id].push(pos);
+                if (driverPaths[id].length > 100) driverPaths[id].shift();
+            }
+
+            if (!driverPolylines[id]) {
+                driverPolylines[id] = new google.maps.Polyline({
+                    path: driverPaths[id],
+                    geodesic: true,
+                    strokeColor: trafficColor,
+                    strokeOpacity: 0.8,
+                    strokeWeight: 4,
+                    map: driversMap
+                });
+            } else {
+                driverPolylines[id].setPath(driverPaths[id]);
+                driverPolylines[id].setOptions({ strokeColor: trafficColor });
+            }
+        }
+
+        // Sequential Destination Milestones (Numbered Stops & Checkered Flag)
+        const mission = activeSchedulesData[id];
+        if (mission && !isCompleted) {
+            if (!driverStopMarkers[id]) driverStopMarkers[id] = [];
+            
+            // Clear existing and re-draw markers for this mission
+            driverStopMarkers[id].forEach(m => m.setMap(null));
+            driverStopMarkers[id] = [];
+
+            // 1. Numbered Intermediate Stops
+            if (mission.stops && mission.stops.length > 0) {
+                mission.stops.forEach((stop, index) => {
+                    if (stop.latitude && stop.longitude) {
+                        const stopPos = { lat: Number(stop.latitude), lng: Number(stop.longitude) };
+                        const overlay = new MapOverlay(
+                            stopPos,
+                            `<span>${index + 1}</span>`,
+                            'stop-marker-numbered'
+                        );
+                        overlay.setMap(driversMap);
+                        driverStopMarkers[id].push(overlay);
+                    }
+                });
+            }
+
+            // 2. Checkered Flag (Final Destination)
+            if (mission.final && mission.final.latitude && mission.final.longitude) {
+                const finalPos = { lat: Number(mission.final.latitude), lng: Number(mission.final.longitude) };
+                const flagOverlay = new MapOverlay(
+                    finalPos,
+                    '<i class="fas fa-flag-checkered"></i>',
+                    'finish-marker-checkered'
+                );
+                flagOverlay.setMap(driversMap);
+                driverStopMarkers[id].push(flagOverlay);
+            }
         }
 
         driverMarkers[id].driverData = d;
@@ -594,12 +697,6 @@ function updateOnlineDriversList() {
     const onlineThreshold = 10 * 60 * 1000;
     
     const validDrivers = Object.values(allDriversData).filter(d => {
-        if (!d.driver_name || d.driver_name === 'Loading Driver...') return false;
-        // Company Filter Removed
-        
-        const email = d.driver_email?.toLowerCase()?.trim();
-        if (!email || !driverDTRStatus[email] || driverDTRStatus[email].action !== 'time_in') return false;
-
         const lastUpdateMs = d.last_updated ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated))) : 0;
         return !isNaN(lastUpdateMs) && (now - lastUpdateMs) < onlineThreshold;
     });
@@ -659,7 +756,6 @@ function updateOnlineDisplay() {
     
     let onlineCount = 0;
     Object.values(allDriversData).forEach(d => {
-        // Company Filter Removed
         const lastUpdateMs = d.last_updated ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated))) : 0;
         if (!isNaN(lastUpdateMs) && (now - lastUpdateMs) < tenMins) {
             onlineCount++;
@@ -771,6 +867,31 @@ function renderRecentCompletedBookings(snapshot) {
     widget.innerHTML = html;
 }
 
+/**
+ * Checks if the 3:00 PM (15:00) cut-off for tomorrow's schedules has passed.
+ * Returns true if the targetDate is tomorrow and current local time is >= 15:00.
+ */
+function isCutOffPassed(targetDate) {
+    if (!targetDate) return false;
+    
+    // 1. Get tomorrow's date string (YYYY-MM-DD)
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+    // 2. Check if the targetDate is tomorrow
+    if (targetDate === tomorrowStr) {
+        // 3. Get current local time (hours)
+        const now = new Date();
+        const currentHour = now.getHours();
+        
+        // 4. Return true if it's 3:00 PM (15) or later
+        return currentHour >= 15;
+    }
+    
+    return false;
+}
+
 window.instantDispatch = async function(bookingId, driverId, driverName, btn) {
     if (!confirm(`Confirm 1-click dispatch to ${driverName}?`)) return;
 
@@ -782,6 +903,29 @@ window.instantDispatch = async function(bookingId, driverId, driverName, btn) {
     try {
         const bookingDoc = await getDoc(doc(db, "bookings", bookingId));
         const bookingData = bookingDoc.data();
+        const targetDate = bookingData.pickup_date || "";
+
+        // CUT-OFF RULE (3:00 PM for tomorrow)
+        if (isCutOffPassed(targetDate)) {
+            const role = currentUserData?.role || currentUserData?.user_type;
+            if (role !== 'super_admin' && role !== 'admin') {
+                alert(`⚠️ CUT-OFF PASSED: It is past 3:00 PM. You can no longer modify or dispatch schedules for tomorrow (${targetDate}). Please contact a Super Admin if this is urgent.`);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = `<i class="fas fa-bolt"></i> Instant`;
+                }
+                return;
+            } else {
+                if (!confirm(`NOTICE: The 3:00 PM cut-off for tomorrow (${targetDate}) has passed. Do you want to OVERRIDE and proceed with this URGENT dispatch?`)) {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = `<i class="fas fa-bolt"></i> Instant`;
+                    }
+                    return;
+                }
+            }
+        }
+
         const driverDoc = await getDoc(doc(db, "drivers", driverId));
         const driverData = driverDoc.exists() ? driverDoc.data() : {};
         const driverEmail = driverData.driver_email || "";
@@ -816,6 +960,7 @@ window.instantDispatch = async function(bookingId, driverId, driverName, btn) {
             schedule_time: bookingData.pickup_time || "",
             return_to_pickup: bookingData.return_to_pickup || false,
             special_instructions: bookingData.special_instructions || "",
+            isOfficial: false, // Default is unofficial until posted
             created_at: serverTimestamp(),
             updated_at: serverTimestamp()
         });
@@ -923,6 +1068,25 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const bookingDoc = await getDoc(doc(db, "bookings", currentDispatchBookingId));
                 const bookingData = bookingDoc.data();
+                const targetDate = bookingData.pickup_date || "";
+
+                // CUT-OFF RULE (3:00 PM for tomorrow)
+                if (isCutOffPassed(targetDate)) {
+                    const role = currentUserData?.role || currentUserData?.user_type;
+                    if (role !== 'super_admin' && role !== 'admin') {
+                        alert(`⚠️ CUT-OFF PASSED: It is past 3:00 PM. You can no longer modify or dispatch schedules for tomorrow (${targetDate}). Please contact a Super Admin if this is urgent.`);
+                        confirmBtn.disabled = false;
+                        confirmBtn.innerText = "Confirm Dispatch";
+                        return;
+                    } else {
+                        if (!confirm(`NOTICE: The 3:00 PM cut-off for tomorrow (${targetDate}) has passed. Do you want to OVERRIDE and proceed with this URGENT dispatch?`)) {
+                            confirmBtn.disabled = false;
+                            confirmBtn.innerText = "Confirm Dispatch";
+                            return;
+                        }
+                    }
+                }
+
                 const driverDoc = await getDoc(doc(db, "drivers", driverId));
                 const driverData = driverDoc.data();
                 const driverEmail = driverData.driver_email || "";
@@ -948,6 +1112,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     dropoff_location: bookingData.dropoff_location?.text || bookingData.dropoff_location || "",
                     schedule_date: bookingData.pickup_date || "",
                     schedule_time: bookingData.pickup_time || "",
+                    isOfficial: false, // Default is unofficial until posted
                     created_at: serverTimestamp(),
                     updated_at: serverTimestamp()
                 });
