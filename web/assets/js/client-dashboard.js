@@ -7,6 +7,8 @@ let clientMap;
 let markers = {};
 let polylines = {};
 let activeDriverEmails = new Set();
+let driverDTRStatus = {}; // email -> { action: 'time_in'|'time_out', timestamp: JS Date }
+let currentUserCompanyId = null;
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -14,13 +16,59 @@ onAuthStateChanged(auth, async (user) => {
         return;
     }
 
-    // Dashboard UI Init
-    initLayout('Dashboard', null); 
-    initMap();
-    initStats();
-    initRecentBookings();
-    initActiveSchedules();
+    try {
+        // Fetch User Profile to get Company ID
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists()) {
+            const userData = userDoc.data();
+            currentUserCompanyId = userData.accredited_company_id;
+            initLayout('Dashboard', userData.full_name);
+        } else {
+            initLayout('Dashboard', user.email.split('@')[0]);
+        }
+        
+        initMap();
+        initStats();
+        initRecentBookings();
+        initActiveSchedules();
+        initDTRStatusSync();
+    } catch (error) {
+        console.error("Dashboard init error:", error);
+    }
 });
+
+/**
+ * Tracks real-time availability based on DTR (Time In / Time Out) logs for today.
+ */
+function initDTRStatusSync() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Only listen to logs for the client's company
+    const dtrQuery = currentUserCompanyId 
+        ? query(collection(db, "dtr_logs"), where("timestamp", ">=", today), where("accredited_company_id", "==", currentUserCompanyId))
+        : query(collection(db, "dtr_logs"), where("timestamp", ">=", today));
+    
+    onSnapshot(dtrQuery, (snapshot) => {
+        snapshot.docChanges().forEach(change => {
+            const data = change.doc.data();
+            const email = data.driver_email?.toLowerCase()?.trim();
+            if (!email) return;
+
+            const logTime = data.timestamp?.toDate() || new Date();
+            
+            if (!driverDTRStatus[email] || logTime > driverDTRStatus[email].timestamp) {
+                driverDTRStatus[email] = {
+                    action: data.action,
+                    timestamp: logTime
+                };
+            }
+        });
+
+        // Refresh tracking if drivers time out
+        syncDriverTracking();
+    });
+}
 
 function initMap() {
     const mapEl = document.getElementById('driversMap');
@@ -236,23 +284,43 @@ function setupLocationListener(driverId) {
 function initStats() {
     const userEmail = auth.currentUser.email;
     
+    // Scoped queries to Client's Company
+    const baseQuery = collection(db, "bookings");
+    const activeBaseQuery = collection(db, "schedules");
+
     // Pending Bookings
-    onSnapshot(query(collection(db, "bookings"), where("client_email", "==", userEmail), where("status", "==", "pending")), (snap) => {
+    let pendingQ = query(baseQuery, where("status", "==", "pending"));
+    if (currentUserCompanyId) pendingQ = query(pendingQ, where("accredited_company_id", "==", currentUserCompanyId));
+    else pendingQ = query(pendingQ, where("client_email", "==", userEmail));
+    
+    onSnapshot(pendingQ, (snap) => {
         document.getElementById('pendingBookings').innerText = snap.size;
     });
 
     // Active Schedules
-    onSnapshot(query(collection(db, "schedules"), where("client_email", "==", userEmail), where("trip_phase", "!=", "completed")), (snap) => {
+    let activeQ = query(activeBaseQuery, where("trip_phase", "!=", "completed"));
+    if (currentUserCompanyId) activeQ = query(activeQ, where("accredited_company_id", "==", currentUserCompanyId));
+    else activeQ = query(activeQ, where("client_email", "==", userEmail));
+
+    onSnapshot(activeQ, (snap) => {
         document.getElementById('activeSchedules').innerText = snap.size;
     });
 
     // Total Bookings
-    onSnapshot(query(collection(db, "bookings"), where("client_email", "==", userEmail)), (snap) => {
+    let totalQ = collection(db, "bookings");
+    if (currentUserCompanyId) totalQ = query(totalQ, where("accredited_company_id", "==", currentUserCompanyId));
+    else totalQ = query(totalQ, where("client_email", "==", userEmail));
+
+    onSnapshot(totalQ, (snap) => {
         document.getElementById('totalBookings').innerText = snap.size;
     });
     
     // Completed Trips
-    onSnapshot(query(collection(db, "bookings"), where("client_email", "==", userEmail), where("status", "==", "completed")), (snap) => {
+    let completedQ = query(collection(db, "bookings"), where("status", "==", "completed"));
+    if (currentUserCompanyId) completedQ = query(completedQ, where("accredited_company_id", "==", currentUserCompanyId));
+    else completedQ = query(completedQ, where("client_email", "==", userEmail));
+
+    onSnapshot(completedQ, (snap) => {
         document.getElementById('completedBookings').innerText = snap.size;
     });
 

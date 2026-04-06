@@ -15,6 +15,7 @@ let currentUserData = null;
 let selectedCompanyId = localStorage.getItem('fleetonix_global_company') || 'all';
 let unsubscribeStats = [];
 let infoWindow = null;
+let driverDTRStatus = {}; // email -> { action: 'time_in'|'time_out', timestamp: JS Date }
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -126,6 +127,42 @@ function refreshDashboardData() {
     unsubscribeStats.forEach(unsub => unsub());
     unsubscribeStats = [];
     initStats();
+    initDTRStatusSync();
+}
+
+/**
+ * Tracks real-time availability based on DTR (Time In / Time Out) logs for today.
+ */
+function initDTRStatusSync() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const dtrQuery = query(collection(db, "dtr_logs"), where("timestamp", ">=", today));
+    
+    onSnapshot(dtrQuery, (snapshot) => {
+        snapshot.docChanges().forEach(change => {
+            const data = change.doc.data();
+            const email = data.driver_email?.toLowerCase()?.trim();
+            if (!email) return;
+
+            const logTime = data.timestamp?.toDate() || new Date();
+            
+            // Only update if this log is newer than what we have
+            if (!driverDTRStatus[email] || logTime > driverDTRStatus[email].timestamp) {
+                driverDTRStatus[email] = {
+                    action: data.action, // 'time_in' or 'time_out'
+                    timestamp: logTime
+                };
+            }
+        });
+
+        // Trigger UI updates to reflect new availability
+        updateOnlineDriversList();
+        updateOnlineDisplay();
+        Object.keys(driverMarkers).forEach(id => {
+            if (allDriversData[id]) refreshMarker(id, allDriversData[id]);
+        });
+    });
 }
 
 function updateMapFilters() {
@@ -311,13 +348,13 @@ function updateDriverState(id, data, source) {
     
     if (source === 'metadata') {
         Object.assign(allDriversData[id], {
-            driver_name: data.driver_name,
+            driver_name: data.driver_name || existing.driver_name || 'Loading Driver...',
             current_status: data.current_status,
             vehicle_assigned: data.vehicle_assigned,
             plate_number: data.plate_number,
-            driver_email: (data.driver_email || "").toLowerCase().trim(),
+            driver_email: data.driver_email?.toLowerCase()?.trim() || existing.driver_email,
             accredited_company_id: data.accredited_company_id || "",
-            profile_image_url: data.profile_image_url || ""
+            profile_image_url: data.profile_image_url || existing.profile_image_url
         });
     } else if (source === 'location') {
         const existingStatus = allDriversData[id].current_status || 'offline';
@@ -339,17 +376,23 @@ function updateDriverState(id, data, source) {
 
 function refreshMarker(id) {
     const d = allDriversData[id];
-    if (!d.current_latitude || !d.current_longitude) return;
+    if (!d || !d.current_latitude || !d.current_longitude) return;
 
     const pos = { lat: d.current_latitude, lng: d.current_longitude };
     const status = d.current_trip_phase || d.current_status || 'available';
     const markerIcon = getMarkerIcon(status);
-    const matchesCompany = selectedCompanyId === 'all' || d.accredited_company_id === selectedCompanyId;
 
     const now = Date.now();
     const tenMins = 10 * 60 * 1000;
     const lastActive = d.last_updated ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated))) : 0;
-    const isOnline = !isNaN(lastActive) && (now - lastActive) < tenMins;
+    
+    // Core Availability Logic: Heartbeat + DTR Status + Company Filter
+    const email = d.driver_email?.toLowerCase()?.trim();
+    const dtr = driverDTRStatus[email];
+    const isOnDuty = dtr ? dtr.action === 'time_in' : false;
+    
+    const isOnline = !isNaN(lastActive) && (now - lastActive) < tenMins && isOnDuty;
+    const matchesCompany = selectedCompanyId === 'all' || d.accredited_company_id === selectedCompanyId;
 
     if (driverMarkers[id]) {
         animateMarkerTo(driverMarkers[id], pos);
@@ -432,6 +475,9 @@ function updateOnlineDriversList() {
         if (!d.driver_name || d.driver_name === 'Loading Driver...') return false;
         if (selectedCompanyId !== 'all' && d.accredited_company_id !== selectedCompanyId) return false;
         
+        const email = d.driver_email?.toLowerCase()?.trim();
+        if (!email || !driverDTRStatus[email] || driverDTRStatus[email].action !== 'time_in') return false;
+
         const lastUpdateMs = d.last_updated ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated))) : 0;
         return !isNaN(lastUpdateMs) && (now - lastUpdateMs) < onlineThreshold;
     });
