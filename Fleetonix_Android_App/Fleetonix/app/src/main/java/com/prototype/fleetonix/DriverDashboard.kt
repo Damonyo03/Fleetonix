@@ -2605,8 +2605,6 @@ fun DriverDashboard(
                 isReporting = isReportingAccident
             )
         }
-
-        }
         
         // NSCRP: Odometer Reading Dialog
         if (showOdometerDialog) {
@@ -2722,7 +2720,6 @@ fun DriverDashboard(
                 onDismiss = { showSignatureDialog = false }
             )
         }
-    }
 
     // Navigation Overlays
     if (showProfile) {
@@ -2734,13 +2731,14 @@ fun DriverDashboard(
             BackHandler { showTripHistory = false }
             TripHistoryScreen(onBack = { showTripHistory = false })
         }
-
         if (showDtrHistory) {
             BackHandler { showDtrHistory = false }
             DTRHistoryScreen(onBack = { showDtrHistory = false })
         }
-    }
-}
+        }
+    } // End of ModalNavigationDrawer main content lambda
+} // End of outer Box (1167)
+} // End of DriverDashboard function (236)
 
 @Composable
 fun SpeedometerWidget(speedKmH: Float, modifier: Modifier = Modifier) {

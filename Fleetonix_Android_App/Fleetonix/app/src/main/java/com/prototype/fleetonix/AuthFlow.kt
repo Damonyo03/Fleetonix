@@ -197,14 +197,13 @@ fun AuthFlow() {
                             ),
                             client = DriverClientInfo(
                                 company = data["company_name"] as? String,
-                                name = data["client_name"] as? String,
-                                phone = data["client_phone"] as? String,
-                                email = data["client_email"] as? String
+                                name = data["client_name"] as? String
                             ),
                             client_name = data["client_name"] as? String,
                             return_to_pickup = data["return_to_pickup"] as? Boolean ?: false,
                             return_pickup_time = data["return_pickup_time"] as? String
                         )
+
                     }.sortedWith(compareByDescending<DriverSchedule> { 
                         when (it.trip_phase) {
                             "pending" -> 3
