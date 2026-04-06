@@ -251,6 +251,12 @@ fun DriverDashboard(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var showProfile by remember { mutableStateOf(false) }
     var showTripHistory by remember { mutableStateOf(false) }
+    var showDtrHistory by remember { mutableStateOf(false) }
+
+    // Live Metadata States
+    var liveDriverName by remember { mutableStateOf(session.user?.name ?: "Driver") }
+    var liveCompanyId by remember { mutableStateOf(session.driver?.id ?: "") } // This usually maps to company or fallback
+    var accreditedCompanyId by remember { mutableStateOf<String?>(null) }
 
     // Accident report states
     var showAccidentDialog by remember { mutableStateOf(false) }
@@ -290,29 +296,44 @@ fun DriverDashboard(
     var showReRoutePrompt by remember { mutableStateOf(false) }
     var isReRouting by remember { mutableStateOf(false) }
 
-    // Check DTR status on init
+    // Check DTR status and Metadata on init
     LaunchedEffect(auth.currentUser?.uid) {
         val uid = auth.currentUser?.uid ?: return@LaunchedEffect
-        db.collection("drivers").document(uid).get().addOnSuccessListener { doc ->
-            isTimedIn = doc.getBoolean("is_currently_timed_in") ?: false
-            
-            // Also fetch the last time_in log for hour calculation
-            db.collection("dtr_logs")
-                .whereEqualTo("driver_uid", uid)
-                .whereEqualTo("action", "time_in")
-                .orderBy("timestamp", Query.Direction.DESCENDING)
-                .limit(1)
-                .get()
-                .addOnSuccessListener { logs ->
-                    val lastLog = logs.documents.firstOrNull()
-                    if (lastLog != null) {
-                        val ts = lastLog.getTimestamp("timestamp")
-                        if (ts != null) {
-                            lastTimeInObj = ts.toDate().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime()
-                            lastTimeInStr = lastTimeInObj?.format(DateTimeFormatter.ofPattern("hh:mm a"))
+        
+        // 1. Listen for User Profile (Metadata Sync)
+        db.collection("users").document(uid).addSnapshotListener { snapshot, _ ->
+            if (snapshot != null && snapshot.exists()) {
+                liveDriverName = snapshot.getString("full_name") ?: liveDriverName
+                accreditedCompanyId = snapshot.getString("accredited_company_id")
+            }
+        }
+
+        // 2. Listen for Driver Status
+        db.collection("drivers").document(uid).addSnapshotListener { snapshot, _ ->
+            if (snapshot != null && snapshot.exists()) {
+                val doc = snapshot
+                isTimedIn = doc.getBoolean("is_currently_timed_in") ?: false
+                
+                // Also fetch the last time_in log for hour calculation if not currently in state
+                if (isTimedIn && lastTimeInObj == null) {
+                    db.collection("dtr_logs")
+                        .whereEqualTo("driver_uid", uid)
+                        .whereEqualTo("action", "time_in")
+                        .orderBy("timestamp", Query.Direction.DESCENDING)
+                        .limit(1)
+                        .get()
+                        .addOnSuccessListener { logs ->
+                            val lastLog = logs.documents.firstOrNull()
+                            if (lastLog != null) {
+                                val ts = lastLog.getTimestamp("timestamp")
+                                if (ts != null) {
+                                    lastTimeInObj = ts.toDate().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime()
+                                    lastTimeInStr = lastTimeInObj?.format(DateTimeFormatter.ofPattern("hh:mm a"))
+                                }
+                            }
                         }
-                    }
                 }
+            }
         }
     }
 
@@ -1173,9 +1194,8 @@ fun DriverDashboard(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         // Hi, [driver name] - left aligned, normal font
-                        val driverName = session.user?.name ?: "Driver"
                         Text(
-                            text = "Hi, $driverName",
+                            text = "Hi, $liveDriverName",
                             color = TextPrimary,
                             style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.fillMaxWidth(),
@@ -1206,6 +1226,34 @@ fun DriverDashboard(
                                 Spacer(modifier = Modifier.padding(horizontal = 8.dp))
                                 Text(
                                     text = "Driver's Profile",
+                                    color = TextPrimary,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        }
+
+                        // Time Record History (DTR)
+                        TextButton(
+                            onClick = {
+                                scope.launch { drawerState.close() }
+                                showDtrHistory = true
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.Start,
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Timer,
+                                    contentDescription = "Time History",
+                                    tint = TextPrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.padding(horizontal = 8.dp))
+                                Text(
+                                    text = "Time Record History",
                                     color = TextPrimary,
                                     style = MaterialTheme.typography.bodyLarge
                                 )
@@ -1424,6 +1472,8 @@ fun DriverDashboard(
                                                 val logData = hashMapOf(
                                                     "driver_uid" to uid,
                                                     "driver_email" to email,
+                                                    "driver_name" to liveDriverName,
+                                                    "accredited_company_id" to (accreditedCompanyId ?: ""),
                                                     "action" to "time_in",
                                                     "timestamp" to FieldValue.serverTimestamp(),
                                                     "latitude" to currentLatitude,
@@ -1490,7 +1540,8 @@ fun DriverDashboard(
                                                  val logData = hashMapOf(
                                                      "driver_uid" to uid,
                                                      "driver_email" to email,
-                                                     "driver_name" to (session.user?.name ?: "Driver"),
+                                                     "driver_name" to liveDriverName,
+                                                     "accredited_company_id" to (accreditedCompanyId ?: ""),
                                                      "action" to "time_out",
                                                      "timestamp" to FieldValue.serverTimestamp(),
                                                      "latitude" to currentLatitude,
@@ -2583,6 +2634,11 @@ fun DriverDashboard(
         if (showTripHistory) {
             BackHandler { showTripHistory = false }
             TripHistoryScreen(onBack = { showTripHistory = false })
+        }
+
+        if (showDtrHistory) {
+            BackHandler { showDtrHistory = false }
+            DTRHistoryScreen(onBack = { showDtrHistory = false })
         }
     }
 }

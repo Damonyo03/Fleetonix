@@ -151,6 +151,8 @@ function initDTRStatusSync() {
             if (!driverDTRStatus[email] || logTime > driverDTRStatus[email].timestamp) {
                 driverDTRStatus[email] = {
                     action: data.action, // 'time_in' or 'time_out'
+                    name: data.driver_name,
+                    companyId: data.accredited_company_id,
                     timestamp: logTime
                 };
             }
@@ -502,12 +504,17 @@ function updateOnlineDriversList() {
         const lastUpdateMs = driver.last_updated ? (driver.last_updated.seconds * 1000) : 0;
         const isLive = lastUpdateMs > 0 && (now - lastUpdateMs) < liveThreshold;
         const vehicleInfo = driver.vehicle_assigned ? `${driver.vehicle_assigned}${driver.plate_number ? ' · ' + driver.plate_number : ''}` : '';
+        const email = driver.driver_email?.toLowerCase()?.trim();
+
+        const displayName = (driver.driver_name && driver.driver_name !== 'Loading...' && driver.driver_name !== 'Loading Driver...') 
+            ? driver.driver_name 
+            : (driverDTRStatus[email]?.name || 'Unnamed Driver');
 
         return `
             <div class="driver-item ${status === 'offline' ? 'offline' : ''} ${isLive ? 'pulse' : ''}" onclick="focusDriver('${driver.id}')" title="${vehicleInfo}">
                 <div class="status-dot ${displayStatus}"></div>
                 <div class="driver-info">
-                    <div class="driver-name">${driver.driver_name || 'Unnamed Driver'}</div>
+                    <div class="driver-name">${displayName}</div>
                     <div class="driver-status-text ${displayStatus}">${statusLabel}</div>
                     ${vehicleInfo ? `<div style="font-size:0.7em; color:var(--text-muted); margin-top:2px;"><i class="fas fa-car" style="font-size:0.8em;"></i> ${vehicleInfo}</div>` : ''}
                 </div>
