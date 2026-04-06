@@ -86,12 +86,13 @@ async function initCompanyFilter() {
         const companiesSnap = await getDocs(query(collection(db, "accredited_companies"), where("status", "==", "active")));
         
         // Clear existing options except first
-        filter.innerHTML = '<option value="all">All Companies</option>';
+        filter.innerHTML = '<option value="all">Global View (All Partners)</option>';
         
         companiesSnap.forEach(doc => {
+            const data = doc.data();
             const option = document.createElement('option');
             option.value = doc.id;
-            option.textContent = doc.data().name;
+            option.textContent = data.name || data.company_name || 'Unnamed Partner';
             filter.appendChild(option);
         });
         
@@ -139,9 +140,13 @@ function initStats() {
 
     const unsubUsers = onSnapshot(usersQuery, (snapshot) => {
         const drivers = snapshot.docs.filter(d => (d.data().user_type === 'driver' || d.data().role === 'driver')).length;
-        const clients = snapshot.docs.filter(d => (d.data().user_type === 'client' || d.data().role === 'client')).length;
         document.getElementById('totalDrivers').innerText = drivers;
-        document.getElementById('totalClients').innerText = clients;
+    });
+
+    const unsubPartners = onSnapshot(collection(db, "accredited_companies"), (snapshot) => {
+        const partnersCount = snapshot.docs.filter(d => d.data().status === 'active').length;
+        const totalPartnersEl = document.getElementById('totalClients');
+        if (totalPartnersEl) totalPartnersEl.innerText = partnersCount;
     });
     
     // Listen for new accidents
@@ -199,7 +204,7 @@ function initStats() {
         document.getElementById('monthlyBookings').innerText = monthCount;
     });
 
-    unsubscribeStats.push(unsubUsers, unsubAccidents, unsubBookings, unsubSchedules, unsubCompleted);
+    unsubscribeStats.push(unsubUsers, unsubPartners, unsubAccidents, unsubBookings, unsubSchedules, unsubCompleted);
 }
 
 function animateMarkerTo(marker, newPos) {
@@ -363,36 +368,36 @@ function getInfoWindowContent(driver) {
         <div class="map-info-window" style="color: #333; padding: 12px; min-width: 220px; font-family: 'Inter', sans-serif;">
             <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; border-bottom:1px solid #eee; padding-bottom:8px;">
                 <div style="width:40px; height:40px; border-radius:50%; background:var(--card-blue); display:flex; align-items:center; justify-content:center; overflow:hidden;">
-                    ${driver.profile_image_url ? \`<img src="\${driver.profile_image_url}" style="width:100%; height:100%; object-fit:cover;">\` : \`<i class="fas fa-user-circle" style="font-size:24px; color:var(--accent-teal);"></i>\`}
+                    ${driver.profile_image_url ? `<img src="${driver.profile_image_url}" style="width:100%; height:100%; object-fit:cover;">` : `<i class="fas fa-user-circle" style="font-size:24px; color:var(--accent-teal);"></i>`}
                 </div>
                 <div>
-                    <strong style="display: block; font-size: 15px; color:var(--midnight);">\${driver.driver_name || driver.driver_email || 'Fleet Driver'}</strong>
-                    <span style="font-size: 11px; color: #666;">ID: \${driver.id.substring(0,8)}...</span>
+                    <strong style="display: block; font-size: 15px; color:var(--midnight);">${driver.driver_name || driver.driver_email || 'Fleet Driver'}</strong>
+                    <span style="font-size: 11px; color: #666;">ID: ${driver.id.substring(0,8)}...</span>
                 </div>
             </div>
             <div style="margin-bottom: 10px;">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <span style="font-size: 11px; color: #888; text-transform:uppercase; letter-spacing:0.5px;">Current Status</span>
-                    <span style="color: \${getStatusColor(status)}; font-weight: 700; font-size: 11px; background:\${getStatusColor(status)}15; padding:2px 8px; border-radius:10px;">\${status.replace(/_/g, ' ').toUpperCase()}</span>
+                    <span style="color: ${getStatusColor(status)}; font-weight: 700; font-size: 11px; background:${getStatusColor(status)}15; padding:2px 8px; border-radius:10px;">${status.replace(/_/g, ' ').toUpperCase()}</span>
                 </div>
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
                 <div style="font-size: 11px; color: #555; background:#f8fafc; padding:6px; border-radius:6px;">
-                    <i class="fas fa-tachometer-alt" style="color:var(--accent-blue); width:14px;"></i> <strong>\${speedKmh}</strong> <small>km/h</small>
+                    <i class="fas fa-tachometer-alt" style="color:var(--accent-blue); width:14px;"></i> <strong>${speedKmh}</strong> <small>km/h</small>
                 </div>
                 <div style="font-size: 11px; color: #555; background:#f8fafc; padding:6px; border-radius:6px;">
-                    <i class="fas fa-compass" style="color:var(--accent-blue); width:14px;"></i> <strong>\${heading}°</strong> <small>HDG</small>
+                    <i class="fas fa-compass" style="color:var(--accent-blue); width:14px;"></i> <strong>${heading}°</strong> <small>HDG</small>
                 </div>
                 <div style="font-size: 11px; color: #555; background:#f8fafc; padding:6px; border-radius:6px; grid-column: 1 / span 2;">
-                    <i class="fas fa-car" style="color:var(--accent-teal); width:14px;"></i> \${driver.vehicle_assigned || 'No Vehicle'} · \${driver.plate_number || 'No Plate'}
+                    <i class="fas fa-car" style="color:var(--accent-teal); width:14px;"></i> ${driver.vehicle_assigned || 'No Vehicle'} · ${driver.plate_number || 'No Plate'}
                 </div>
             </div>
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; border-top:1px solid #f1f5f9; padding-top:8px;">
-                <span style="font-size: 10px; color: #94a3b8;">\${driver.wifi_ssid ? \`<i class="fas fa-wifi"></i> \${driver.wifi_ssid}\` : 'Satellite Sync'}</span>
-                \${driver.last_updated ? \`<span style="font-size: 9px; color: #94a3b8;">Updated: \${new Date(driver.last_updated.seconds * 1000).toLocaleTimeString()}</span>\` : ''}
+                <span style="font-size: 10px; color: #94a3b8;">${driver.wifi_ssid ? `<i class="fas fa-wifi"></i> ${driver.wifi_ssid}` : 'Satellite Sync'}</span>
+                ${driver.last_updated ? `<span style="font-size: 9px; color: #94a3b8;">Updated: ${new Date(driver.last_updated.seconds * 1000).toLocaleTimeString()}</span>` : ''}
             </div>
         </div>
-    \`;
+    `;
 }
 
 function updateOnlineDriversList() {
@@ -431,22 +436,22 @@ function updateOnlineDriversList() {
         const statusLabel = displayStatus.replace(/_/g, ' ');
         const lastUpdateMs = driver.last_updated ? (driver.last_updated.seconds * 1000) : 0;
         const isLive = lastUpdateMs > 0 && (now - lastUpdateMs) < liveThreshold;
-        const vehicleInfo = driver.vehicle_assigned ? \`\${driver.vehicle_assigned}\${driver.plate_number ? ' · ' + driver.plate_number : ''}\` : '';
+        const vehicleInfo = driver.vehicle_assigned ? `${driver.vehicle_assigned}${driver.plate_number ? ' · ' + driver.plate_number : ''}` : '';
 
-        return \`
-            <div class="driver-item \${status === 'offline' ? 'offline' : ''} \${isLive ? 'pulse' : ''}" onclick="focusDriver('\${driver.id}')" title="\${vehicleInfo}">
-                <div class="status-dot \${displayStatus}"></div>
+        return `
+            <div class="driver-item ${status === 'offline' ? 'offline' : ''} ${isLive ? 'pulse' : ''}" onclick="focusDriver('${driver.id}')" title="${vehicleInfo}">
+                <div class="status-dot ${displayStatus}"></div>
                 <div class="driver-info">
-                    <div class="driver-name">\${driver.driver_name || 'Unnamed Driver'}</div>
-                    <div class="driver-status-text \${displayStatus}">\${statusLabel}</div>
-                    \${vehicleInfo ? \`<div style="font-size:0.7em; color:var(--text-muted); margin-top:2px;"><i class="fas fa-car" style="font-size:0.8em;"></i> \${vehicleInfo}</div>\` : ''}
+                    <div class="driver-name">${driver.driver_name || 'Unnamed Driver'}</div>
+                    <div class="driver-status-text ${displayStatus}">${statusLabel}</div>
+                    ${vehicleInfo ? `<div style="font-size:0.7em; color:var(--text-muted); margin-top:2px;"><i class="fas fa-car" style="font-size:0.8em;"></i> ${vehicleInfo}</div>` : ''}
                 </div>
                 <div class="driver-badge-area">
-                    \${status === 'available' ? \`<span class="status-badge available \${isLive ? 'premium' : ''}" style="font-size: 0.65rem; padding: 2px 6px;">Available</span>\` : ''}
-                    \${['on_schedule', 'accepted', 'pickup', 'dropoff', 'in_progress'].includes(displayStatus) ? \`<span class="status-badge \${displayStatus}" style="font-size: 0.65rem; padding: 2px 6px;">\${statusLabel}</span>\` : ''}
+                    ${status === 'available' ? `<span class="status-badge available ${isLive ? 'premium' : ''}" style="font-size: 0.65rem; padding: 2px 6px;">Available</span>` : ''}
+                    ${['on_schedule', 'accepted', 'pickup', 'dropoff', 'in_progress'].includes(displayStatus) ? `<span class="status-badge ${displayStatus}" style="font-size: 0.65rem; padding: 2px 6px;">${statusLabel}</span>` : ''}
                 </div>
             </div>
-        \`;
+        `;
     }).join('') : '<div style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 0.85em;">No online drivers found.</div>';
 
     if (onlineCount) onlineCount.innerText = validDrivers.length;
@@ -470,7 +475,7 @@ function updateOnlineDisplay() {
     });
     
     if (onlineBadge) {
-        onlineBadge.innerHTML = `<i class="fas fa-circle pulse" style="color:#10b981; font-size:0.6em;"></i> LIVE: \${onlineCount} ONLINE`;
+        onlineBadge.innerHTML = `<i class="fas fa-circle pulse" style="color:#10b981; font-size:0.6em;"></i> LIVE: ${onlineCount} ONLINE`;
     }
     
     if (activeDriversEl) {
@@ -478,7 +483,7 @@ function updateOnlineDisplay() {
     }
 
     if (mapStatusEl) {
-        mapStatusEl.innerText = `Live: \${onlineCount} drivers online`;
+        mapStatusEl.innerText = `Live: ${onlineCount} drivers online`;
     }
 }
 
@@ -495,7 +500,7 @@ function getMarkerIcon(status) {
     const color = getStatusColor(status).substring(1); 
     return {
         path: google.maps.SymbolPath.CIRCLE,
-        fillColor: \`#\${color}\`,
+        fillColor: `#${color}`,
         fillOpacity: 1,
         strokeWeight: 2,
         strokeColor: '#FFFFFF',
@@ -547,38 +552,38 @@ function renderRecentCompletedBookings(snapshot) {
         const driverName = data.driver_name || 'Fleet Driver';
         const completedTime = data.updated_at ? data.updated_at.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now';
 
-        html += \`
+        html += `
             <div class="widget-row">
                 <div class="widget-info">
                     <div class="widget-title" style="display:flex; align-items:center; gap:8px;">
-                        <span>Trip #\${id.substring(0, 6).toUpperCase()}</span>
+                        <span>Trip #${id.substring(0, 6).toUpperCase()}</span>
                         <span class="badge badge-success" style="font-size:0.6rem; padding:1px 6px;">COMPLETED</span>
                     </div>
                     <div class="widget-route" style="font-size:0.8rem; margin:4px 0;">
-                        <i class="fas fa-map-marker-alt" style="color:var(--accent-teal);"></i> \${pickupStr} 
+                        <i class="fas fa-map-marker-alt" style="color:var(--accent-teal);"></i> ${pickupStr} 
                         <i class="fas fa-long-arrow-alt-right" style="color: var(--text-muted); margin: 0 4px;"></i> 
-                        \${dropoffStr}
+                        ${dropoffStr}
                     </div>
                     <div style="font-size:0.75rem; color:var(--text-muted);">
-                        <i class="fas fa-user-check"></i> \${driverName} · Arrived at \${completedTime}
+                        <i class="fas fa-user-check"></i> ${driverName} · Arrived at ${completedTime}
                     </div>
                 </div>
-                <button class="btn btn-secondary btn-sm" onclick="window.location.href='trip-tickets.html?id=\${id}'" style="padding: 6px 12px; font-size: 0.75rem;">
+                <button class="btn btn-secondary btn-sm" onclick="window.location.href='trip-tickets.html?id=${id}'" style="padding: 6px 12px; font-size: 0.75rem;">
                     View Ticket
                 </button>
             </div>
-        \`;
+        `;
     });
     
     widget.innerHTML = html;
 }
 
 window.instantDispatch = async function(bookingId, driverId, driverName, btn) {
-    if (!confirm(\`Confirm 1-click dispatch to \${driverName}?\`)) return;
+    if (!confirm(`Confirm 1-click dispatch to ${driverName}?`)) return;
 
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = \`<span>⏳ ...</span>\`;
+        btn.innerHTML = `<span>⏳ ...</span>`;
     }
 
     try {
@@ -699,7 +704,7 @@ window.openDispatchModal = async function(bookingId) {
     let optionsHtml = '<option value="">-- Select a Driver --</option>';
     sortedDrivers.forEach(d => {
         const icon = d.isOnline ? '🟢' : '⚪';
-        optionsHtml += \`<option value="\${d.id}">\${icon} \${d.name} - \${d.vehicle} (\${d.plate})</option>\`;
+        optionsHtml += `<option value="${d.id}">${icon} ${d.name} - ${d.vehicle} (${d.plate})</option>`;
     });
     select.innerHTML = optionsHtml;
 };

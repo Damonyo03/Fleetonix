@@ -121,9 +121,9 @@ fun AuthFlow() {
                             userData = doc.data
                             userRole = doc.getString("user_type")
                             Log.d("AuthFlow", "User role identified: $userRole")
-                            // Force OTP verification for all driver logins
+                            // Bypass OTP verification for driver logins for now (as requested)
                             if (userRole == "driver") {
-                                isDriverVerified = false
+                                isDriverVerified = true 
                             }
                         } else {
                             Log.w("AuthFlow", "User record not found in Firestore for $email. Signing out.")

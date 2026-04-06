@@ -97,22 +97,10 @@ fun LoginScreen(
                     val db = FirebaseFirestore.getInstance()
                     val userDoc = db.collection("users").document(user.uid).get().await()
                     
-                    if (userDoc.exists() && userDoc.getString("user_type") == "driver") {
-                        // Generate and store 6-digit OTP for driver
-                        val otp = (100000..999999).random().toString()
-                        val otpData = hashMapOf(
-                            "email" to user.email,
-                            "otp" to otp,
-                            "created_at" to com.google.firebase.Timestamp.now(),
-                            "expires_at" to com.google.firebase.Timestamp(System.currentTimeMillis() / 1000 + 300, 0) // 5 mins
-                        )
-                        db.collection("otp_codes").document(user.uid).set(otpData).await()
-                        
+                        // Login successful - OTP suppressed as requested
                         if (BuildConfig.DEBUG) {
-                            Log.d("LoginScreen", "Generated OTP for ${user.email}: $otp")
+                            Log.d("LoginScreen", "Login successful for ${user.email} (OTP generation skipped)")
                         }
-                        // In a real app, a Cloud Function would trigger an email send here
-                    }
                 }
                 
                 // Upon success, update presence and notify flow
