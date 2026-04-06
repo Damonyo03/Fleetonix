@@ -8,7 +8,8 @@ import { sanitizeFirestoreData, generateNumericId } from "./modules/data.js";
 let driversMap = null;
 let driverMarkers = {};
 let driverPolylines = {};
-let allDriversData = {};
+let allDriversData = {}; // Stores combined metadata + live location
+let emailToUidMap = {}; // Maps driver_email -> UID for fast lookup
 let pendingBookingsMap = new Map();
 let currentDispatchBookingId = null;
 let currentUserData = null;
@@ -307,33 +308,57 @@ function initMap() {
 
     onSnapshot(collection(db, "drivers"), (snapshot) => {
         snapshot.docChanges().forEach(change => {
-            const id = change.doc.id;
+            const id = change.doc.id; // UID
+            const data = change.doc.data();
+            const email = data.driver_email?.toLowerCase()?.trim();
+            
+            if (email) {
+                const oldEmailEntry = allDriversData[email];
+                emailToUidMap[email] = id;
+                
+                // If we already have location under the email key, MOVE it to the UID key
+                if (oldEmailEntry && oldEmailEntry.current_latitude && !allDriversData[id]) {
+                    console.log(`Merging Email-based location for ${email} into UID-based profile ${id}`);
+                    allDriversData[id] = { ...oldEmailEntry, id: id };
+                    delete allDriversData[email];
+                    if (driverMarkers[email]) {
+                        driverMarkers[id] = driverMarkers[email];
+                        delete driverMarkers[email];
+                    }
+                }
+            }
+            
             if (change.type === "removed") {
+                delete allDriversData[id];
+                if (email) delete emailToUidMap[email];
                 if (driverMarkers[id]) {
                     driverMarkers[id].setMap(null);
                     delete driverMarkers[id];
                 }
-                delete allDriversData[id];
-                updateOnlineDriversList();
-                updateOnlineDisplay();
                 return;
             }
-            updateDriverState(id, change.doc.data(), 'metadata');
+            updateDriverState(id, data, 'metadata');
         });
     });
 
     onSnapshot(collection(db, "driver_locations"), (snapshot) => {
         snapshot.docChanges().forEach(change => {
-            const id = change.doc.id;
+            const docId = change.doc.id; // Email
+            const data = change.doc.data();
+            const emailKey = docId.toLowerCase().trim();
+            
+            // Resolve to UID if possible
+            const resolvedId = emailToUidMap[emailKey] || emailKey;
+            
             if (change.type === "removed") {
-                if (allDriversData[id]) {
-                    allDriversData[id].current_latitude = null;
-                    allDriversData[id].current_longitude = null;
+                if (allDriversData[resolvedId]) {
+                    allDriversData[resolvedId].current_latitude = null;
+                    allDriversData[resolvedId].current_longitude = null;
                 }
-                refreshMarker(id);
+                refreshMarker(resolvedId);
                 return;
             }
-            updateDriverState(id, change.doc.data(), 'location');
+            updateDriverState(resolvedId, data, 'location');
         });
     });
 
@@ -393,13 +418,17 @@ function refreshMarker(id) {
     const dtr = driverDTRStatus[email];
     const isOnDuty = dtr ? dtr.action === 'time_in' : false;
     
-    const isOnline = !isNaN(lastActive) && (now - lastActive) < tenMins && isOnDuty;
+    // RELAXED Logic: Show if there is a LIVE heartbeat (within 5 mins) OR if they are strictly On Duty
+    const isRecentlyActive = !isNaN(lastActive) && (now - lastActive) < (5 * 60 * 1000);
+    const isOnline = isRecentlyActive || ( !isNaN(lastActive) && (now - lastActive) < tenMins && isOnDuty );
+    
     const matchesCompany = selectedCompanyId === 'all' || d.accredited_company_id === selectedCompanyId;
 
     if (driverMarkers[id]) {
         animateMarkerTo(driverMarkers[id], pos);
         driverMarkers[id].setIcon(markerIcon);
         driverMarkers[id].setOpacity(status === 'offline' ? 0.6 : 1.0);
+        // Show if company matches AND they are actually online (heartbeat)
         driverMarkers[id].setVisible(matchesCompany && isOnline);
         driverMarkers[id].driverData = d;
     } else {

@@ -47,53 +47,45 @@ fun TripHistoryScreen(
     LaunchedEffect(Unit) {
         val uid = auth.currentUser?.uid ?: return@LaunchedEffect
         val email = auth.currentUser?.email ?: return@LaunchedEffect
+        val emailPruned = email.lowercase().trim()
 
-        // Primary: filter by driver_uid (Auth UID) - most reliable
-        val listenerReg = db.collection("trip_tickets")
+        isLoading = true
+        
+        // Listen to BOTH UID and Email queries to ensure no records (like the 14.07km one) are missed
+        val uidQuery = db.collection("trip_tickets")
             .whereEqualTo("driver_uid", uid)
             .orderBy("created_at", Query.Direction.DESCENDING)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    android.util.Log.e("TripHistory", "UID query error, trying email fallback", error)
-                    // Fallback: filter by driver_email
-                    db.collection("trip_tickets")
-                        .whereEqualTo("driver_email", email.lowercase().trim())
-                        .orderBy("created_at", Query.Direction.DESCENDING)
-                        .addSnapshotListener { snap2, err2 ->
-                            if (err2 != null) {
-                                android.util.Log.e("TripHistory", "Email fallback also failed", err2)
-                                isLoading = false
-                                return@addSnapshotListener
-                            }
-                            if (snap2 != null) {
-                                tickets = snap2.documents.mapNotNull { doc ->
-                                    buildTripItem(doc)
-                                }
-                                isLoading = false
-                            }
-                        }
-                    return@addSnapshotListener
-                }
 
-                if (snapshot != null) {
-                    val results = snapshot.documents.mapNotNull { doc -> buildTripItem(doc) }
-                    if (results.isEmpty()) {
-                        // Fallback to email query if UID yields nothing (for legacy records)
-                        db.collection("trip_tickets")
-                            .whereEqualTo("driver_email", email.lowercase().trim())
-                            .orderBy("created_at", Query.Direction.DESCENDING)
-                            .addSnapshotListener { snap2, _ ->
-                                if (snap2 != null) {
-                                    tickets = snap2.documents.mapNotNull { doc -> buildTripItem(doc) }
-                                    isLoading = false
-                                }
-                            }
+        val emailQuery = db.collection("trip_tickets")
+            .whereEqualTo("driver_email", emailPruned)
+            .orderBy("created_at", Query.Direction.DESCENDING)
+
+        val uidListener = uidQuery.addSnapshotListener { snapshot, _ ->
+            if (snapshot != null) {
+                val uidResults = snapshot.documents.mapNotNull { buildTripItem(it) }
+                // Merge and update
+                tickets = (tickets + uidResults).distinctBy { it.id }.sortedByDescending { it.date }
+                isLoading = false
+            }
+        }
+
+        val emailListener = emailQuery.addSnapshotListener { snapshot, _ ->
+            if (snapshot != null) {
+                // IMPORTANT: Filter out trips with this email that belong to a DIFFERENT UID
+                // This prevents leakage from other accounts (like the April 03 trips which are "not his")
+                val emailResults = snapshot.documents.mapNotNull { doc ->
+                    val docUid = doc.getString("driver_uid")
+                    if (docUid == null || docUid == "" || docUid == uid) {
+                        buildTripItem(doc)
                     } else {
-                        tickets = results
-                        isLoading = false
+                        null
                     }
                 }
+                // Merge and update
+                tickets = (tickets + emailResults).distinctBy { it.id }.sortedByDescending { it.date }
+                isLoading = false
             }
+        }
     }
 
     Scaffold(
