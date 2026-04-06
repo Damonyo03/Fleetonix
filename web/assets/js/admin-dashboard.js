@@ -60,7 +60,18 @@ onAuthStateChanged(auth, async (user) => {
 
     // Start Live Listeners
     refreshDashboardData();
-    initMap();
+    
+    // Guarded Map Initialization
+    const tryInitMap = () => {
+        if (typeof google !== 'undefined' && google.maps) {
+            initMap();
+        } else {
+            console.warn("Google Maps not ready, retrying in 500ms...");
+            setTimeout(tryInitMap, 500);
+        }
+    };
+    tryInitMap();
+    
     initDashboardUI();
 });
 
@@ -140,7 +151,8 @@ function initStats() {
 
     const unsubUsers = onSnapshot(usersQuery, (snapshot) => {
         const drivers = snapshot.docs.filter(d => (d.data().user_type === 'driver' || d.data().role === 'driver')).length;
-        document.getElementById('totalDrivers').innerText = drivers;
+        const totalDriversEl = document.getElementById('totalDrivers');
+        if (totalDriversEl) totalDriversEl.innerText = drivers;
     });
 
     const unsubPartners = onSnapshot(collection(db, "accredited_companies"), (snapshot) => {
@@ -169,7 +181,8 @@ function initStats() {
     // Active Trips: status in ['started', 'in_progress']
     const activeTripsQuery = query(schedulesQuery, where("status", "in", ["started", "in_progress"]));
     const unsubSchedules = onSnapshot(activeTripsQuery, (snapshot) => {
-        document.getElementById('activeSchedules').innerText = snapshot.size;
+        const activeSchedulesEl = document.getElementById('activeSchedules');
+        if (activeSchedulesEl) activeSchedulesEl.innerText = snapshot.size;
     });
 
     // Extended Insights & Recent Completed Bookings
@@ -186,7 +199,8 @@ function initStats() {
 
         snapshot.forEach(doc => {
             const data = doc.data();
-            const completedAt = data.updated_at?.toDate() || data.created_at?.toDate();
+            const completedAt = data.updated_at?.toDate?.() || data.created_at?.toDate?.();
+            if (!completedAt) return;
             
             if (completedAt >= today) todayCount++;
             if (completedAt >= startOfMonth) monthCount++;
@@ -195,13 +209,18 @@ function initStats() {
             if (data.start_time && data.end_time) {
                 const start = data.start_time.toDate ? data.start_time.toDate() : new Date(data.start_time);
                 const end = data.end_time.toDate ? data.end_time.toDate() : new Date(data.end_time);
-                totalDuration += (end - start) / (1000 * 60); // duration in minutes
+                if (!isNaN(start) && !isNaN(end)) {
+                    totalDuration += (end - start) / (1000 * 60); // duration in minutes
+                }
             }
         });
 
         const avgDuration = todayCount > 0 ? Math.round(totalDuration / todayCount) : 0;
-        document.getElementById('avgTripDuration').innerHTML = `${avgDuration} <small style="font-size:0.8rem; font-weight:400;">mins</small>`;
-        document.getElementById('monthlyBookings').innerText = monthCount;
+        const avgDurationEl = document.getElementById('avgTripDuration');
+        if (avgDurationEl) avgDurationEl.innerHTML = `${avgDuration} <small style="font-size:0.8rem; font-weight:400;">mins</small>`;
+        
+        const monthlyBookingsEl = document.getElementById('monthlyBookings');
+        if (monthlyBookingsEl) monthlyBookingsEl.innerText = monthCount;
     });
 
     unsubscribeStats.push(unsubUsers, unsubPartners, unsubAccidents, unsubBookings, unsubSchedules, unsubCompleted);
@@ -329,8 +348,8 @@ function refreshMarker(id) {
 
     const now = Date.now();
     const tenMins = 10 * 60 * 1000;
-    const lastActive = d.last_updated ? (d.last_updated.toMillis ? d.last_updated.toMillis() : d.last_updated.seconds * 1000) : 0;
-    const isOnline = (now - lastActive) < tenMins;
+    const lastActive = d.last_updated ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated))) : 0;
+    const isOnline = !isNaN(lastActive) && (now - lastActive) < tenMins;
 
     if (driverMarkers[id]) {
         animateMarkerTo(driverMarkers[id], pos);
@@ -394,7 +413,7 @@ function getInfoWindowContent(driver) {
             </div>
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; border-top:1px solid #f1f5f9; padding-top:8px;">
                 <span style="font-size: 10px; color: #94a3b8;">${driver.wifi_ssid ? `<i class="fas fa-wifi"></i> ${driver.wifi_ssid}` : 'Satellite Sync'}</span>
-                ${driver.last_updated ? `<span style="font-size: 9px; color: #94a3b8;">Updated: ${new Date(driver.last_updated.seconds * 1000).toLocaleTimeString()}</span>` : ''}
+                ${driver.last_updated ? `<span style="font-size: 9px; color: #94a3b8;">Updated: ${new Date(driver.last_updated.seconds ? driver.last_updated.seconds * 1000 : (driver.toMillis ? driver.toMillis() : Number(driver.last_updated))).toLocaleTimeString()}</span>` : ''}
             </div>
         </div>
     `;
@@ -413,8 +432,8 @@ function updateOnlineDriversList() {
         if (!d.driver_name || d.driver_name === 'Loading Driver...') return false;
         if (selectedCompanyId !== 'all' && d.accredited_company_id !== selectedCompanyId) return false;
         
-        const lastUpdateMs = d.last_updated ? (d.last_updated.toMillis ? d.last_updated.toMillis() : d.last_updated.seconds * 1000) : 0;
-        return (now - lastUpdateMs) < onlineThreshold;
+        const lastUpdateMs = d.last_updated ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated))) : 0;
+        return !isNaN(lastUpdateMs) && (now - lastUpdateMs) < onlineThreshold;
     });
 
     const sortedDrivers = validDrivers.sort((a, b) => {
@@ -468,8 +487,8 @@ function updateOnlineDisplay() {
     let onlineCount = 0;
     Object.values(allDriversData).forEach(d => {
         if (selectedCompanyId !== 'all' && d.accredited_company_id !== selectedCompanyId) return;
-        const lastUpdateMs = d.last_updated ? (d.last_updated.toMillis ? d.last_updated.toMillis() : d.last_updated.seconds * 1000) : 0;
-        if ((now - lastUpdateMs) < tenMins) {
+        const lastUpdateMs = d.last_updated ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated))) : 0;
+        if (!isNaN(lastUpdateMs) && (now - lastUpdateMs) < tenMins) {
             onlineCount++;
         }
     });
@@ -531,8 +550,8 @@ function renderRecentCompletedBookings(snapshot) {
     }
 
     const docs = snapshot.docs.sort((a, b) => {
-        const timeA = a.data().updated_at?.toMillis() || 0;
-        const timeB = b.data().updated_at?.toMillis() || 0;
+        const timeA = a.data().updated_at?.toMillis ? a.data().updated_at.toMillis() : (a.data().updated_at?.seconds ? a.data().updated_at.seconds * 1000 : 0);
+        const timeB = b.data().updated_at?.toMillis ? b.data().updated_at.toMillis() : (b.data().updated_at?.seconds ? b.data().updated_at.seconds * 1000 : 0);
         return timeB - timeA;
     }).slice(0, 5);
 
@@ -550,7 +569,8 @@ function renderRecentCompletedBookings(snapshot) {
         const pickupStr = getLocText(data.pickup_location);
         const dropoffStr = getLocText(data.dropoff_location);
         const driverName = data.driver_name || 'Fleet Driver';
-        const completedTime = data.updated_at ? data.updated_at.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Just now';
+        const updatedTime = data.updated_at?.toDate ? data.updated_at.toDate() : (data.updated_at?.seconds ? new Date(data.updated_at.seconds * 1000) : new Date());
+        const completedTime = updatedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         html += `
             <div class="widget-row">
