@@ -58,8 +58,10 @@ data class DriverSchedule(
     @SerializedName("schedule_date") val schedule_date: String? = null,
     @SerializedName("schedule_time") val scheduled_time: String? = null,
     @SerializedName("trip_phase") val trip_phase: String? = null, 
-    val status: String? = null,
+    @SerializedName("status") val status: String? = null,
     @SerializedName("isOfficial") val isOfficial: Boolean? = false,
+    @SerializedName("return_to_pickup") val return_to_pickup: Boolean? = false,
+    @SerializedName("return_pickup_time") val return_pickup_time: String? = null,
     
     // Multi-point pickups
     @SerializedName("pickup_points") val pickup_points: List<PickupPoint>? = null,

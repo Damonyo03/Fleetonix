@@ -34,6 +34,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.tasks.await
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.*
+import com.google.firebase.Timestamp
 import com.google.android.gms.maps.*
 import com.google.android.gms.maps.model.*
 import com.google.maps.android.compose.*
@@ -306,11 +307,11 @@ fun DriverDashboard(
     var showReRoutePrompt by remember { mutableStateOf(false) }
     var isReRouting by remember { mutableStateOf(false) }
 
-                }
-            }
-        }
-
-        // 3. Calculate Monthly OT Balance (NSCRP 26h Limit)
+    // 3. Automated Metadata Fetching (OT & Odometer)
+    LaunchedEffect(session.user?.id) {
+        val uid = session.user?.id ?: return@LaunchedEffect
+        
+        // Calculate Monthly OT Balance (NSCRP 26h Limit)
         val startOfMonth = LocalDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0)
         val startTimestamp = Timestamp(java.util.Date.from(startOfMonth.atZone(ZoneId.systemDefault()).toInstant()))
         
@@ -422,9 +423,9 @@ fun DriverDashboard(
             nextSchedule?.scheduled_time?.let { formatScheduleTime(it) } ?: "--"
         }
     }
-    val stopsCount = feed?.schedules?.size ?: 0
-    val scheduledDateTime = remember(nextSchedule?.scheduled_date, nextSchedule?.scheduled_time) {
-        parseScheduleDateTime(nextSchedule?.scheduled_date, nextSchedule?.scheduled_time)
+    val stopsCount = (feed?.schedules?.size ?: 0)
+    val scheduledDateTime = remember(nextSchedule?.schedule_date, nextSchedule?.scheduled_time) {
+        parseScheduleDateTime(nextSchedule?.schedule_date, nextSchedule?.scheduled_time)
     }
     val isStartWindowOpen = scheduledDateTime?.let { target ->
         val diffMinutes = Duration.between(LocalDateTime.now(), target).toMinutes()
@@ -520,10 +521,10 @@ fun DriverDashboard(
     var lastCompletedTime by remember { mutableStateOf<Long?>(null) }
 
     // Logic: 1-hour window for advanced booking acceptance (Global state for UI consumption)
-    val isJobAcceptable = remember(feed?.schedules?.firstOrNull()?.scheduled_date, feed?.schedules?.firstOrNull()?.scheduled_time) {
+    val isJobAcceptable = remember(feed?.schedules?.firstOrNull()?.schedule_date, feed?.schedules?.firstOrNull()?.scheduled_time) {
         try {
             val sched = feed?.schedules?.firstOrNull() ?: return@remember true
-            val sDate = sched.scheduled_date ?: return@remember true
+            val sDate = sched.schedule_date ?: return@remember true
             val sTime = sched.scheduled_time ?: return@remember true
             
             val now = LocalDateTime.now()
@@ -2105,7 +2106,7 @@ fun DriverDashboard(
                                 // Left icon: Call Client
                                 FilledIconButton(
                                     onClick = {
-                                        val phone = nextSchedule?.client?.phone ?: nextSchedule?.client_phone
+                                        val phone = nextSchedule?.client?.phone
                                         if (!phone.isNullOrBlank()) {
                                             val intent = Intent(Intent.ACTION_DIAL, android.net.Uri.parse("tel:$phone"))
                                             context.startActivity(intent)
@@ -2695,10 +2696,10 @@ fun DriverDashboard(
                             isCompletingTrip = true
                             val docId = nextSchedule?.docId ?: return@launch
                             db.collection("schedules").document(docId).update(
-                                "signature_url" to signatureUrl,
-                                "trip_phase" to "completed",
-                                "status" to "completed",
-                                "completed_at" to FieldValue.serverTimestamp()
+                                "signature_url", signatureUrl,
+                                "trip_phase", "completed",
+                                "status", "completed",
+                                "completed_at", FieldValue.serverTimestamp()
                             ).await()
                             tripActionSuccess = "Trip verified with signature and completed!"
                         } catch (e: Exception) {
@@ -2715,10 +2716,10 @@ fun DriverDashboard(
                             isCompletingTrip = true
                             val docId = nextSchedule?.docId ?: return@launch
                             db.collection("schedules").document(docId).update(
-                                "refusal_reason" to reason,
-                                "trip_phase" to "completed",
-                                "status" to "completed",
-                                "completed_at" to FieldValue.serverTimestamp()
+                                "refusal_reason", reason,
+                                "trip_phase", "completed",
+                                "status", "completed",
+                                "completed_at", FieldValue.serverTimestamp()
                             ).await()
                             tripActionSuccess = "Trip completed with signature refusal recorded."
                         } catch (e: Exception) {
@@ -2730,7 +2731,6 @@ fun DriverDashboard(
                 },
                 onDismiss = { showSignatureDialog = false }
             )
-        }
         }
     }
 

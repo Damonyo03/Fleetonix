@@ -183,7 +183,7 @@ fun AuthFlow() {
                             scheduleId = sId,
                             trip_phase = data["trip_phase"] as? String ?: "pending",
                             status = data["status"] as? String,
-                            scheduled_date = data["schedule_date"] as? String,
+                            schedule_date = data["schedule_date"] as? String,
                             scheduled_time = data["schedule_time"] as? String,
                             pickup_location = DriverScheduleLocation(
                                 address = data["pickup_location"] as? String,
@@ -201,10 +201,9 @@ fun AuthFlow() {
                                 phone = data["client_phone"] as? String,
                                 email = data["client_email"] as? String
                             ),
-                            return_to_pickup = data["return_to_pickup"] as? Boolean ?: false,
-                            client_phone = data["client_phone"] as? String,
                             client_name = data["client_name"] as? String,
-                            client_email = data["client_email"] as? String
+                            return_to_pickup = data["return_to_pickup"] as? Boolean ?: false,
+                            return_pickup_time = data["return_pickup_time"] as? String
                         )
                     }.sortedWith(compareByDescending<DriverSchedule> { 
                         when (it.trip_phase) {
