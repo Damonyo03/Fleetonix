@@ -55,20 +55,35 @@ data class DriverSchedule(
     val docId: String? = null,
     @SerializedName("schedule_id") val scheduleId: Int? = null,
     @SerializedName("trip_id") val tripId: String? = null,
-    @SerializedName("scheduled_date") val scheduled_date: String? = null,
-    @SerializedName("scheduled_time") val scheduled_time: String? = null,
-    @SerializedName("trip_phase") val trip_phase: String? = null, // "pending", "pickup", "dropoff", "return_pickup", "ready_to_complete", "completed"
-    val status: String? = null, // "pending", "started", "in_progress", "completed", "cancelled"
+    @SerializedName("schedule_date") val schedule_date: String? = null,
+    @SerializedName("schedule_time") val scheduled_time: String? = null,
+    @SerializedName("trip_phase") val trip_phase: String? = null, 
+    val status: String? = null,
+    @SerializedName("isOfficial") val isOfficial: Boolean? = false,
+    
+    // Multi-point pickups
+    @SerializedName("pickup_points") val pickup_points: List<PickupPoint>? = null,
     @SerializedName("pickup_location") val pickup_location: DriverScheduleLocation? = null,
     @SerializedName("dropoff_location") val dropoff_location: DriverScheduleLocation? = null,
-    @SerializedName("return_to_pickup") val return_to_pickup: Boolean? = null,
-    @SerializedName("return_pickup_time") val return_pickup_time: String? = null,
+    
+    // Odometer & Authorization
+    @SerializedName("start_odometer") val start_odometer: Double? = null,
+    @SerializedName("end_odometer") val end_odometer: Double? = null,
+    @SerializedName("signature_url") val signature_url: String? = null,
+    @SerializedName("refusal_reason") val refusal_reason: String? = null,
+    
     @SerializedName("total_km_travelled") val total_km_travelled: Double? = null,
     @SerializedName("completed_at") val completed_at: Any? = null,
-    @SerializedName("client_phone") val client_phone: String? = null,
     @SerializedName("client_name") val client_name: String? = null,
-    @SerializedName("client_email") val client_email: String? = null,
     val client: DriverClientInfo? = null
+)
+
+data class PickupPoint(
+    val name: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val order: Int? = null,
+    val arrived_at: Any? = null
 )
 
 data class DriverScheduleLocation(

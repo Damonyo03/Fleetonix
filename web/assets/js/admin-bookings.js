@@ -114,31 +114,30 @@ async function showCreateBookingModal(clients) {
         </div>
 
         <div id="new_client_section" style="display: none;">
-            <div class="modal-form-row">
-                <div class="form-group">
-                    <label for="modal_guest_name">Guest Name</label>
-                    <input type="text" id="modal_guest_name" class="form-input" placeholder="Enter guest name...">
-                </div>
-                <div class="form-group">
-                    <label for="modal_guest_email">Guest Email</label>
-                    <input type="email" id="modal_guest_email" class="form-input" placeholder="Enter guest email...">
-                </div>
+            <div class="form-group">
+                <label for="modal_guest_name">Passenger Name</label>
+                <input type="text" id="modal_guest_name" class="form-input" placeholder="Enter passenger name...">
             </div>
             <div class="form-group">
-                <label for="modal_company">Company Name (Optional)</label>
-                <input type="text" id="modal_company" class="form-input" placeholder="Enter company name...">
+                <label for="modal_contractor">Contractor (Default: Jettsan)</label>
+                <input type="text" id="modal_contractor" class="form-input" value="Jettsan" readonly>
             </div>
         </div>
 
-        <div class="form-group" style="position: relative;">
-            <label for="pickup_location">Pickup Location</label>
-            <div class="input-with-action">
-                <input type="text" id="pickup_location" class="form-input" placeholder="Search for pickup address..." required autocomplete="off">
-                <button type="button" class="btn-input-action" id="locatePickup" title="Use current location"><i class="fas fa-location-crosshairs"></i></button>
+        <div id="pickup_points_container">
+            <div class="form-group pickup-point" style="position: relative;">
+                <label for="pickup_location_1">Pickup Location 1 (Primary)</label>
+                <div class="input-with-action">
+                    <input type="text" id="pickup_location_1" class="form-input pickup-input" placeholder="Search for primary pickup..." required autocomplete="off">
+                    <button type="button" class="btn-input-action locate-btn" title="Use current location"><i class="fas fa-location-crosshairs"></i></button>
+                </div>
+                <input type="hidden" class="lat-input" value="0">
+                <input type="hidden" class="lng-input" value="0">
             </div>
-            <input type="hidden" id="pickup_latitude" value="0">
-            <input type="hidden" id="pickup_longitude" value="0">
         </div>
+        <button type="button" id="add_pickup_point" class="btn-secondary" style="margin-bottom: 20px; padding: 8px 16px; font-size: 0.85em;">
+            <i class="fas fa-plus"></i> Add Another Pickup Point
+        </button>
 
         <div class="form-group" style="position: relative;">
             <label for="dropoff_location">Dropoff Location</label>
@@ -219,21 +218,49 @@ async function showCreateBookingModal(clients) {
         const time = document.getElementById('pickup_time').value;
         if (!date || !time) throw new Error("Please enter a date and time.");
 
+        // 3:00 PM Cut-off Logic for next-day schedules
+        const selectedDate = new Date(date);
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(0,0,0,0);
+        
+        if (selectedDate.getTime() === tomorrow.getTime()) {
+            const now = new Date();
+            if (now.getHours() >= 15) {
+                const isAdmin = currentUserData?.role === 'admin' || currentUserData?.role === 'super_admin';
+                if (!isAdmin) {
+                    throw new Error("Cut-off Reached: Next-day schedules must be requested before 3:00 PM.");
+                } else {
+                    console.warn("Cut-off passed, but user is Admin. Proceeding.");
+                }
+            }
+        }
+
         const driverId = document.getElementById('modal_driver').value;
         const autoDispatch = document.getElementById('modal_auto_dispatch').checked;
+
+        const pickupPoints = Array.from(document.querySelectorAll('.pickup-point')).map((el, i) => ({
+            name: el.querySelector('.pickup-input').value,
+            latitude: parseFloat(el.querySelector('.lat-input').value) || 0,
+            longitude: parseFloat(el.querySelector('.lng-input').value) || 0,
+            order: i + 1
+        }));
+
+        if (pickupPoints.some(p => !p.name)) throw new Error("Please fill in all pickup locations.");
 
         const bookingId = generateNumericId().toString();
         const data = sanitizeFirestoreData({
             booking_id: bookingId,
             client_id: clientId,
             client_name: clientName,
-            client_email: clientEmail,
-            accredited_company_id: clientCompanyId,
-            company_name: isExisting ? '' : (document.getElementById('modal_company')?.value || ''),
+            // client_email/phone removed for privacy
+            contractor: 'Jettsan',
+            isOfficial: false, // Default to false until Posted
 
-            pickup_location: pickup,
-            pickup_latitude: parseFloat(document.getElementById('pickup_latitude').value) || 0,
-            pickup_longitude: parseFloat(document.getElementById('pickup_longitude').value) || 0,
+            pickup_points: pickupPoints,
+            pickup_location: pickupPoints[0].name, // Keep for legacy compatibility
+            pickup_latitude: pickupPoints[0].latitude,
+            pickup_longitude: pickupPoints[0].longitude,
 
             dropoff_location: dropoff,
             dropoff_latitude: parseFloat(document.getElementById('dropoff_latitude').value) || 0,
@@ -248,7 +275,8 @@ async function showCreateBookingModal(clients) {
             driver_id: driverId || null,
             status: autoDispatch ? 'scheduled' : 'pending',
             createdBy: 'admin',
-            created_at: serverTimestamp()
+            created_at: serverTimestamp(),
+            updated_at: serverTimestamp()
         });
 
         // 1. Save Booking
@@ -339,11 +367,42 @@ async function showCreateBookingModal(clients) {
 
     // Initialize client type toggle logic
     setTimeout(async () => {
+        // Toggle Client Sections
         const radios = document.querySelectorAll('input[name="client_type"]');
         radios.forEach(r => r.addEventListener('change', (e) => {
             document.getElementById('existing_client_section').style.display = e.target.value === 'existing' ? 'block' : 'none';
             document.getElementById('new_client_section').style.display = e.target.value === 'new' ? 'block' : 'none';
         }));
+
+        // Dynamic Pickup Points
+        const addPickupBtn = document.getElementById('add_pickup_point');
+        const container = document.getElementById('pickup_points_container');
+        let pickupCount = 1;
+
+        if (addPickupBtn && container) {
+            addPickupBtn.onclick = () => {
+                pickupCount++;
+                const div = document.createElement('div');
+                div.className = 'form-group pickup-point';
+                div.style.position = 'relative';
+                div.innerHTML = `
+                    <label>Pickup Location ${pickupCount}</label>
+                    <div class="input-with-action">
+                        <input type="text" class="form-input pickup-input" placeholder="Search for secondary pickup..." required autocomplete="off">
+                        <button type="button" class="btn-input-action remove-pickup" title="Remove"><i class="fas fa-trash-can"></i></button>
+                    </div>
+                    <input type="hidden" class="lat-input" value="0">
+                    <input type="hidden" class="lng-input" value="0">
+                `;
+                container.appendChild(div);
+
+                // Auto-complete binding would go here
+                const input = div.querySelector('.pickup-input');
+                if (window.initAutocompleteForInput) window.initAutocompleteForInput(input);
+                
+                div.querySelector('.remove-pickup').onclick = () => div.remove();
+            };
+        }
 
         const driverSelect = document.getElementById('modal_driver');
         if (driverSelect) {

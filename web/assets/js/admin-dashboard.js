@@ -13,7 +13,7 @@ let emailToUidMap = {}; // Maps driver_email -> UID for fast lookup
 let pendingBookingsMap = new Map();
 let currentDispatchBookingId = null;
 let currentUserData = null;
-let selectedCompanyId = localStorage.getItem('fleetonix_global_company') || 'all';
+let selectedContractorId = 'Jettsan'; // Defaulting to Jettsan for NSCRP
 let unsubscribeStats = [];
 let infoWindow = null;
 let driverDTRStatus = {}; // email -> { action: 'time_in'|'time_out', timestamp: JS Date }
@@ -45,19 +45,17 @@ onAuthStateChanged(auth, async (user) => {
         return;
     }
 
-    // If company_admin, force their company
-    if (role === 'company_admin' && userData.accredited_company_id) {
-        selectedCompanyId = userData.accredited_company_id;
-    }
+    // Force single-tenant logic
+    selectedContractorId = 'Jettsan';
 
     currentUserData = userData;
     const name = userData ? userData.full_name : user.email.split('@')[0];
     initLayout('Dashboard', name);
     document.getElementById('welcomeMessage').innerText = `Welcome back, ${name}! Here's what's happening with your fleet.`;
 
-    const userRole = userData?.role || userData?.user_type;
+    // Restricted access logic for Jettsan
     if (userRole === 'super_admin' || userRole === 'admin') {
-        initCompanyFilter();
+        // initCompanyFilter(); - Removed for single-tenant
     }
 
     // Start Live Listeners
@@ -75,7 +73,82 @@ onAuthStateChanged(auth, async (user) => {
     tryInitMap();
     
     initDashboardUI();
+    initPostingFeature();
 });
+
+function initPostingFeature() {
+    const postBtn = document.getElementById('postScheduleBtn');
+    if (!postBtn) return;
+
+    // Time Check Loop
+    const updateBtnStatus = () => {
+        const now = new Date();
+        const hrs = now.getHours();
+        const mins = now.getMinutes();
+        const totalMins = hrs * 60 + mins;
+        
+        // 5:30 PM = 17:30 = 1050 mins
+        // 6:00 PM = 18:00 = 1080 mins
+        const isWindowOpen = totalMins >= 1050 && totalMins <= 1080;
+        
+        if (isWindowOpen) {
+            postBtn.disabled = false;
+            postBtn.classList.add('premium-pulsing');
+            postBtn.title = "Ready to publish tomorrow's mission schedule.";
+        } else {
+            postBtn.disabled = true;
+            postBtn.classList.remove('premium-pulsing');
+            postBtn.title = "Schedule posting is only available between 5:30 PM and 6:00 PM.";
+        }
+    };
+
+    updateBtnStatus();
+    setInterval(updateBtnStatus, 60000);
+
+    postBtn.onclick = async () => {
+        if (!confirm("Are you sure you want to OFFICIALIZE tomorrow's schedules for Jettsan? This will make them visible to all assigned drivers.")) return;
+        
+        try {
+            postBtn.disabled = true;
+            postBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Posting...';
+
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const dateStr = tomorrow.toISOString().split('T')[0];
+
+            const q = query(collection(db, "schedules"), 
+                where("schedule_date", "==", dateStr),
+                where("isOfficial", "==", false)
+            );
+            
+            const snap = await getDocs(q);
+            if (snap.empty) {
+                alert("No tomorrow's schedules found to post.");
+                postBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Post Schedule';
+                return;
+            }
+
+            const batchCount = snap.size;
+            let updated = 0;
+            
+            const promises = snap.docs.map(d => updateDoc(d.ref, { 
+                isOfficial: true,
+                posted_at: serverTimestamp()
+            }));
+            
+            await Promise.all(promises);
+            
+            alert(`SUCCESS: ${batchCount} schedules have been posted and are now LIVE for drivers.`);
+            postBtn.innerHTML = '<i class="fas fa-check-circle"></i> Official Posted';
+            postBtn.style.background = 'var(--accent-green)';
+        } catch (err) {
+            console.error("Posting error:", err);
+            alert("Error posting schedules: " + err.message);
+            postBtn.disabled = false;
+            postBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Post Schedule';
+        }
+    };
+}
 
 function initDashboardUI() {
     const toggleBtn = document.getElementById('toggleStatsBtn');
@@ -407,29 +480,46 @@ function refreshMarker(id) {
 
     const pos = { lat: d.current_latitude, lng: d.current_longitude };
     const status = d.current_trip_phase || d.current_status || 'available';
-    const markerIcon = getMarkerIcon(status);
+    
+    // Traffic Color Coding (NSCRP Rule)
+    // Green > 40kmh, Orange 10-40kmh, Red < 10kmh
+    const speedKmh = (d.current_speed || 0) * 3.6;
+    let trafficColor = '#10b981'; // Default Green (Normal)
+    if (speedKmh < 10) trafficColor = '#ef4444'; // Red (Heavy Traffic)
+    else if (speedKmh < 40) trafficColor = '#f59e0b'; // Orange (Light Traffic)
+
+    const markerIcon = getMarkerIcon(status, trafficColor);
 
     const now = Date.now();
     const tenMins = 10 * 60 * 1000;
     const lastActive = d.last_updated ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated))) : 0;
     
-    // Core Availability Logic: Heartbeat + DTR Status + Company Filter
+    // Availability Logic: Heartbeat + DTR Status
     const email = d.driver_email?.toLowerCase()?.trim();
     const dtr = driverDTRStatus[email];
     const isOnDuty = dtr ? dtr.action === 'time_in' : false;
     
-    // RELAXED Logic: Show if there is a LIVE heartbeat (within 5 mins) OR if they are strictly On Duty
     const isRecentlyActive = !isNaN(lastActive) && (now - lastActive) < (5 * 60 * 1000);
     const isOnline = isRecentlyActive || ( !isNaN(lastActive) && (now - lastActive) < tenMins && isOnDuty );
-    
-    const matchesCompany = selectedCompanyId === 'all' || d.accredited_company_id === selectedCompanyId;
+    const isAccident = d.current_status === 'accident' || d.is_accident === true;
 
     if (driverMarkers[id]) {
         animateMarkerTo(driverMarkers[id], pos);
         driverMarkers[id].setIcon(markerIcon);
         driverMarkers[id].setOpacity(status === 'offline' ? 0.6 : 1.0);
-        // Show if company matches AND they are actually online (heartbeat)
-        driverMarkers[id].setVisible(matchesCompany && isOnline);
+        driverMarkers[id].setVisible(isOnline);
+        
+        // Accident Blinking (using BOUNCE as a visual cue)
+        if (isAccident) {
+            if (!driverMarkers[id].isBlinking) {
+                driverMarkers[id].setAnimation(google.maps.Animation.BOUNCE);
+                driverMarkers[id].isBlinking = true;
+            }
+        } else {
+            driverMarkers[id].setAnimation(null);
+            driverMarkers[id].isBlinking = false;
+        }
+
         driverMarkers[id].driverData = d;
     } else {
         const marker = new google.maps.Marker({
@@ -438,10 +528,11 @@ function refreshMarker(id) {
             title: d.driver_name || 'Driver',
             icon: markerIcon,
             opacity: status === 'offline' ? 0.6 : 1.0,
-            visible: matchesCompany && isOnline,
-            animation: google.maps.Animation.DROP
+            visible: isOnline,
+            animation: isAccident ? google.maps.Animation.BOUNCE : google.maps.Animation.DROP
         });
 
+        marker.isBlinking = isAccident;
         marker.driverData = d;
         marker.addListener('click', () => {
             if (infoWindow) infoWindow.close();
@@ -504,7 +595,7 @@ function updateOnlineDriversList() {
     
     const validDrivers = Object.values(allDriversData).filter(d => {
         if (!d.driver_name || d.driver_name === 'Loading Driver...') return false;
-        if (selectedCompanyId !== 'all' && d.accredited_company_id !== selectedCompanyId) return false;
+        // Company Filter Removed
         
         const email = d.driver_email?.toLowerCase()?.trim();
         if (!email || !driverDTRStatus[email] || driverDTRStatus[email].action !== 'time_in') return false;
@@ -568,7 +659,7 @@ function updateOnlineDisplay() {
     
     let onlineCount = 0;
     Object.values(allDriversData).forEach(d => {
-        if (selectedCompanyId !== 'all' && d.accredited_company_id !== selectedCompanyId) return;
+        // Company Filter Removed
         const lastUpdateMs = d.last_updated ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated))) : 0;
         if (!isNaN(lastUpdateMs) && (now - lastUpdateMs) < tenMins) {
             onlineCount++;

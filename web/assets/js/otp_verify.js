@@ -116,26 +116,44 @@
         }
     }
     
-    // Form submission - combine OTP inputs
+    // Form submission or Button Click - combine OTP inputs
+    function combineOtp() {
+        return Array.from(otpInputs).map(input => input.value).join('');
+    }
+
     if (otpForm) {
-        otpForm.addEventListener('submit', function(e) {
-            const otpArray = Array.from(otpInputs).map(input => input.value).join('');
-            if (otpArray.length !== 6) {
-                e.preventDefault();
-                alert('Please enter all 6 digits of the OTP code');
-                return false;
+        if (otpForm.tagName === 'FORM') {
+            otpForm.addEventListener('submit', function(e) {
+                const otpArray = combineOtp();
+                if (otpArray.length !== 6) {
+                    e.preventDefault();
+                    // alert('Please enter all 6 digits of the OTP code');
+                    return false;
+                }
+                
+                // For standard forms, add a hidden input
+                let hiddenInput = this.querySelector('input[name="otp_code"]');
+                if (!hiddenInput) {
+                    hiddenInput = document.createElement('input');
+                    hiddenInput.type = 'hidden';
+                    hiddenInput.name = 'otp_code';
+                    this.appendChild(hiddenInput);
+                }
+                hiddenInput.value = otpArray;
+                console.log("OTP Combined (Form):", otpArray);
+            });
+        }
+    }
+
+    // Always ensure the Verify button has the correct listener if it exists
+    if (verifyBtn) {
+        verifyBtn.addEventListener('click', function(e) {
+            const otpArray = combineOtp();
+            if (otpArray.length === 6) {
+                console.log("OTP Combined (Button):", otpArray);
+                // We can emit a custom event or set a global variable if needed
+                window.lastCollectedOtp = otpArray;
             }
-            
-            // For standard forms, add a hidden input
-            let hiddenInput = this.querySelector('input[name="otp_code"]');
-            if (!hiddenInput) {
-                hiddenInput = document.createElement('input');
-                hiddenInput.type = 'hidden';
-                hiddenInput.name = 'otp_code';
-                this.appendChild(hiddenInput);
-            }
-            hiddenInput.value = otpArray;
-            console.log("OTP Combined:", otpArray);
         });
     }
 

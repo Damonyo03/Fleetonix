@@ -264,6 +264,16 @@ fun DriverDashboard(
 
     var isReportingVehicleIssue by remember { mutableStateOf(false) }
     var showVehicleIssueDialog by remember { mutableStateOf(false) }
+
+    // NSCRP States
+    var monthlyOTHours by remember { mutableStateOf(0.0) }
+    var startOdometer by remember { mutableStateOf("") }
+    var endOdometer by remember { mutableStateOf("") }
+    var lastVehicleMileage by remember { mutableStateOf(0.0) }
+    var showOdometerDialog by remember { mutableStateOf(false) }
+    var showSignatureDialog by remember { mutableStateOf(false) }
+    var signatureBase64 by remember { mutableStateOf<String?>(null) }
+    var refusalReason by remember { mutableStateOf("") }
     
     fun getAddressFromLocation(lat: Double, lng: Double): String {
         return try {
@@ -296,44 +306,31 @@ fun DriverDashboard(
     var showReRoutePrompt by remember { mutableStateOf(false) }
     var isReRouting by remember { mutableStateOf(false) }
 
-    // Check DTR status and Metadata on init
-    LaunchedEffect(auth.currentUser?.uid) {
-        val uid = auth.currentUser?.uid ?: return@LaunchedEffect
-        
-        // 1. Listen for User Profile (Metadata Sync)
-        db.collection("users").document(uid).addSnapshotListener { snapshot, _ ->
-            if (snapshot != null && snapshot.exists()) {
-                liveDriverName = snapshot.getString("full_name") ?: liveDriverName
-                accreditedCompanyId = snapshot.getString("accredited_company_id")
+                }
             }
         }
 
-        // 2. Listen for Driver Status
-        db.collection("drivers").document(uid).addSnapshotListener { snapshot, _ ->
-            if (snapshot != null && snapshot.exists()) {
-                val doc = snapshot
-                isTimedIn = doc.getBoolean("is_currently_timed_in") ?: false
-                
-                // Also fetch the last time_in log for hour calculation if not currently in state
-                if (isTimedIn && lastTimeInObj == null) {
-                    db.collection("dtr_logs")
-                        .whereEqualTo("driver_uid", uid)
-                        .whereEqualTo("action", "time_in")
-                        .orderBy("timestamp", Query.Direction.DESCENDING)
-                        .limit(1)
-                        .get()
-                        .addOnSuccessListener { logs ->
-                            val lastLog = logs.documents.firstOrNull()
-                            if (lastLog != null) {
-                                val ts = lastLog.getTimestamp("timestamp")
-                                if (ts != null) {
-                                    lastTimeInObj = ts.toDate().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime()
-                                    lastTimeInStr = lastTimeInObj?.format(DateTimeFormatter.ofPattern("hh:mm a"))
-                                }
-                            }
-                        }
+        // 3. Calculate Monthly OT Balance (NSCRP 26h Limit)
+        val startOfMonth = LocalDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0)
+        val startTimestamp = Timestamp(java.util.Date.from(startOfMonth.atZone(ZoneId.systemDefault()).toInstant()))
+        
+        db.collection("dtr_logs")
+            .whereEqualTo("driver_uid", uid)
+            .whereEqualTo("is_overtime", true)
+            .whereGreaterThanOrEqualTo("timestamp", startTimestamp)
+            .get()
+            .addOnSuccessListener { logs ->
+                var total = 0.0
+                for (doc in logs.documents) {
+                    total += doc.getDouble("total_hours") ?: 0.0
                 }
+                monthlyOTHours = total
+                Log.d("DriverDashboard", "Monthly OT Hours: $monthlyOTHours / 26.0")
             }
+            
+        // 4. Fetch Last Vehicle Mileage
+        db.collection("drivers").document(uid).get().addOnSuccessListener { doc ->
+            lastVehicleMileage = doc.getDouble("current_mileage") ?: 0.0
         }
     }
 
@@ -411,7 +408,7 @@ fun DriverDashboard(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val nextSchedule = feed?.schedules?.firstOrNull()
+    val nextSchedule = feed?.schedules?.firstOrNull { it.isOfficial == true }
     val tripPhase = nextSchedule?.trip_phase ?: "pending"
     val returnRequired = nextSchedule?.return_to_pickup == true
 
@@ -1528,7 +1525,9 @@ fun DriverDashboard(
                                                  val addr = getAddressFromLocation(currentLatitude, currentLongitude)
                                                  
                                                  // OT Calculation Logic (threshold: 5:30 PM)
-                                                 val isOvertime = now.hour >= 17 && (now.hour > 17 || now.minute >= 30)
+                                                 val timeThresholdMet = now.hour >= 17 && (now.hour > 17 || now.minute >= 30)
+                                                 // Hard block OT computation if 26h limit reached
+                                                 val isOvertime = timeThresholdMet && (monthlyOTHours < 26.0)
                                                  
                                                  // Total Hours Calculation
                                                  var totalHours = 0.0
@@ -1807,6 +1806,33 @@ fun DriverDashboard(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                // Multi-point Pickups List
+                nextSchedule?.pickup_points?.let { points ->
+                    if (points.isNotEmpty()) {
+                        Text("Route Stops", color = TextSecondary, modifier = Modifier.padding(top = 8.dp))
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = CardBlue),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                points.sortedBy { it.order }.forEach { point ->
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        Box(
+                                            modifier = Modifier.size(8.dp).background(if (point.arrived_at != null) AccentTeal else Color.Gray, androidx.compose.foundation.shape.CircleShape)
+                                        )
+                                        Column {
+                                            Text(point.name ?: "Unknown Stop", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                            if (point.arrived_at != null) {
+                                                Text("Arrived", color = AccentTeal, style = MaterialTheme.typography.labelSmall)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 if (feedError != null) {
                     Text(
                         text = feedError,
@@ -1826,6 +1852,20 @@ fun DriverDashboard(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
+                        Button(
+                            onClick = {
+                                tripActionSuccess = "Leave/Reliever request feature coming soon. Please contact Admin."
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentOrange.copy(alpha = 0.2f), contentColor = AccentOrange),
+                            border = BorderStroke(1.dp, AccentOrange),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.DateRange, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Request Leave / Reliever")
+                        }
+
                         // Return to Route Prompt
                         if (showReRoutePrompt && !isReRouting) {
                             Card(
@@ -1963,6 +2003,7 @@ fun DriverDashboard(
                                             // Notify service to start accumulating NEW route
                                             val startTripIntent = Intent(context, LocationService::class.java).apply {
                                                 action = LocationService.ACTION_START_TRIP
+                                                putExtra(LocationService.EXTRA_DRIVER_ID, auth.currentUser?.email?.lowercase()?.trim() ?: "")
                                             }
                                             context.startService(startTripIntent)
 
@@ -1978,8 +2019,9 @@ fun DriverDashboard(
                                             // Create initial real-time Trip Ticket
                                             val initialTicketData = hashMapOf(
                                                 "schedule_id" to docId,
+                                                "driver_uid" to (auth.currentUser?.uid ?: ""),
                                                 "driver_email" to (auth.currentUser?.email?.lowercase()?.trim() ?: ""),
-                                                "driver_name" to (session.user?.name ?: "Driver"),
+                                                "driver_name" to liveDriverName,
                                                 "client_name" to (nextSchedule?.client?.name ?: "Unknown"),
                                                 "vehicle_plate" to (session.driver?.plateNumber ?: ""),
                                                 "pickup_location" to (nextSchedule?.pickup_location?.address ?: "Unknown"),
@@ -2169,7 +2211,7 @@ fun DriverDashboard(
                                                     // Start high-accuracy tracking
                                                     val startTripIntent = Intent(context, LocationService::class.java).apply {
                                                         action = LocationService.ACTION_START_TRIP
-                                                        putExtra(LocationService.EXTRA_DRIVER_ID, session.user?.email)
+                                                        putExtra(LocationService.EXTRA_DRIVER_ID, auth.currentUser?.email?.lowercase()?.trim() ?: "")
                                                     }
                                                     context.startService(startTripIntent)
                                                     
@@ -2205,47 +2247,11 @@ fun DriverDashboard(
                                     }
                                 }
 
-                                // Step 3: MARK AS PICKED UP
+                                // Step 3: MARK AS PICKED UP (Odometer required)
                                 phase == "moving_to_pickup" -> {
                                     Button(
                                         onClick = {
-                                            val docId = nextSchedule?.docId ?: return@Button
-                                            scope.launch {
-                                                try {
-                                                    isMarkingPickup = true
-                                                     db.collection("schedules").document(docId).update(
-                                                        "trip_phase", "picked_up",
-                                                        "picked_up_at", FieldValue.serverTimestamp()
-                                                    ).await()
-
-                                                    pickedUpAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
-                                                    
-                                                    // Sync departure time to live Trip Ticket
-                                                    activeTicketId?.let { ticketId ->
-                                                        db.collection("trip_tickets").document(ticketId).update(
-                                                            "time_of_departure", pickedUpAt
-                                                        )
-                                                    }
-                                                    
-                                                    // Sync to drivers collection
-                                                    val email = auth.currentUser?.email
-                                                    if (email != null) {
-                                                        val dSnap = db.collection("drivers")
-                                                            .whereEqualTo("driver_email", email.lowercase().trim())
-                                                            .get().await()
-                                                        dSnap.documents.firstOrNull()?.reference?.update(
-                                                            "current_status", "picked_up",
-                                                            "current_trip_phase", "picked_up",
-                                                            "time_of_departure", pickedUpAt
-                                                        )
-                                                    }
-                                                    tripActionSuccess = "Passenger Picked Up! Ready for dropoff route."
-                                                } catch (e: Exception) {
-                                                    tripActionError = "Failed: ${e.message}"
-                                                } finally {
-                                                    isMarkingPickup = false
-                                                }
-                                            }
+                                            showOdometerDialog = true
                                         },
                                         modifier = Modifier.fillMaxWidth().height(64.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
@@ -2343,20 +2349,18 @@ fun DriverDashboard(
                                      }
                                 }
 
-                                // Step 6: COMPLETE
+                                // Step 6: COMPLETE (Odometer & Signature required)
                                 phase == "dropped_off" || phase == "ready_to_complete" || phase == "return_pickup" -> {
                                     Button(
                                         onClick = {
-                                            completedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
-                                            targetTripId = nextSchedule?.docId
-                                            showTripTicket = true
+                                            showOdometerDialog = true
                                         },
                                         modifier = Modifier.fillMaxWidth().height(64.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
                                         shape = RoundedCornerShape(16.dp),
                                         enabled = !isAnyLoading
                                     ) {
-                                        Text("COMPLETE TRIP & VIEW TICKET", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                        Text("COMPLETE TRIP", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -2432,6 +2436,7 @@ fun DriverDashboard(
                                                 // Notify service to start accumulating NEW route
                                                 val startTripIntent = Intent(context, LocationService::class.java).apply {
                                                     action = LocationService.ACTION_START_TRIP
+                                                    putExtra(LocationService.EXTRA_DRIVER_ID, auth.currentUser?.email?.lowercase()?.trim() ?: "")
                                                 }
                                                 context.startService(startTripIntent)
                                                 db.collection("schedules").document(docId).update(
@@ -2445,8 +2450,9 @@ fun DriverDashboard(
                                                 // Create initial real-time Trip Ticket
                                                 val initialTicketData = hashMapOf(
                                                     "schedule_id" to docId,
+                                                    "driver_uid" to (auth.currentUser?.uid ?: ""),
                                                     "driver_email" to (auth.currentUser?.email?.lowercase()?.trim() ?: ""),
-                                                    "driver_name" to (session.user?.name ?: "Driver"),
+                                                    "driver_name" to liveDriverName,
                                                     "client_name" to (nextSchedule?.client?.name ?: "Unknown"),
                                                     "vehicle_plate" to (session.driver?.plateNumber ?: ""),
                                                     "pickup_location" to (nextSchedule?.pickup_location?.address ?: "Unknown"),
@@ -2554,8 +2560,9 @@ fun DriverDashboard(
                             // Save the actual Trip Ticket for the Admin Dashboard and History
                             val ticketData = hashMapOf(
                                 "schedule_id" to docId,
+                                "driver_uid" to (auth.currentUser?.uid ?: ""),
                                 "driver_email" to (auth.currentUser?.email?.lowercase()?.trim() ?: ""),
-                                "driver_name" to (session.user?.name ?: "Driver"),
+                                "driver_name" to liveDriverName,
                                 "client_name" to (nextSchedule?.client?.name ?: "Unknown"),
                                 "vehicle_plate" to (session.driver?.plateNumber ?: ""),
                                 "pickup_location" to (nextSchedule?.pickup_location?.address ?: "Unknown"),
@@ -2614,12 +2621,114 @@ fun DriverDashboard(
             )
         }
 
-        // Vehicle Issue Dialog (outside ModalNavigationDrawer but inside Box)
-        if (showVehicleIssueDialog) {
-            VehicleIssueDialog(
-                onDismiss = { showVehicleIssueDialog = false },
-                onReport = handleVehicleIssueReport,
-                isReporting = isReportingVehicleIssue
+        }
+        
+        // NSCRP: Odometer Reading Dialog
+        if (showOdometerDialog) {
+            val isStarting = tripPhase == "moving_to_pickup" || tripPhase == "accepted"
+            OdometerDialog(
+                lastMileage = lastVehicleMileage,
+                isStarting = isStarting,
+                onConfirm = { mileage ->
+                    showOdometerDialog = false
+                    scope.launch {
+                        try {
+                            isMarkingPickup = true
+                            val docId = nextSchedule?.docId ?: return@launch
+                            val uid = auth.currentUser?.uid ?: return@launch
+                            
+                            // 1. Automated Time In (DTR) if not already
+                            if (!isTimedIn) {
+                                val addr = getAddressFromLocation(currentLatitude, currentLongitude)
+                                val logData = hashMapOf(
+                                    "driver_uid" to uid,
+                                    "driver_email" to (auth.currentUser?.email ?: ""),
+                                    "driver_name" to liveDriverName,
+                                    "action" to "time_in",
+                                    "timestamp" to FieldValue.serverTimestamp(),
+                                    "latitude" to currentLatitude,
+                                    "longitude" to currentLongitude,
+                                    "location_name" to addr,
+                                    "device_time" to LocalDateTime.now().toString(),
+                                    "is_overtime" to false
+                                )
+                                db.collection("dtr_logs").add(logData).await()
+                                db.collection("drivers").document(uid).update("is_currently_timed_in", true).await()
+                                isTimedIn = true
+                            }
+                            
+                            // 2. Update Schedule with Odometer
+                            val updateData = if (isStarting) {
+                                mapOf("start_odometer" to mileage, "trip_phase" to "picked_up", "picked_up_at" to FieldValue.serverTimestamp())
+                            } else {
+                                mapOf("end_odometer" to mileage)
+                            }
+                            db.collection("schedules").document(docId).update(updateData).await()
+                            
+                            // 3. Update Driver's Current Mileage
+                            db.collection("drivers").document(uid).update("current_mileage", mileage).await()
+                            lastVehicleMileage = mileage
+                            
+                            if (!isStarting) {
+                                showSignatureDialog = true
+                            } else {
+                                tripActionSuccess = "Odometer recorded. Trip started!"
+                            }
+                        } catch (e: Exception) {
+                            tripActionError = "Odometer failed: ${e.message}"
+                        } finally {
+                            isMarkingPickup = false
+                        }
+                    }
+                },
+                onDismiss = { showOdometerDialog = false }
+            )
+        }
+
+        // NSCRP: Signature / Refusal Dialog
+        if (showSignatureDialog) {
+            SignatureDialog(
+                onConfirm = { signatureUrl ->
+                    showSignatureDialog = false
+                    scope.launch {
+                        try {
+                            isCompletingTrip = true
+                            val docId = nextSchedule?.docId ?: return@launch
+                            db.collection("schedules").document(docId).update(
+                                "signature_url" to signatureUrl,
+                                "trip_phase" to "completed",
+                                "status" to "completed",
+                                "completed_at" to FieldValue.serverTimestamp()
+                            ).await()
+                            tripActionSuccess = "Trip verified with signature and completed!"
+                        } catch (e: Exception) {
+                            tripActionError = "Completion failed: ${e.message}"
+                        } finally {
+                            isCompletingTrip = false
+                        }
+                    }
+                },
+                onRefuse = { reason ->
+                    showSignatureDialog = false
+                    scope.launch {
+                        try {
+                            isCompletingTrip = true
+                            val docId = nextSchedule?.docId ?: return@launch
+                            db.collection("schedules").document(docId).update(
+                                "refusal_reason" to reason,
+                                "trip_phase" to "completed",
+                                "status" to "completed",
+                                "completed_at" to FieldValue.serverTimestamp()
+                            ).await()
+                            tripActionSuccess = "Trip completed with signature refusal recorded."
+                        } catch (e: Exception) {
+                            tripActionError = "Completion failed: ${e.message}"
+                        } finally {
+                            isCompletingTrip = false
+                        }
+                    }
+                },
+                onDismiss = { showSignatureDialog = false }
             )
         }
         }
@@ -2706,6 +2815,148 @@ fun SpeedometerWidget(speedKmH: Float, modifier: Modifier = Modifier) {
                     color = Color.LightGray,
                     style = MaterialTheme.typography.labelSmall
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun OdometerDialog(
+    lastMileage: Double,
+    isStarting: Boolean,
+    onConfirm: (Double) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var mileageStr by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = CardBlue,
+            modifier = androidx.compose.ui.Modifier.padding(16.dp)
+        ) {
+            Column(
+                modifier = androidx.compose.ui.Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    if (isStarting) "START ODOMETER" else "END ODOMETER",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                
+                Text(
+                    "Last recorded: ${"%.1f".format(lastMileage)} KM",
+                    color = TextSecondary,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                OutlinedTextField(
+                    value = mileageStr,
+                    onValueChange = { if (it.all { char -> char.isDigit() || char == '.' }) mileageStr = it },
+                    label = { Text("Enter Odometer Reading") },
+                    modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                    ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = AccentTeal,
+                        cursorColor = AccentTeal
+                    )
+                )
+
+                if (error != null) {
+                    Text(error!!, color = Color.Red, style = MaterialTheme.typography.bodySmall)
+                }
+
+                Button(
+                    onClick = {
+                        val mileage = mileageStr.toDoubleOrNull()
+                        if (mileage == null) {
+                            error = "Invalid number"
+                        } else if (mileage < lastMileage) {
+                            error = "Mileage cannot be less than last recorded (${lastMileage})"
+                        } else {
+                            onConfirm(mileage)
+                        }
+                    },
+                    modifier = androidx.compose.ui.Modifier.fillMaxWidth().height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
+                ) {
+                    Text("CONFIRM", fontWeight = FontWeight.Bold, color = Midnight)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SignatureDialog(
+    onConfirm: (String) -> Unit,
+    onRefuse: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var refusalReasonVal by remember { mutableStateOf("") }
+    var showRefusalField by remember { mutableStateOf(false) }
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(24.dp), color = CardBlue) {
+            Column(modifier = androidx.compose.ui.Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("CLIENT VERIFICATION", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                
+                if (!showRefusalField) {
+                    Box(
+                        modifier = androidx.compose.ui.Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .background(Color.White, RoundedCornerShape(8.dp))
+                            .border(1.dp, Color.Gray, RoundedCornerShape(8.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Digital Signature Canvas", color = Color.Gray)
+                    }
+
+                    Row(modifier = androidx.compose.ui.Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { onConfirm("placeholder_signature_url") },
+                            modifier = androidx.compose.ui.Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
+                        ) {
+                            Text("SAVE SIGNATURE", color = Midnight)
+                        }
+                        
+                        OutlinedButton(
+                            onClick = { showRefusalField = true },
+                            modifier = androidx.compose.ui.Modifier.weight(1f)
+                        ) {
+                            Text("REFUSE TO SIGN", color = AccentOrange)
+                        }
+                    }
+                } else {
+                    OutlinedTextField(
+                        value = refusalReasonVal,
+                        onValueChange = { refusalReasonVal = it },
+                        label = { Text("Reason for Refusal") },
+                        modifier = androidx.compose.ui.Modifier.fillMaxWidth()
+                    )
+                    
+                    Button(
+                        onClick = { onRefuse(refusalReasonVal) },
+                        modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentOrange)
+                    ) {
+                        Text("SUBMIT REFUSAL", color = Color.White)
+                    }
+                    
+                    TextButton(onClick = { showRefusalField = false }) {
+                        Text("Back to Signature", color = TextSecondary)
+                    }
+                }
             }
         }
     }

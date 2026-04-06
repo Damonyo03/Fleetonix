@@ -182,8 +182,8 @@ class LocationService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val extraDriverId = intent?.getStringExtra(EXTRA_DRIVER_ID)
         if (extraDriverId != null) {
-            driverDocId = extraDriverId.trim()
-            Log.d("LocationService", "Started tracking for driver: $driverDocId (document ID used for driver_locations)")
+            driverDocId = extraDriverId.lowercase().trim()
+            Log.d("LocationService", "Started tracking for driver email: $driverDocId")
         }
 
         when (intent?.action) {
@@ -276,12 +276,18 @@ class LocationService : Service() {
     }
 
     private fun updateDriverStatus(status: String) {
-        val id = driverDocId ?: return
+        val email = driverDocId ?: return
         val firestore = FirebaseFirestore.getInstance()
-        firestore.collection("drivers").document(id)
-            .update("current_status", status)
-            .addOnSuccessListener {
-                Log.d("LocationService", "Driver status updated to $status in Firestore.")
+        
+        // Query by email since drivers collection uses UID as document ID
+        firestore.collection("drivers")
+            .whereEqualTo("driver_email", email)
+            .get()
+            .addOnSuccessListener { snapshot ->
+                for (doc in snapshot.documents) {
+                    doc.reference.update("current_status", status)
+                }
+                Log.d("LocationService", "Driver status updated to $status for $email")
             }
             .addOnFailureListener { e ->
                 Log.e("LocationService", "Failed to update driver status: ${e.message}")
