@@ -90,10 +90,10 @@ fun OTPVerifyScreen(
                     android.util.Log.d("OTPVerifyScreen", "Verifying OTP via Firestore for userId=$userId, otpCode=$trimmedOtp")
                 }
 
-                val otpDoc = db.collection("otp_codes").document(userId).get().await()
+                val otpDoc = db.collection("otps").document(userId).get().await()
                 
                 if (!otpDoc.exists()) {
-                    errorMessage = "OTP not found. Please login again."
+                    errorMessage = "OTP not found. Please click resend to get a new code."
                     return@launch
                 }
 
@@ -108,7 +108,7 @@ fun OTPVerifyScreen(
                         }
                         
                         // Delete OTP after success
-                        db.collection("otp_codes").document(userId).delete()
+                        db.collection("otps").document(userId).delete()
                         
                         // Prepare DriverLoginData
                         val userDoc = db.collection("users").document(userId).get().await()
@@ -162,15 +162,30 @@ fun OTPVerifyScreen(
                 isResending = true
                 errorMessage = null
 
-                // Call login again to get new OTP
-                // Note: This requires email/password, so we'll need to store them temporarily
-                // For now, we'll show a message that user needs to go back and login again
-                errorMessage = "Please go back and login again to receive a new OTP"
+                val response = FleetonixApi.driverService.forgotPassword(
+                    ForgotPasswordRequest(email = userEmail.trim().lowercase())
+                )
+
+                if (response.success) {
+                    timeLeft = 300 // Reset timer
+                    errorMessage = null
+                } else {
+                    errorMessage = "Failed to resend OTP: ${response.message}"
+                }
             } catch (ex: Exception) {
                 errorMessage = "Failed to resend OTP: ${ex.message}"
             } finally {
                 isResending = false
             }
+        }
+    }
+
+    // Automatically send OTP the very first time the screen is composed
+    var hasSentInitialOTP by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!hasSentInitialOTP) {
+            hasSentInitialOTP = true
+            resendOTP()
         }
     }
 
@@ -287,7 +302,8 @@ fun OTPVerifyScreen(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = "Didn't receive the code? ",

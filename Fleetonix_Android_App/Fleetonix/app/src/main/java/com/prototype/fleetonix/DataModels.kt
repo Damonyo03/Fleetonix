@@ -157,14 +157,14 @@ data class DriverOTPResponse(
 )
 
 data class DriverOTPData(
-    @SerializedName("user_id") val userId: String? = null,
+    @SerializedName("userId") val userId: String? = null,
     val email: String? = null,
     val message: String? = null
 )
 
 data class DriverOTPVerifyRequest(
-    @SerializedName("user_id") val userId: String,
-    @SerializedName("otp_code") val otpCode: String
+    @SerializedName("userId") val userId: String,
+    @SerializedName("otpCode") val otpCode: String
 )
 
 // Forgot Password Models
@@ -179,16 +179,15 @@ data class ForgotPasswordResponse(
 )
 
 data class ForgotPasswordData(
-    @SerializedName("user_id") val userId: String? = null,
+    @SerializedName("userId") val userId: String? = null,
     val email: String? = null,
     val otp: String? = null
 )
 
 data class ResetPasswordRequest(
-    @SerializedName("user_id") val userId: String,
-    val otp: String,
-    val password: String,
-    @SerializedName("confirm_password") val confirmPassword: String? = null
+    @SerializedName("userId") val userId: String,
+    @SerializedName("otp") val otp: String,
+    @SerializedName("password") val password: String
 )
 
 data class ResetPasswordResponse(

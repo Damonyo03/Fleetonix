@@ -69,7 +69,7 @@ fun ForgotPasswordScreen(
                 errorMessage = null
 
                 val response = FleetonixApi.driverService.forgotPassword(
-                    ForgotPasswordRequest(email = trimmedEmail)
+                    ForgotPasswordRequest(email = trimmedEmail.lowercase())
                 )
 
                 if (response.success && response.data != null) {

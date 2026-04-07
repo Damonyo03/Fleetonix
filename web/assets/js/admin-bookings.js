@@ -219,8 +219,10 @@ async function showCreateBookingModal(clients) {
             }
         }
 
-        const pickup = document.getElementById('pickup_location').value.trim();
-        const dropoff = document.getElementById('dropoff_location').value.trim();
+        const pickupElement = document.getElementById('pickup_location_1') || document.getElementById('pickup_location');
+        const pickup = pickupElement ? pickupElement.value.trim() : "";
+        const dropoffElement = document.getElementById('dropoff_location');
+        const dropoff = dropoffElement ? dropoffElement.value.trim() : "";
         if (!pickup || !dropoff) throw new Error("Please enter pickup and dropoff locations.");
 
         const date = document.getElementById('pickup_date').value;
@@ -300,8 +302,8 @@ async function showCreateBookingModal(clients) {
                 trip_phase: "pending",
                 status: "pending",
                 pickup_location: pickup,
-                pickup_latitude: parseFloat(document.getElementById('pickup_latitude').value) || 0,
-                pickup_longitude: parseFloat(document.getElementById('pickup_longitude').value) || 0,
+                pickup_latitude: pickupPoints[0].latitude,
+                pickup_longitude: pickupPoints[0].longitude,
                 dropoff_location: dropoff,
                 dropoff_latitude: parseFloat(document.getElementById('dropoff_latitude').value) || 0,
                 dropoff_longitude: parseFloat(document.getElementById('dropoff_longitude').value) || 0,
@@ -372,9 +374,10 @@ async function showCreateBookingModal(clients) {
                 `;
                 container.appendChild(div);
 
-                // Auto-complete binding would go here
                 const input = div.querySelector('.pickup-input');
-                if (window.initAutocompleteForInput) window.initAutocompleteForInput(input);
+                if (window.initAutocompleteForInput) {
+                    window.initAutocompleteForInput(input);
+                }
                 
                 div.querySelector('.remove-pickup').onclick = () => div.remove();
             };

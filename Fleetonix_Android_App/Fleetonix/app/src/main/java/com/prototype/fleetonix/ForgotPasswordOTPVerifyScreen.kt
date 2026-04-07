@@ -47,12 +47,16 @@ import com.prototype.fleetonix.ui.theme.TextPrimary
 import com.prototype.fleetonix.ui.theme.TextSecondary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import retrofit2.HttpException
+import org.json.JSONObject
+import android.util.Log
 
 @Composable
 fun ForgotPasswordOTPVerifyScreen(
     userId: String,
     userEmail: String,
     onVerified: (String) -> Unit,
+    onResent: (ForgotPasswordData) -> Unit,
     onBack: () -> Unit
 ) {
     var otpCode by rememberSaveable { mutableStateOf("") }
@@ -95,13 +99,23 @@ fun ForgotPasswordOTPVerifyScreen(
                 )
 
                 if (response.success) {
-                    onVerified(trimmedOtp)
+                    errorMessage = null // Clear error immediately
+                    onVerified(trimmedOtp.trim()) // Ensure absolutely clean string
                 } else {
                     errorMessage = response.message.ifBlank { "Invalid OTP code" }
                 }
+            } catch (ex: HttpException) {
+                val errorBody = ex.response()?.errorBody()?.string()
+                Log.e("ForgotPasswordOTPVerify", "HTTP Error $errorBody")
+                errorMessage = try {
+                    val json = JSONObject(errorBody ?: "")
+                    json.getString("message")
+                } catch (e: Exception) {
+                    "OTP error (HTTP ${ex.code()}). Please request a new one."
+                }
             } catch (ex: Exception) {
-                android.util.Log.e("ForgotPasswordOTPVerifyScreen", "Exception during OTP verification", ex)
-                errorMessage = "Network error occurred. Please try again."
+                Log.e("ForgotPasswordOTPVerifyScreen", "Exception during OTP verification", ex)
+                errorMessage = "Network error occurred. Please try again.\n(${ex.localizedMessage})"
             } finally {
                 isLoading = false
             }
@@ -115,12 +129,13 @@ fun ForgotPasswordOTPVerifyScreen(
                 errorMessage = null
 
                 val response = FleetonixApi.driverService.forgotPassword(
-                    ForgotPasswordRequest(email = userEmail)
+                    ForgotPasswordRequest(email = userEmail.trim().lowercase())
                 )
 
                 if (response.success && response.data != null) {
                     timeLeft = 300 // Reset timer
                     errorMessage = null
+                    onResent(response.data) // Update global state
                 } else {
                     errorMessage = "Failed to resend OTP: ${response.message}"
                 }
@@ -262,7 +277,7 @@ fun ForgotPasswordOTPVerifyScreen(
                     )
                     TextButton(
                         onClick = { resendOTP() },
-                        enabled = !isResending && timeLeft <= 0
+                        enabled = !isResending && (timeLeft <= 240) // ENABLE AFTER 60 SECONDS
                     ) {
                         if (isResending) {
                             CircularProgressIndicator(

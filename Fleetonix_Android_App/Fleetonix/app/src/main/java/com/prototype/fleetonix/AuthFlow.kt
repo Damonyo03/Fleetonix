@@ -60,11 +60,13 @@ fun AuthFlow() {
     var feedLoading by remember { mutableStateOf(false) }
     var feedError by remember { mutableStateOf<String?>(null) }
     
-    var showForgotPassword by remember { mutableStateOf(false) }
-    var showForgotPasswordOTP by remember { mutableStateOf(false) }
-    var showResetPassword by remember { mutableStateOf(false) }
-    var otpData by remember { mutableStateOf<ForgotPasswordData?>(null) }
-    var verifiedOtpCode by remember { mutableStateOf("") }
+    var showForgotPassword by rememberSaveable { mutableStateOf(false) }
+    var showForgotPasswordOTP by rememberSaveable { mutableStateOf(false) }
+    var showResetPassword by rememberSaveable { mutableStateOf(false) }
+    
+    var resetUserId by rememberSaveable { mutableStateOf("") }
+    var resetEmail by rememberSaveable { mutableStateOf("") }
+    var verifiedOtpCode by rememberSaveable { mutableStateOf("") }
     
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -304,7 +306,8 @@ fun AuthFlow() {
             )
             "forgot_password" -> ForgotPasswordScreen(
                 onOTPSent = { data ->
-                    otpData = data
+                    resetUserId = data.userId ?: ""
+                    resetEmail = data.email ?: ""
                     showForgotPasswordOTP = true
                     showForgotPassword = false
                 },
@@ -313,15 +316,18 @@ fun AuthFlow() {
                 }
             )
             "forgot_password_otp" -> {
-                val data = otpData
-                if (data != null) {
+                if (resetUserId.isNotEmpty()) {
                     ForgotPasswordOTPVerifyScreen(
-                        userId = data.userId ?: "",
-                        userEmail = data.email ?: "",
+                        userId = resetUserId,
+                        userEmail = resetEmail,
                         onVerified = { otp ->
                             verifiedOtpCode = otp
                             showResetPassword = true
                             showForgotPasswordOTP = false
+                        },
+                        onResent = { data ->
+                            resetUserId = data.userId ?: resetUserId
+                            resetEmail = data.email ?: resetEmail
                         },
                         onBack = {
                             showForgotPasswordOTP = false
@@ -331,12 +337,11 @@ fun AuthFlow() {
                 }
             }
             "reset_password" -> {
-                val data = otpData
-                if (data != null) {
+                if (resetUserId.isNotEmpty()) {
                     ResetPasswordScreen(
-                        userId = data.userId ?: "",
+                        userId = resetUserId,
                         otpCode = verifiedOtpCode,
-                        userEmail = data.email ?: "",
+                        userEmail = resetEmail,
                         onPasswordReset = {
                             showResetPassword = false
                             showForgotPassword = false

@@ -45,7 +45,7 @@ interface DriverApi {
     suspend fun verifyForgotPasswordOTP(@Body request: DriverOTPVerifyRequest): DriverOTPResponse
 
     @POST("resetPasswordWithOTP")
-    suspend fun resetPassword(@Body request: ResetPasswordRequest): ResetPasswordResponse
+    suspend fun resetPassword(@Body request: Map<String, String>): ResetPasswordResponse
 
     @POST("reportAccident")
     suspend fun reportAccident(

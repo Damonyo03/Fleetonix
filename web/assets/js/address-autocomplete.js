@@ -100,32 +100,63 @@ class AddressAutocomplete {
     }
 }
 
+/**
+ * Robust Initialization Helper
+ * Can be called with either IDs or actual DOM elements.
+ */
+window.initAutocompleteForInput = (input, lat, lng) => {
+    const inputEl = typeof input === 'string' ? document.getElementById(input) : input;
+    let latEl = typeof lat === 'string' ? document.getElementById(lat) : lat;
+    let lngEl = typeof lng === 'string' ? document.getElementById(lng) : lng;
+
+    if (!inputEl) return null;
+
+    // Fallback: If lat/lng elements are not provided, look for hidden inputs in the same container
+    if (!latEl || !lngEl) {
+        const container = inputEl.closest('.form-group') || inputEl.parentElement;
+        if (container) {
+            latEl = latEl || container.querySelector('.lat-input, [id$="_latitude"]');
+            lngEl = lngEl || container.querySelector('.lng-input, [id$="_longitude"]');
+        }
+    }
+
+    if (inputEl && !inputEl.dataset.autocompleteBound) {
+        inputEl.dataset.autocompleteBound = "true";
+        const instance = new AddressAutocomplete(inputEl, latEl, lngEl);
+        
+        // Handle "Use Current Location" buttons if they exist in the same group
+        const group = inputEl.closest('.form-group');
+        if (group) {
+            const locateBtn = group.querySelector('.locate-btn, .btn-input-action');
+            if (locateBtn) {
+                locateBtn.onclick = () => instance.getCurrentLocation();
+            }
+        }
+        
+        return instance;
+    }
+    return null;
+};
+
 // Global initialization function
 window.initAllAutocompletes = () => {
     const configs = [
-        { input: 'pickup_location', lat: 'pickup_latitude', lng: 'pickup_longitude', key: 'pickupAuto' },
-        { input: 'dropoff_location', lat: 'dropoff_latitude', lng: 'dropoff_longitude', key: 'dropoffAuto' }
+        { input: 'pickup_location', lat: 'pickup_latitude', lng: 'pickup_longitude' },
+        { input: 'pickup_location_1', lat: 'pickup_latitude_1', lng: 'pickup_longitude_1' },
+        { input: 'dropoff_location', lat: 'dropoff_latitude', lng: 'dropoff_longitude' }
     ];
 
     configs.forEach(conf => {
-        const input = document.getElementById(conf.input);
-        const lat = document.getElementById(conf.lat);
-        const lng = document.getElementById(conf.lng);
-
-        if (input && lat && !input.dataset.autocompleteBound) {
-            input.dataset.autocompleteBound = "true";
-            window[conf.key] = new AddressAutocomplete(input, lat, lng);
-            
-            // Re-bind target buttons if they exist
-            const targetBtn = input.id === 'pickup_location' ? document.getElementById('locatePickup') : document.getElementById('locateDropoff');
-            if (targetBtn) {
-                targetBtn.onclick = () => window[conf.key].getCurrentLocation();
-            }
-        }
+        window.initAutocompleteForInput(conf.input, conf.lat, conf.lng);
+    });
+    
+    // Also catch any generic pickup-inputs without specific IDs (common in dynamic rows)
+    document.querySelectorAll('.pickup-input:not([data-autocomplete-bound])').forEach(el => {
+        window.initAutocompleteForInput(el);
     });
 };
 
-// Auto-init on DOM changes (to catch modals)
+// Auto-init on DOM changes (to catch modals and dynamic rows)
 const observer = new MutationObserver(() => {
     if (window.google && window.google.maps && window.google.maps.places) {
         window.initAllAutocompletes();

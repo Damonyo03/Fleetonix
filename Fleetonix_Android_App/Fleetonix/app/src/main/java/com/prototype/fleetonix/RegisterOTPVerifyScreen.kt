@@ -43,7 +43,8 @@ import com.prototype.fleetonix.ui.theme.Midnight
 import com.prototype.fleetonix.ui.theme.TextPrimary
 import com.prototype.fleetonix.ui.theme.TextSecondary
 import kotlinx.coroutines.launch
-
+import kotlinx.coroutines.delay
+import androidx.compose.runtime.LaunchedEffect
 @Composable
 fun RegisterOTPVerifyScreen(
     userData: UserRegistrationData,
@@ -54,9 +55,23 @@ fun RegisterOTPVerifyScreen(
     var otpCode by rememberSaveable { mutableStateOf("") }
     var isLoading by rememberSaveable { mutableStateOf(false) }
     var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var timeLeft by rememberSaveable { mutableStateOf(300) } // 5 minutes in seconds
+    var isResending by rememberSaveable { mutableStateOf(false) }
     
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
+
+    // Countdown timer
+    LaunchedEffect(timeLeft) {
+        if (timeLeft > 0) {
+            delay(1000)
+            timeLeft--
+        }
+    }
+
+    val minutes = timeLeft / 60
+    val seconds = timeLeft % 60
+    val timeString = String.format("%d:%02d", minutes, seconds)
 
     fun attemptVerifyOTP() {
         if (otpCode.length < 6) {
@@ -147,6 +162,24 @@ fun RegisterOTPVerifyScreen(
                 )
             )
 
+            if (timeLeft > 0) {
+                Text(
+                    text = "Code expires in: $timeString",
+                    color = if (timeLeft < 60) Color(0xFFFF6B6B) else AccentTeal,
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else {
+                Text(
+                    text = "OTP expired. Please request a new one.",
+                    color = Color(0xFFFF6B6B),
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
             if (!errorMessage.isNullOrBlank()) {
                 Text(
                     text = errorMessage ?: "",
@@ -168,7 +201,7 @@ fun RegisterOTPVerifyScreen(
                     onClick = { attemptVerifyOTP() },
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.medium,
-                    enabled = !isLoading
+                    enabled = !isLoading && otpCode.length == 6 && timeLeft > 0
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(
@@ -180,6 +213,53 @@ fun RegisterOTPVerifyScreen(
                         Text("Complete Registration")
                     }
                 }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Didn't receive the code? ",
+                        color = TextSecondary,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                try {
+                                    isResending = true
+                                    errorMessage = null
+                                    val response = FleetonixApi.driverService.sendRegistrationOTP(
+                                        RegistrationOTPRequest(email = email)
+                                    )
+                                    if (response.success) {
+                                        timeLeft = 300 // Reset timer
+                                        errorMessage = null
+                                    } else {
+                                        errorMessage = "Failed to resend OTP: ${response.message}"
+                                    }
+                                } catch (ex: Exception) {
+                                    errorMessage = "Network error. Please try again."
+                                } finally {
+                                    isResending = false
+                                }
+                            }
+                        },
+                        enabled = !isResending && timeLeft <= 0
+                    ) {
+                        if (isResending) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = AccentTeal,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Text("Resend", color = AccentTeal)
+                        }
+                    }
+                }
+
                 TextButton(
                     onClick = onBack,
                     modifier = Modifier.fillMaxWidth()
