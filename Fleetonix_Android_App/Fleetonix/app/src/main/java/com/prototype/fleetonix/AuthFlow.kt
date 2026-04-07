@@ -72,6 +72,7 @@ fun AuthFlow() {
     val lifecycleOwner = LocalLifecycleOwner.current
 
     var showHistory by remember { mutableStateOf(false) }
+    var showAssignments by remember { mutableStateOf(false) }
 
     // Lifecycle-aware Presence Management
     // Ensures status is ONLY 'active' when app is in foreground
@@ -250,6 +251,7 @@ fun AuthFlow() {
         userRole == "driver" && !isDriverVerified -> "verify_otp"
         isFirstLoginMode && needsPasswordReset -> "force_reset"
         showHistory -> "history"
+        showAssignments -> "assignments"
         else -> "dashboard"
     }
     
@@ -422,6 +424,9 @@ fun AuthFlow() {
                         onViewHistory = {
                             showHistory = true
                         },
+                        onViewAssignments = {
+                            showAssignments = true
+                        },
                         onLogout = {
                             PresenceManager.updateStatus(false)
                             auth.signOut()
@@ -433,6 +438,9 @@ fun AuthFlow() {
             }
             "history" -> {
                 TripHistoryScreen(onBack = { showHistory = false })
+            }
+            "assignments" -> {
+                AssignmentsScreen(onBack = { showAssignments = false })
             }
         }
     }

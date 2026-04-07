@@ -241,6 +241,7 @@ fun DriverDashboard(
     feedError: String?,
     onRefresh: () -> Unit,
     onViewHistory: () -> Unit,
+    onViewAssignments: () -> Unit,
     onLogout: () -> Unit
 ) {
     Log.d("DriverDashboard", "Dashboard recomposed. Schedules count: ${feed?.schedules?.size ?: 0} (Loading: $isFeedLoading)")
@@ -1253,6 +1254,34 @@ fun DriverDashboard(
                                 Spacer(modifier = Modifier.padding(horizontal = 8.dp))
                                 Text(
                                     text = "Time Record History",
+                                    color = TextPrimary,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        }
+
+                        // My Assignments option
+                        TextButton(
+                            onClick = {
+                                scope.launch { drawerState.close() }
+                                onViewAssignments()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.Start,
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Assignment,
+                                    contentDescription = "Assignments",
+                                    tint = TextPrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.padding(horizontal = 8.dp))
+                                Text(
+                                    text = "My Assignments",
                                     color = TextPrimary,
                                     style = MaterialTheme.typography.bodyLarge
                                 )
