@@ -30,6 +30,54 @@
             .map-section { grid-template-columns: 1fr; }
             .side-panel { height: 400px; }
         }
+
+        /* ── Quick Info Panel (marker click overlay) ─────────────── */
+        #quickInfoPanel {
+            display: none;
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            width: 300px;
+            background: rgba(15, 23, 42, 0.96);
+            border: 1px solid rgba(99, 179, 237, 0.25);
+            border-radius: 14px;
+            padding: 16px 18px;
+            z-index: 10;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            color: #e2e8f0;
+            font-family: 'Inter', sans-serif;
+            animation: slideUpPanel 0.22s ease;
+        }
+        #quickInfoPanel.active { display: block; }
+        @keyframes slideUpPanel {
+            from { opacity: 0; transform: translateY(12px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .qip-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+        .qip-name { font-size: 15px; font-weight: 700; color: #f1f5f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 210px; }
+        .qip-close { background: none; border: none; color: #64748b; cursor: pointer; font-size: 18px; line-height: 1; padding: 0; }
+        .qip-close:hover { color: #f1f5f9; }
+        .qip-status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+        .qip-badge { font-size: 10px; font-weight: 800; padding: 3px 9px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .qip-badge.available { background: #10b98122; color: #10b981; border: 1px solid #10b981; }
+        .qip-badge.on_schedule, .qip-badge.accepted, .qip-badge.moving_to_pickup,
+        .qip-badge.picked_up, .qip-badge.moving_to_dropoff { background: #3b82f622; color: #3b82f6; border: 1px solid #3b82f6; }
+        .qip-badge.ready_to_complete, .qip-badge.return_pickup { background: #f59e0b22; color: #f59e0b; border: 1px solid #f59e0b; }
+        .qip-badge.completed { background: #10b98122; color: #10b981; border: 1px solid #10b981; }
+        .qip-badge.offline { background: #94a3b822; color: #94a3b8; border: 1px solid #94a3b8; }
+        .qip-badge.accident { background: #ef444422; color: #ef4444; border: 1px solid #ef4444; }
+        .qip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+        .qip-cell { background: rgba(255,255,255,0.04); border-radius: 8px; padding: 8px 10px; }
+        .qip-cell-label { font-size: 9px; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 3px; }
+        .qip-cell-value { font-size: 14px; font-weight: 700; color: #f1f5f9; }
+        .qip-cell-value small { font-size: 10px; font-weight: 400; color: #94a3b8; }
+        .qip-cell.full { grid-column: 1 / span 2; }
+        .qip-traffic { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-top: 4px; }
+        .qip-traffic-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+        .qip-footer { font-size: 10px; color: #475569; display: flex; justify-content: space-between; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px; margin-top: 4px; }
+        .qip-focus-btn { background: none; border: 1px solid rgba(99,179,237,0.3); border-radius: 6px; color: #63b3ed; font-size: 10px; padding: 3px 8px; cursor: pointer; }
+        .qip-focus-btn:hover { background: rgba(99,179,237,0.1); }
     </style>
 </head>
 <body>
@@ -159,7 +207,47 @@
                     </div>
                     
                     <div class="map-section">
-                        <div id="drivers-map"></div>
+                        <div style="position: relative;">
+                            <div id="drivers-map"></div>
+
+                            <!-- Quick Info Panel: shown on marker click -->
+                            <div id="quickInfoPanel">
+                                <div class="qip-header">
+                                    <span class="qip-name" id="qipName">Driver</span>
+                                    <button class="qip-close" onclick="window.closeQuickInfoPanel()">&times;</button>
+                                </div>
+                                <div class="qip-status-row">
+                                    <span class="qip-badge available" id="qipBadge">Available</span>
+                                    <span id="qipVehicle" style="font-size:11px; color:#64748b;"></span>
+                                </div>
+                                <div class="qip-grid">
+                                    <div class="qip-cell">
+                                        <div class="qip-cell-label">Speed</div>
+                                        <div class="qip-cell-value" id="qipSpeed">0 <small>km/h</small></div>
+                                    </div>
+                                    <div class="qip-cell">
+                                        <div class="qip-cell-label">Odometer</div>
+                                        <div class="qip-cell-value" id="qipOdometer">-- <small>km</small></div>
+                                    </div>
+                                    <div class="qip-cell full">
+                                        <div class="qip-cell-label">Trip Phase</div>
+                                        <div class="qip-cell-value" id="qipPhase" style="font-size:12px;">--</div>
+                                    </div>
+                                    <div class="qip-cell full">
+                                        <div class="qip-cell-label">Passenger</div>
+                                        <div class="qip-cell-value" id="qipPassenger" style="font-size:12px;">--</div>
+                                    </div>
+                                </div>
+                                <div class="qip-traffic">
+                                    <div class="qip-traffic-dot" id="qipTrafficDot" style="background:#10b981;"></div>
+                                    <span id="qipTrafficLabel" style="color:#94a3b8;">No traffic data</span>
+                                </div>
+                                <div class="qip-footer">
+                                    <span id="qipLastSeen">--</span>
+                                    <button class="qip-focus-btn" id="qipFocusBtn"><i class="fas fa-crosshairs"></i> Re-center</button>
+                                </div>
+                            </div>
+                        </div></div>
                         
                         <div class="side-panel">
                             <div class="glass-card" style="padding: 16px; border-radius: var(--radius-md); background: rgba(255,255,255,0.02);">

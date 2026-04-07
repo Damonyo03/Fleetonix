@@ -18,9 +18,11 @@ let infoWindow = null;
 let driverDTRStatus = {}; // email -> { action: 'time_in'|'time_out', timestamp: JS Date }
 
 // Live Map Assets
-let accidentOverlays = {}; // driverId -> AccidentOverlay
-let activeSchedulesData = {}; // driverId -> { stops: [], final: {}, tripId: "" }
-let driverPaths = {}; // driverId -> [{lat, lng}]
+let accidentOverlays = {};        // driverId -> AccidentOverlay
+let activeSchedulesData = {};      // driverId -> { stops:[], final:{}, tripId:"" }
+let driverPaths = {};              // driverId -> [{lat, lng, speedKmh}]
+let driverPolylineSegments = {};   // driverId -> [google.maps.Polyline] (colored segments)
+let activeQuickInfoDriverId = null; // currently pinned Quick Info driver
 
 class MapOverlay extends google.maps.OverlayView {
     constructor(position, content, className) {
@@ -572,12 +574,19 @@ function refreshMarker(id) {
     // Automated Cleanup for Completed Trips
     if (isCompleted) {
         if (driverPolylines[id]) { driverPolylines[id].setMap(null); delete driverPolylines[id]; }
+        // Clear color-coded segments
+        if (driverPolylineSegments[id]) {
+            driverPolylineSegments[id].forEach(s => s.setMap(null));
+            delete driverPolylineSegments[id];
+        }
         if (driverPaths[id]) delete driverPaths[id];
         if (accidentOverlays[id]) { accidentOverlays[id].setMap(null); delete accidentOverlays[id]; }
         if (driverStopMarkers[id]) {
             driverStopMarkers[id].forEach(m => m.setMap(null));
             delete driverStopMarkers[id];
         }
+        // Close Quick Info panel if this driver is shown
+        if (activeQuickInfoDriverId === id) closeQuickInfoPanel();
     }
 
     if (driverMarkers[id]) {
@@ -604,28 +613,45 @@ function refreshMarker(id) {
             delete accidentOverlays[id];
         }
 
-        // Telemetry Polyline Implementation
-        if (!isCompleted && (status === 'in_progress' || status === 'pickup' || status === 'dropoff')) {
+        // ── Segment Color-Coded Route Polylines ─────────────────────────────────
+        // Each path segment is its own 2-point polyline colored by speed at that point.
+        if (!isCompleted && (status === 'in_progress' || status === 'pickup' || status === 'dropoff' ||
+                             status === 'moving_to_pickup' || status === 'moving_to_dropoff' ||
+                             status === 'picked_up' || status === 'accepted' || status === 'on_schedule')) {
             if (!driverPaths[id]) driverPaths[id] = [];
             
             const lastPoint = driverPaths[id][driverPaths[id].length - 1];
             if (!lastPoint || (lastPoint.lat !== pos.lat || lastPoint.lng !== pos.lng)) {
-                driverPaths[id].push(pos);
-                if (driverPaths[id].length > 100) driverPaths[id].shift();
+                driverPaths[id].push({ lat: pos.lat, lng: pos.lng, speedKmh });
+                if (driverPaths[id].length > 120) driverPaths[id].shift();
             }
 
-            if (!driverPolylines[id]) {
-                driverPolylines[id] = new google.maps.Polyline({
-                    path: driverPaths[id],
-                    geodesic: true,
-                    strokeColor: trafficColor,
-                    strokeOpacity: 0.8,
-                    strokeWeight: 4,
-                    map: driversMap
-                });
-            } else {
-                driverPolylines[id].setPath(driverPaths[id]);
-                driverPolylines[id].setOptions({ strokeColor: trafficColor });
+            // Re-draw all segments as colored polylines
+            if (!driverPolylineSegments[id]) driverPolylineSegments[id] = [];
+            
+            // Only rebuild if path grew (avoid full redraw on every tick)
+            const path = driverPaths[id];
+            if (path.length >= 2) {
+                // Clear old segments
+                driverPolylineSegments[id].forEach(seg => seg.setMap(null));
+                driverPolylineSegments[id] = [];
+
+                for (let i = 0; i < path.length - 1; i++) {
+                    const segSpeed = path[i + 1].speedKmh || path[i].speedKmh || 0;
+                    let segColor = '#10b981'; // Green – moving fast (>40 km/h)
+                    if (segSpeed < 10)       segColor = '#ef4444'; // Red – heavy traffic
+                    else if (segSpeed < 40)  segColor = '#f59e0b'; // Orange – light traffic
+
+                    const seg = new google.maps.Polyline({
+                        path: [{ lat: path[i].lat, lng: path[i].lng }, { lat: path[i+1].lat, lng: path[i+1].lng }],
+                        geodesic: true,
+                        strokeColor: segColor,
+                        strokeOpacity: 0.85,
+                        strokeWeight: 4,
+                        map: driversMap
+                    });
+                    driverPolylineSegments[id].push(seg);
+                }
             }
         }
 
@@ -681,12 +707,20 @@ function refreshMarker(id) {
 
         marker.isBlinking = isAccident;
         marker.driverData = d;
+        marker.driverId = id;
         marker.addListener('click', () => {
-            if (infoWindow) infoWindow.close();
-            infoWindow.setContent(getInfoWindowContent(marker.driverData));
-            infoWindow.open(driversMap, marker);
+            // Auto-center + zoom the map
+            driversMap.panTo(marker.getPosition());
+            driversMap.setZoom(16);
+            // Show Quick Info panel (replaces legacy infoWindow)
+            showQuickInfoPanel(id, marker.driverData);
         });
         driverMarkers[id] = marker;
+    }
+
+    // Live-update Quick Info if this driver is currently pinned
+    if (activeQuickInfoDriverId === id) {
+        showQuickInfoPanel(id, d);
     }
 }
 
@@ -848,11 +882,117 @@ function updateOnlineDisplay() {
 window.focusDriver = function(driverId) {
     const marker = driverMarkers[driverId];
     if (marker) {
-        driversMap.setCenter(marker.getPosition());
+        driversMap.panTo(marker.getPosition());
         driversMap.setZoom(16);
-        google.maps.event.trigger(marker, 'click');
+        showQuickInfoPanel(driverId, allDriversData[driverId]);
     }
 };
+
+/**
+ * Shows the Quick Info panel overlay on the map.
+ * Populates all fields from live driver data + active schedule data.
+ */
+function showQuickInfoPanel(driverId, driver) {
+    if (!driver) return;
+    activeQuickInfoDriverId = driverId;
+
+    const panel = document.getElementById('quickInfoPanel');
+    if (!panel) return;
+
+    // Name
+    const email = driver.driver_email?.toLowerCase()?.trim() || '';
+    const resolvedName = (driver.driver_name && !['Loading...', 'Loading Driver...'].includes(driver.driver_name))
+        ? driver.driver_name
+        : (driverDTRStatus[email]?.name || driver.driver_email || 'Fleet Driver');
+    document.getElementById('qipName').textContent = resolvedName;
+
+    // Vehicle
+    const vehicle = driver.vehicle_assigned
+        ? `${driver.vehicle_assigned}${driver.plate_number ? ' · ' + driver.plate_number : ''}`
+        : 'No vehicle assigned';
+    document.getElementById('qipVehicle').textContent = vehicle;
+
+    // Status badge
+    const rawStatus = driver.current_trip_phase || driver.current_status || 'available';
+    const badge = document.getElementById('qipBadge');
+    badge.textContent = rawStatus.replace(/_/g, ' ').toUpperCase();
+    badge.className = `qip-badge ${rawStatus}`;
+
+    // Speed
+    const speedKmh = ((driver.current_speed || 0) * 3.6).toFixed(1);
+    document.getElementById('qipSpeed').innerHTML = `${speedKmh} <small>km/h</small>`;
+
+    // Odometer
+    const odometer = driver.odometer_start !== undefined
+        ? `${Number(driver.odometer_start).toFixed(1)} <small>km</small>`
+        : '-- <small>km</small>';
+    document.getElementById('qipOdometer').innerHTML = odometer;
+
+    // Trip Phase (human readable)
+    const phaseMap = {
+        pending: 'Pending Dispatch',
+        accepted: 'Job Accepted',
+        moving_to_pickup: 'En Route to Pickup',
+        picked_up: 'Passenger On Board',
+        moving_to_dropoff: 'En Route to Dropoff',
+        ready_to_complete: 'At Destination',
+        return_pickup: 'Return Trip',
+        completed: 'Trip Completed',
+        available: 'Standby / Available',
+        on_schedule: 'Scheduled',
+    };
+    document.getElementById('qipPhase').textContent = phaseMap[rawStatus] || rawStatus.replace(/_/g, ' ');
+
+    // Passenger info
+    const mission = activeSchedulesData[driverId];
+    const passengerName = driver.passenger_name || driver.client_name || (mission ? '(see schedule)' : 'No active trip');
+    document.getElementById('qipPassenger').textContent = passengerName;
+
+    // Traffic indicator
+    const spd = (driver.current_speed || 0) * 3.6;
+    let trafficColor = '#94a3b8', trafficLabel = 'Stationary';
+    if (spd >= 40)      { trafficColor = '#10b981'; trafficLabel = 'Moving freely (>40 km/h)'; }
+    else if (spd >= 10) { trafficColor = '#f59e0b'; trafficLabel = 'Light traffic (10-40 km/h)'; }
+    else if (spd > 0)   { trafficColor = '#ef4444'; trafficLabel = 'Heavy traffic (<10 km/h)'; }
+    document.getElementById('qipTrafficDot').style.background = trafficColor;
+    document.getElementById('qipTrafficLabel').textContent = trafficLabel;
+    document.getElementById('qipTrafficLabel').style.color = trafficColor;
+
+    // Last seen
+    let lastSeenText = 'No signal';
+    if (driver.last_updated) {
+        const lastMs = driver.last_updated.toMillis
+            ? driver.last_updated.toMillis()
+            : (driver.last_updated.seconds ? driver.last_updated.seconds * 1000 : Number(driver.last_updated));
+        const ageMins = Math.round((Date.now() - lastMs) / 60000);
+        const timeStr = new Date(lastMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        lastSeenText = `Last seen ${timeStr} (${ageMins}m ago)`;
+    }
+    document.getElementById('qipLastSeen').textContent = lastSeenText;
+
+    // Re-center button
+    const focusBtn = document.getElementById('qipFocusBtn');
+    focusBtn.onclick = () => {
+        const marker = driverMarkers[driverId];
+        if (marker) {
+            driversMap.panTo(marker.getPosition());
+            driversMap.setZoom(17);
+        }
+    };
+
+    // Show panel (re-trigger animation)
+    panel.classList.remove('active');
+    void panel.offsetWidth; // reflow
+    panel.classList.add('active');
+}
+
+function closeQuickInfoPanel() {
+    activeQuickInfoDriverId = null;
+    const panel = document.getElementById('quickInfoPanel');
+    if (panel) panel.classList.remove('active');
+}
+window.closeQuickInfoPanel = closeQuickInfoPanel;
+
 
 function getMarkerIcon(status) {
     const color = getStatusColor(status).substring(1); 
