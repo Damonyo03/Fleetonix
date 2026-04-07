@@ -29,18 +29,7 @@ onAuthStateChanged(auth, async (user) => {
 
     const role = currentUserData?.role || currentUserData?.user_type;
 
-    // If company_admin, force their company
-    if (role === 'company_admin' && currentUserData.accredited_company_id) {
-        selectedCompanyId = currentUserData.accredited_company_id;
-    }
-
     // DTR logs initialized for NSCRP
-
-    // Pre-fetch all companies for display names
-    const companiesSnap = await getDocs(collection(db, "accredited_companies"));
-    companiesSnap.forEach(doc => {
-        activeCompanies[doc.id] = doc.data().name;
-    });
 
     initDTRLogs();
 });
@@ -81,7 +70,6 @@ function renderLogs(docs) {
         const log = d.data();
         const timestamp = log.timestamp ? log.timestamp.toDate().toLocaleString() : 'N/A';
         const actionLabel = log.action === 'time_in' ? 'Time In' : 'Time Out';
-        const companyName = activeCompanies[log.accredited_company_id] || "Unknown Company";
         const gpsLink = (log.latitude && log.longitude) 
             ? `<a href="https://www.google.com/maps?q=${log.latitude},${log.longitude}" target="_blank" class="gps-link"><i class="fas fa-map-marker-alt"></i> View Map</a>`
             : 'N/A';

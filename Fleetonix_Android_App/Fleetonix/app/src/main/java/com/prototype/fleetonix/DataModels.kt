@@ -244,8 +244,7 @@ data class UserRegistrationData(
     val full_name: String,
     val password: String,
     val phone: String? = null,
-    val role: String,
-    @SerializedName("accredited_company_id") val accredited_company_id: String? = "jettsan"
+    val role: String
 )
 
 data class CompleteRegistrationRequest(

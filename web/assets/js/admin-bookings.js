@@ -109,7 +109,7 @@ async function showCreateBookingModal(clients) {
             <label for="modal_client">Select Client</label>
             <select id="modal_client" class="form-input">
                 <option value="">-- Choose a Client --</option>
-                ${clients.map(c => `<option value="${c.id}" data-name="${c.full_name}" data-company-id="${c.accredited_company_id || ''}">${c.full_name}</option>`).join('')}
+                ${clients.map(c => `<option value="${c.id}" data-name="${c.full_name}">${c.full_name}</option>`).join('')}
             </select>
         </div>
 
@@ -462,11 +462,7 @@ function initBookingList() {
     let q = collection(db, "bookings");
 
     // RBAC Filtering
-    if (role === 'company_admin' && companyId) {
-        q = query(collection(db, "bookings"), where("accredited_company_id", "==", companyId));
-    } else {
-        q = query(collection(db, "bookings"), orderBy("created_at", "desc"));
-    }
+    q = query(collection(db, "bookings"), orderBy("created_at", "desc"));
 
     onSnapshot(q, (snapshot) => {
         allBookings = snapshot.docs;

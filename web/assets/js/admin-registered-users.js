@@ -54,15 +54,11 @@ onAuthStateChanged(auth, async (user) => {
     // Filter + Search listeners
     document.getElementById('roleFilter')?.addEventListener('change', applyFilters);
     document.getElementById('searchInput')?.addEventListener('input', applyFilters);
-    document.getElementById('companyFilter')?.addEventListener('change', applyFilters);
 
     // Create User Button
     document.getElementById('createUserBtn')?.addEventListener('click', showCreateUserModal);
     
     // Initialize UI without company filters
-    if (document.getElementById('companyFilter')) {
-        document.getElementById('companyFilter').style.display = 'none';
-    }
 });
 
 
@@ -114,7 +110,7 @@ function renderUsers(users) {
                         ${role}
                     </span>
                 </td>
-                <td>${u.company_name || '—'}</td>
+                <td>Jettsan</td>
                 <td style="color:var(--text-muted); font-size:0.85em;">${registered}</td>
                 <td>
                     <div style="display: flex; gap: 8px; justify-content: flex-end;">
@@ -151,7 +147,7 @@ window.viewUser = async (id) => {
             </div>
             <div><strong>Role:</strong> <span style="text-transform:capitalize;">${role}</span></div>
             <div><strong>Phone:</strong> ${u.phone || u.contact_number || '—'}</div>
-            <div><strong>Company:</strong> ${u.company_name || '—'}</div>
+            <div><strong>Contractor:</strong> Jettsan</div>
             <div><strong>Address:</strong> ${u.address || '—'}</div>
         </div>
     `, async () => { /* read-only */ });
@@ -210,7 +206,6 @@ async function showCreateUserModal() {
         const email = document.getElementById('modal_email').value.trim();
         const password = document.getElementById('modal_password').value;
         const role = document.getElementById('modal_role').value;
-        const companyName = document.getElementById('modal_company').value.trim();
 
         if (!fullName || !email || !password || !role) {
             throw new Error("Please fill in all required fields.");

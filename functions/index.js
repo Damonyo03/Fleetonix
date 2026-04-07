@@ -326,7 +326,6 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
       full_name: fullName,
       email: email.toLowerCase().trim(),
       role: role,
-      accredited_company_id: "jettsan",
       company_name: "Jettsan",
       created_at: admin.firestore.FieldValue.serverTimestamp(),
       user_type: role, // Compatibility for dual-schema
@@ -339,7 +338,6 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
       await admin.firestore().collection("drivers").doc(email.toLowerCase().trim()).set({
         driver_name: fullName,
         driver_email: email.toLowerCase().trim(),
-        accredited_company_id: "jettsan",
         current_status: "offline",
         created_at: admin.firestore.FieldValue.serverTimestamp(),
         updated_at: admin.firestore.FieldValue.serverTimestamp(),
@@ -673,7 +671,6 @@ exports.completeRegistration = onRequest({ cors: true }, async (req, res) => {
       email: email.toLowerCase().trim(),
       phone: phone || userData.phone || "",
       company_name: "Jettsan",
-      accredited_company_id: "jettsan",
       user_type: role,
       status: "active",
       created_at: admin.firestore.FieldValue.serverTimestamp(),
@@ -684,7 +681,6 @@ exports.completeRegistration = onRequest({ cors: true }, async (req, res) => {
       await admin.firestore().collection("drivers").doc(email.toLowerCase().trim()).set({
         driver_name: userData.full_name,
         driver_email: email.toLowerCase().trim(),
-        accredited_company_id: "jettsan",
         current_status: "offline",
         created_at: admin.firestore.FieldValue.serverTimestamp(),
         updated_at: admin.firestore.FieldValue.serverTimestamp(),

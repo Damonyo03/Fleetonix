@@ -236,7 +236,6 @@ function initDTRStatusSync() {
                 driverDTRStatus[email] = {
                     action: data.action, // 'time_in' or 'time_out'
                     name: data.driver_name,
-                    companyId: data.accredited_company_id,
                     timestamp: logTime
                 };
             }
@@ -270,11 +269,9 @@ function initStats() {
         if (totalDriversEl) totalDriversEl.innerText = drivers;
     });
 
-    const unsubPartners = onSnapshot(collection(db, "accredited_companies"), (snapshot) => {
-        const partnersCount = snapshot.docs.filter(d => d.data().status === 'active').length;
-        const totalPartnersEl = document.getElementById('totalClients');
-        if (totalPartnersEl) totalPartnersEl.innerText = partnersCount;
-    });
+    // Total Partners stat removed or hardcoded to 1 (Jettsan)
+    const totalPartnersEl = document.getElementById('totalClients');
+    if (totalPartnersEl) totalPartnersEl.innerText = "1";
     
     // Listen for new accidents
     const accidentsQuery = query(collection(db, "accidents"), where("status", "==", "pending"));
@@ -474,7 +471,6 @@ function updateDriverState(id, data, source) {
             vehicle_assigned: data.vehicle_assigned,
             plate_number: data.plate_number,
             driver_email: data.driver_email?.toLowerCase()?.trim() || existing.driver_email,
-            accredited_company_id: data.accredited_company_id || "",
             profile_image_url: data.profile_image_url || existing.profile_image_url
         });
     } else if (source === 'location') {

@@ -35,7 +35,7 @@ onAuthStateChanged(auth, async (user) => {
         }
     }
 
-    const adminRoles = ['admin', 'super_admin', 'company_admin'];
+    const adminRoles = ['admin', 'super_admin'];
     const userRoleType = userData?.user_type || userData?.role;
 
     if (!userData || !adminRoles.includes(userRoleType)) {
@@ -70,7 +70,7 @@ function initExportFeature() {
                 return {
                     "Trip ID": d.id,
                     "Driver": s.driver_name || 'N/A',
-                    "Client": s.company_name || s.client_name || 'N/A',
+                    "Client": s.client_name || 'N/A',
                     "Pickup": s.pickup_location || 'N/A',
                     "Time": s.schedule_time || 'N/A',
                     "Status": s.status || 'scheduled',

@@ -68,7 +68,7 @@ onAuthStateChanged(auth, async (user) => {
             if (!emailSnap.empty) userData = emailSnap.docs[0].data();
         }
 
-        const adminRoles = ['admin', 'super_admin', 'company_admin'];
+        const adminRoles = ['admin', 'super_admin'];
         const role = userData?.user_type || userData?.role;
         
         if (!userData || !adminRoles.includes(role)) {

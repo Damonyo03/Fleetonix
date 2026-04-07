@@ -103,7 +103,6 @@ async function repairMissingDriverProfiles() {
                 await setDoc(doc(db, "drivers", u.id), {
                     driver_name: userData.full_name || "New Driver",
                     driver_email: email,
-                    accredited_company_id: "jettsan",
                     current_status: "offline",
                     vehicle_assigned: "Pending Assignment",
                     plate_number: "N/A",
@@ -261,7 +260,6 @@ if (addDriverBtn) {
                     license_number: license,
                     plate_number: plate,
                     vehicle_assigned: vehicle,
-                    accredited_company_id: companyId,
                     current_status: "offline",
                     isFirstLogin: true,
                     is_currently_timed_in: false,
@@ -278,7 +276,6 @@ if (addDriverBtn) {
                     role: "driver",
                     status: "active",
                     isFirstLogin: true,
-                    accredited_company_id: companyId,
                     created_at: serverTimestamp()
                 });
 

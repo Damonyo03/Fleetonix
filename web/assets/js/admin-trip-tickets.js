@@ -42,7 +42,6 @@ function loadTickets() {
     }
 
     const role = currentUserData.role || currentUserData.user_type;
-    const companyId = currentUserData.accredited_company_id;
 
     // --- Real-time listener on trip_tickets (primary source from Android app) ---
     let tripTicketsQuery;
@@ -82,7 +81,6 @@ function loadTickets() {
                 completed_at: data.created_at,
                 schedule_date: data.schedule_date || '',
                 schedule_time: data.schedule_time || '',
-                accredited_company_id: data.accredited_company_id || '',
                 ...data
             };
         });
