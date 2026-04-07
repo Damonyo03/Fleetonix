@@ -115,8 +115,8 @@ window.initAutocompleteForInput = (input, lat, lng) => {
     if (!latEl || !lngEl) {
         const container = inputEl.closest('.form-group') || inputEl.parentElement;
         if (container) {
-            latEl = latEl || container.querySelector('.lat-input, [id$="_latitude"]');
-            lngEl = lngEl || container.querySelector('.lng-input, [id$="_longitude"]');
+            latEl = latEl || container.querySelector('.lat-input, .drop-lat-input, [id$="_latitude"]');
+            lngEl = lngEl || container.querySelector('.lng-input, .drop-lng-input, [id$="_longitude"]');
         }
     }
 
@@ -150,8 +150,8 @@ window.initAllAutocompletes = () => {
         window.initAutocompleteForInput(conf.input, conf.lat, conf.lng);
     });
     
-    // Also catch any generic pickup-inputs without specific IDs (common in dynamic rows)
-    document.querySelectorAll('.pickup-input:not([data-autocomplete-bound])').forEach(el => {
+    // Also catch any generic pickup and dropoff inputs without specific IDs (common in dynamic rows)
+    document.querySelectorAll('.pickup-input:not([data-autocomplete-bound]), .dropoff-input:not([data-autocomplete-bound])').forEach(el => {
         window.initAutocompleteForInput(el);
     });
 };
