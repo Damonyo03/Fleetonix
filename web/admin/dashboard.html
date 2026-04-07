@@ -8,9 +8,16 @@
     <link rel="stylesheet" href="../assets/css/style.css">
     <link rel="stylesheet" href="../assets/css/admin.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Maps JS - Replace 'key=' value with your own Google Maps API Key -->
-    <!-- You must enable 'Maps JavaScript API', 'Places API', and 'Geometry Library' in Google Cloud Console -->
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBWal4kXhImWNvJL2jV4LG0FvftdN2J9DQ&libraries=places,geometry"></script>
+    <!-- Google Maps JS: async loading with callback to prevent race conditions -->
+    <script>
+        // Global callback fired by Maps API once it is fully ready.
+        // admin-dashboard.js listens for this via window.__mapsReady.
+        window.__onMapsReady = function() {
+            window.__mapsReady = true;
+            document.dispatchEvent(new Event('maps-api-ready'));
+        };
+    </script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBWal4kXhImWNvJL2jV4LG0FvftdN2J9DQ&libraries=places,geometry&loading=async&callback=__onMapsReady" async defer></script>
     <style>
         #drivers-map { width: 100%; height: 600px; border-radius: var(--radius-lg); background: var(--bg-accent); border: 1px solid var(--border-color); }
         .driver-label { background: white; padding: 4px 8px; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-weight: 700; border: 1px solid #ddd; font-size: 11px; color: #111; position: relative; top: -45px; }
@@ -247,8 +254,10 @@
                                     <button class="qip-focus-btn" id="qipFocusBtn"><i class="fas fa-crosshairs"></i> Re-center</button>
                                 </div>
                             </div>
-                        </div></div>
+                        </div>
+                        <!-- /position:relative wrapper closes here, INSIDE map-section -->
                         
+
                         <div class="side-panel">
                             <div class="glass-card" style="padding: 16px; border-radius: var(--radius-md); background: rgba(255,255,255,0.02);">
                                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">

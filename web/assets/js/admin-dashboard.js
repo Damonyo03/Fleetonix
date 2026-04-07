@@ -24,45 +24,14 @@ let driverPaths = {};              // driverId -> [{lat, lng, speedKmh}]
 let driverPolylineSegments = {};   // driverId -> [google.maps.Polyline] (colored segments)
 let activeQuickInfoDriverId = null; // currently pinned Quick Info driver
 
-class MapOverlay extends google.maps.OverlayView {
-    constructor(position, content, className) {
-        super();
-        this.position = position;
-        this.content = content;
-        this.className = className;
-        this.div = null;
-    }
+// Fix Issue 4: Properly declared module-level globals (avoids ReferenceError in strict mode)
+let selectedContractorId = null;
+let currentUserData = null;
 
-    onAdd() {
-        this.div = document.createElement('div');
-        this.div.className = this.className;
-        this.div.style.position = 'absolute';
-        this.div.innerHTML = this.content;
-        const panes = this.getPanes();
-        panes.overlayMouseTarget.appendChild(this.div);
-    }
-
-    draw() {
-        const overlayProjection = this.getProjection();
-        const sw = overlayProjection.fromLatLngToDivPixel(this.position);
-        if (sw && this.div) {
-            this.div.style.left = sw.x + 'px';
-            this.div.style.top = sw.y + 'px';
-        }
-    }
-
-    onRemove() {
-        if (this.div) {
-            this.div.parentNode.removeChild(this.div);
-            this.div = null;
-        }
-    }
-
-    setPosition(pos) {
-        this.position = pos;
-        this.draw();
-    }
-}
+// Fix Issue 1: MapOverlay is moved INSIDE initMap() so it only
+// runs after google.maps is confirmed ready. This variable is a
+// module-level reference set once initMap() defines the class.
+let MapOverlay = null;
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -104,13 +73,18 @@ onAuthStateChanged(auth, async (user) => {
     // Start Live Listeners
     refreshDashboardData();
     
-    // Guarded Map Initialization
+    // Fix Issue 1 & 2: Use the maps-api-ready event dispatched by __onMapsReady callback
+    // instead of polling google.maps, which prevented the class from being defined safely.
     const tryInitMap = () => {
-        if (typeof google !== 'undefined' && google.maps) {
+        if (window.__mapsReady && typeof google !== 'undefined' && google.maps) {
             initMap();
         } else {
-            console.warn("Google Maps not ready, retrying in 500ms...");
-            setTimeout(tryInitMap, 500);
+            // Fallback: listen for the custom event fired by the callback in dashboard.html
+            document.addEventListener('maps-api-ready', () => initMap(), { once: true });
+            // Also try directly in case the event already fired before this code ran
+            setTimeout(() => {
+                if (!driversMap && window.__mapsReady) initMap();
+            }, 1000);
         }
     };
     tryInitMap();
@@ -305,6 +279,7 @@ function initStats() {
 
             if (change.type === "removed") {
                 delete activeSchedulesData[driverId];
+                if (allDriversData[driverId]) delete allDriversData[driverId].odometer_start;
             } else {
                 activeSchedulesData[driverId] = {
                     stops: Array.isArray(data.pickup_location) ? data.pickup_location : (data.pickup_location ? [data.pickup_location] : []),
@@ -312,6 +287,10 @@ function initStats() {
                     tripId: change.doc.id,
                     status: data.status
                 };
+                // Fix Issue 5: pipe odometer_start from schedule to driver data for Quick Info Panel
+                if (allDriversData[driverId]) {
+                    allDriversData[driverId].odometer_start = data.odometer_start;
+                }
             }
             // Trigger marker refresh to update polylines/stops
             if (driverMarkers[driverId]) refreshMarker(driverId);
@@ -386,6 +365,44 @@ function animateMarkerTo(marker, newPos) {
 }
 
 function initMap() {
+    // Fix Issue 1: Define MapOverlay HERE, after google.maps is guaranteed ready.
+    // This is the only safe place — it must extend google.maps.OverlayView.
+    MapOverlay = class extends google.maps.OverlayView {
+        constructor(position, content, className) {
+            super();
+            this.position = position;
+            this.content = content;
+            this.className = className;
+            this.div = null;
+        }
+        onAdd() {
+            this.div = document.createElement('div');
+            this.div.className = this.className;
+            this.div.style.position = 'absolute';
+            this.div.innerHTML = this.content;
+            const panes = this.getPanes();
+            panes.overlayMouseTarget.appendChild(this.div);
+        }
+        draw() {
+            const overlayProjection = this.getProjection();
+            const sw = overlayProjection.fromLatLngToDivPixel(this.position);
+            if (sw && this.div) {
+                this.div.style.left = sw.x + 'px';
+                this.div.style.top = sw.y + 'px';
+            }
+        }
+        onRemove() {
+            if (this.div) {
+                this.div.parentNode.removeChild(this.div);
+                this.div = null;
+            }
+        }
+        setPosition(pos) {
+            this.position = pos;
+            this.draw();
+        }
+    };
+
     const mapOptions = {
         center: { lat: 14.5995, lng: 120.9842 },
         zoom: 11,
