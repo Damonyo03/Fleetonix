@@ -512,8 +512,10 @@ function updateDriverState(id, data, source) {
             current_trip_phase: data.current_trip_phase || existing.current_trip_phase,
             vehicle_assigned: data.vehicle_assigned || existing.vehicle_assigned,
             plate_number: data.plate_number || existing.plate_number,
+            car_color: data.car_color || existing.car_color,
             driver_email: data.driver_email?.toLowerCase()?.trim() || existing.driver_email,
-            profile_image_url: data.profile_image_url || existing.profile_image_url
+            profile_image_url: data.profile_image_url || existing.profile_image_url,
+            is_background: data.is_background !== undefined ? data.is_background : existing.is_background
         });
     } else if (source === 'location') {
         const lastMs = data.last_updated
@@ -536,6 +538,7 @@ function updateDriverState(id, data, source) {
             current_heading: data.current_heading,
             wifi_ssid: data.wifi_ssid,
             last_updated: data.last_updated,
+            is_background: data.is_background !== undefined ? data.is_background : existing.is_background,
             current_status: existingStatus === 'offline' ? 'available' : existingStatus
         });
     }
@@ -840,8 +843,8 @@ function updateOnlineDriversList() {
         const displayStatus = phase ? phase : status;
         const statusLabel = displayStatus.replace(/_/g, ' ');
         const lastUpdateMs = driver.last_updated ? (driver.last_updated.seconds * 1000) : 0;
-        const isLive = lastUpdateMs > 0 && (now - lastUpdateMs) < liveThreshold;
-        const vehicleInfo = driver.vehicle_assigned ? `${driver.vehicle_assigned}${driver.plate_number ? ' · ' + driver.plate_number : ''}` : '';
+        const isBackground = driver.is_background === true;
+        const vehicleInfo = driver.vehicle_assigned ? `${driver.vehicle_assigned}${driver.car_color ? ' (' + driver.car_color + ')' : ''}${driver.plate_number ? ' · ' + driver.plate_number : ''}` : '';
         const email = driver.driver_email?.toLowerCase()?.trim();
 
         const displayName = (driver.driver_name && driver.driver_name !== 'Loading...' && driver.driver_name !== 'Loading Driver...') 
@@ -852,9 +855,12 @@ function updateOnlineDriversList() {
             <div class="driver-item ${status === 'offline' ? 'offline' : ''} ${isLive ? 'pulse' : ''}" onclick="focusDriver('${driver.id}')" title="${vehicleInfo}">
                 <div class="status-dot ${displayStatus}"></div>
                 <div class="driver-info">
-                    <div class="driver-name">${displayName}</div>
-                    <div class="driver-status-text ${displayStatus}">${statusLabel}</div>
-                    ${vehicleInfo ? `<div style="font-size:0.7em; color:var(--text-muted); margin-top:2px;"><i class="fas fa-car" style="font-size:0.8em;"></i> ${vehicleInfo}</div>` : ''}
+                    <div class="driver-name" style="font-weight: 700; color: var(--text-primary);">${displayName}</div>
+                    <div class="driver-status-text ${displayStatus}" style="display: flex; align-items: center; gap: 6px;">
+                        ${statusLabel}
+                        ${isBackground ? '<span class="bg-indicator active" title="App Running in Background"></span>' : ''}
+                    </div>
+                    ${vehicleInfo ? `<div style="font-size:0.75em; color:var(--text-secondary); margin-top:3px; line-height: 1.2;"><i class="fas fa-truck-pickup" style="font-size:0.85em; color: var(--accent-blue);"></i> ${vehicleInfo}</div>` : ''}
                 </div>
                 <div class="driver-badge-area">
                     ${status === 'available' ? `<span class="status-badge available ${isLive ? 'premium' : ''}" style="font-size: 0.65rem; padding: 2px 6px;">Available</span>` : ''}

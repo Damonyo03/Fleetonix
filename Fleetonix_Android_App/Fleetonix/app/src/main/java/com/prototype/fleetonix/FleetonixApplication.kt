@@ -1,10 +1,10 @@
 package com.prototype.fleetonix
 
 import android.app.Application
+import androidx.lifecycle.ProcessLifecycleOwner
 import com.google.firebase.FirebaseApp
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreSettings
-import com.google.firebase.firestore.MemoryCacheSettings
 import com.google.firebase.firestore.PersistentCacheSettings
 
 class FleetonixApplication : Application() {
@@ -18,8 +18,6 @@ class FleetonixApplication : Application() {
         val firestore = FirebaseFirestore.getInstance()
         
         val settings = FirebaseFirestoreSettings.Builder()
-            // Configure persistent cache with a reasonable size (e.g., 100 MB)
-            // Firebase will automatically queue writes when offline and sync when online
             .setLocalCacheSettings(
                 PersistentCacheSettings.newBuilder()
                     .setSizeBytes(104857600L) // 100 MB cache size
@@ -28,5 +26,8 @@ class FleetonixApplication : Application() {
             .build()
             
         firestore.firestoreSettings = settings
+
+        // Start observing application lifecycle
+        ProcessLifecycleOwner.get().lifecycle.addObserver(AppLifecycleObserver())
     }
 }

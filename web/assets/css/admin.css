@@ -764,3 +764,28 @@ body {
     box-shadow: 0 4px 12px rgba(0,0,0,0.5);
     z-index: 999;
 }
+/* Background App Activity (Flashing Green Sign) */
+@keyframes background-active-pulse {
+    0% { transform: scale(1); background-color: var(--accent-green); box-shadow: 0 0 5px var(--accent-green); opacity: 1; }
+    50% { transform: scale(1.4); background-color: #ffffff; box-shadow: 0 0 20px var(--accent-green); opacity: 0.8; }
+    100% { transform: scale(1); background-color: var(--accent-green); box-shadow: 0 0 5px var(--accent-green); opacity: 1; }
+}
+
+.bg-indicator {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+.bg-indicator.active {
+    animation: background-active-pulse 1s infinite cubic-bezier(0.4, 0, 0.2, 1);
+    background-color: var(--accent-green);
+}
+
+.bg-indicator.inactive {
+    background-color: var(--text-muted);
+    opacity: 0.3;
+}

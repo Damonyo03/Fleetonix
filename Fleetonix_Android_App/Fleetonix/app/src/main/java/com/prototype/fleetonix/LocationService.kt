@@ -328,6 +328,7 @@ class LocationService : Service() {
             "acceleration_g" to currentGForce,
             "wifi_ssid" to currentWifiSsid,
             "wifi_rssi" to currentWifiRssi,
+            "is_background" to AppLifecycleObserver.isAppInBackground,
             "last_updated" to FieldValue.serverTimestamp()
         )
 
