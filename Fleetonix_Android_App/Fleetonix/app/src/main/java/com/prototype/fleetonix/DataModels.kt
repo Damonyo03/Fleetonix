@@ -247,6 +247,7 @@ data class UserRegistrationData(
     val full_name: String,
     val password: String,
     val phone: String? = null,
+    val accredited_company_id: String? = null,
     val role: String
 )
 
