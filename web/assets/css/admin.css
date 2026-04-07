@@ -789,3 +789,53 @@ body {
     background-color: var(--text-muted);
     opacity: 0.3;
 }
+
+/* ── Multi-Segment Trip Timelines ────────────────────────────────────────── */
+.segment-timeline {
+    position: relative;
+    padding-left: 24px;
+    margin: 20px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.segment-timeline::before {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 5px;
+    bottom: 5px;
+    width: 2px;
+    background: repeating-linear-gradient(to bottom, var(--border-color), var(--border-color) 4px, transparent 4px, transparent 8px);
+}
+
+.timeline-point {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    font-size: 0.875rem;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -24px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--bg-secondary);
+    border: 3px solid var(--border-color);
+    z-index: 2;
+    margin-top: 2px;
+}
+
+.timeline-marker.pickup { border-color: var(--accent-blue); background: var(--accent-blue); box-shadow: 0 0 10px rgba(0, 212, 255, 0.4); }
+.timeline-marker.dropoff { border-color: var(--accent-green); background: var(--bg-secondary); }
+.timeline-marker.final { border-color: var(--accent-green); background: var(--accent-green); box-shadow: 0 0 10px rgba(0, 255, 136, 0.4); }
+
+.timeline-content { flex: 1; }
+.timeline-label { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 2px; display: block; }
+.timeline-address { color: var(--text-primary); font-weight: 500; }
+.timeline-time { font-size: 0.75rem; color: var(--accent-blue); font-weight: 600; margin-left: 8px; }
+

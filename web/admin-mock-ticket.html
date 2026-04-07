@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Segment Trip Ticket Mockup</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/admin.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { background: #0a0a0a; color: #fff; font-family: 'Inter', sans-serif; padding: 40px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        /* Include the new segment styles directly here for the mock */
+        .segment-timeline {
+            position: relative;
+            padding-left: 24px;
+            margin: 20px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .segment-timeline::before {
+            content: '';
+            position: absolute;
+            left: 7px;
+            top: 5px;
+            bottom: 5px;
+            width: 2px;
+            background: repeating-linear-gradient(to bottom, var(--border-color, #333), var(--border-color, #333) 4px, transparent 4px, transparent 8px);
+        }
+        .timeline-point {
+            position: relative;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            font-size: 0.875rem;
+        }
+        .timeline-marker {
+            position: absolute;
+            left: -24px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #111;
+            border: 3px solid #333;
+            z-index: 2;
+            margin-top: 2px;
+        }
+        .timeline-marker.pickup { border-color: #00d4ff; background: #00d4ff; box-shadow: 0 0 10px rgba(0, 212, 255, 0.4); }
+        .timeline-marker.dropoff { border-color: #10b981; background: #111; }
+        .timeline-marker.final { border-color: #10b981; background: #10b981; box-shadow: 0 0 10px rgba(0, 255, 136, 0.4); }
+        .timeline-label { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; color: #888; margin-bottom: 2px; display: block; }
+        .timeline-address { color: #eee; font-weight: 500; }
+        .timeline-content { flex: 1; }
+        
+        .ticket-card { 
+            background: rgba(255,255,255,0.03); 
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 24px;
+        }
+        .metric-box {
+            background: rgba(255,255,255,0.03); 
+            padding: 12px; 
+            border-radius: 8px; 
+            border: 1px solid rgba(255,255,255,0.1); 
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 style="margin-bottom: 30px; font-weight: 300;">Multi-Segment Trip Ticket Preview</h2>
+        
+        <div class="ticket-card">
+            <!-- Header -->
+            <div class="ticket-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 15px;">
+                <div>
+                    <div class="ticket-id" style="font-size: 0.7rem; color: #888; font-weight: 600; margin-bottom: 4px;"><i class="fas fa-hashtag"></i> Schedule ID: TRIP_1712471200</div>
+                    <div class="ticket-driver" style="font-size: 1.1rem; font-weight: 700; color: #fff;"><i class="fas fa-user-circle"></i> John Doe</div>
+                    <div class="ticket-vehicle" style="font-size: 0.8rem; color: #00d4ff; margin-top: 2px;"><i class="fas fa-car-side"></i> Toyota Hiace (White) &nbsp;·&nbsp; <i class="fas fa-id-card"></i> ABC-1234</div>
+                </div>
+                <div style="text-align: right;">
+                    <span class="status-badge completed" style="background: rgba(16, 185, 129, 0.1); color: #10b981; padding: 4px 10px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; border: 1px solid rgba(16, 185, 129, 0.2);">Completed</span>
+                    <div style="font-size:0.75rem; color:#888; margin-top:8px;">
+                        <i class="fas fa-calendar-check"></i> April 07, 2026, 10:30 AM
+                    </div>
+                </div>
+            </div>
+
+            <!-- Metrics -->
+            <div class="ticket-metrics" style="display: flex; gap: 12px; margin-bottom: 24px;">
+                <div class="metric-box" style="flex: 1;">
+                    <div class="metric-label" style="font-size: 0.65rem; color: #888; text-transform: uppercase;">Start Time</div>
+                    <div class="metric-value" style="font-size: 1rem; color: #00d4ff; font-weight: 700;">08:15 AM</div>
+                </div>
+                <div class="metric-box" style="flex: 1;">
+                    <div class="metric-label" style="font-size: 0.65rem; color: #888; text-transform: uppercase;">Arrival</div>
+                    <div class="metric-value" style="font-size: 1rem; color: #10b981; font-weight: 700;">10:22 AM</div>
+                </div>
+                <div class="metric-box" style="flex: 1;">
+                    <div class="metric-label" style="font-size: 0.65rem; color: #888; text-transform: uppercase;">Distance</div>
+                    <div class="metric-value" style="font-size: 1rem; color: #14b8a6; font-weight: 700;">42.5 km</div>
+                </div>
+            </div>
+
+            <!-- Timeline -->
+            <div class="segment-timeline">
+                <div class="timeline-point">
+                    <div class="timeline-marker pickup"></div>
+                    <div class="timeline-content">
+                        <span class="timeline-label">Pickup 1</span>
+                        <div class="timeline-address">Manila Grand Terminal, Pasay City</div>
+                    </div>
+                </div>
+                <div class="timeline-point">
+                    <div class="timeline-marker dropoff"></div>
+                    <div class="timeline-content">
+                        <span class="timeline-label">Drop-off 1</span>
+                        <div class="timeline-address">Client Headquarters, Makati CBD</div>
+                    </div>
+                </div>
+                <div class="timeline-point">
+                    <div class="timeline-marker pickup"></div>
+                    <div class="timeline-content">
+                        <span class="timeline-label">Pickup 2 (Transfer)</span>
+                        <div class="timeline-address">BGC Main Entrance, Taguig</div>
+                    </div>
+                </div>
+                <div class="timeline-point">
+                    <div class="timeline-marker final"></div>
+                    <div class="timeline-content">
+                        <span class="timeline-label">Final Drop-off</span>
+                        <div class="timeline-address">Ninoy Aquino International Airport, Terminal 3</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer Meta -->
+            <div class="ticket-client" style="margin-top: 15px; font-size: 0.85rem; color: #888; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 12px;">
+                <i class="fas fa-user-tie"></i> Client: Jettsan Logistics &nbsp; · <i class="fas fa-calendar"></i> 2026-04-07
+            </div>
+
+            <button style="width: 100%; margin-top: 15px; background: rgba(20, 184, 166, 0.1); border: 1px solid rgba(20, 184, 166, 0.3); color: #14b8a6; padding: 10px; border-radius: 6px; cursor: pointer;">
+                <i class="fas fa-map-marked-alt"></i> View Full Traveled Route Map
+            </button>
+        </div>
+    </div>
+</body>
+</html>

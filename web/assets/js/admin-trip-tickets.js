@@ -187,62 +187,85 @@ function renderTickets(tickets) {
     container.innerHTML = tickets.map(ticket => {
         const completedAt = formatTimestamp(ticket.completed_at);
         const acceptedAt = ticket.accepted_at || ticket.time_of_departure || '—';
-        const pickedUpAt = ticket.picked_up_at || ticket.timeOfDeparture || '—';
         const arrivalAt = ticket.time_of_arrival || ticket.timeOfArrival || '—';
         const totalKm = parseFloat(ticket.total_km_travelled || ticket.totalKmTravelled || 0).toFixed(2);
         const vehicleType = ticket.vehicle_type || ticket.vehicle_assigned || '—';
         const plateNumber = ticket.plate_number || '—';
 
+        let routeHtml = `
+            <div class="ticket-route" style="display: flex; align-items: center; gap: 12px; color: var(--text-secondary); margin: 15px 0; font-size: 0.9rem;">
+                <i class="fas fa-map-marker-alt" style="color:var(--accent-blue);"></i>
+                <span>${ticket.pickup_location || '—'}</span>
+                <span class="route-arrow" style="color: var(--text-muted);"><i class="fas fa-long-arrow-alt-right"></i></span>
+                <i class="fas fa-flag-checkered" style="color:var(--accent-green);"></i>
+                <span>${ticket.dropoff_location || '—'}</span>
+            </div>
+        `;
+
+        if (ticket.segments && Array.isArray(ticket.segments) && ticket.segments.length > 0) {
+            routeHtml = `
+                <div class="segment-timeline">
+                    ${ticket.segments.map((seg, idx) => `
+                        <div class="timeline-point">
+                            <div class="timeline-marker pickup"></div>
+                            <div class="timeline-content">
+                                <span class="timeline-label">Pickup ${idx + 1}</span>
+                                <div class="timeline-address">${seg.pickup}</div>
+                            </div>
+                        </div>
+                        <div class="timeline-point">
+                            <div class="timeline-marker ${idx === ticket.segments.length - 1 ? 'final' : 'dropoff'}"></div>
+                            <div class="timeline-content">
+                                <span class="timeline-label">Drop-off ${idx + 1}</span>
+                                <div class="timeline-address">${seg.dropoff}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
         return `
             <div class="ticket-card" id="ticket-${ticket.id}">
-                <div class="ticket-header">
+                <div class="ticket-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 15px;">
                     <div>
-                        <div class="ticket-id"><i class="fas fa-hashtag"></i> Schedule ID: ${ticket.id.substring(0, 12).toUpperCase()}</div>
-                        <div class="ticket-driver"><i class="fas fa-user"></i> ${ticket.driver_name || '—'}</div>
-                        <div class="ticket-vehicle"><i class="fas fa-car"></i> ${vehicleType} &nbsp;·&nbsp; <i class="fas fa-id-card"></i> ${plateNumber}</div>
+                        <div class="ticket-id" style="font-size: 0.7rem; color: var(--text-muted); font-weight: 600; margin-bottom: 4px;"><i class="fas fa-hashtag"></i> Schedule ID: ${ticket.id.substring(0, 12).toUpperCase()}</div>
+                        <div class="ticket-driver" style="font-size: 1.1rem; font-weight: 700; color: var(--text-primary);"><i class="fas fa-user-circle"></i> ${ticket.driver_name || '—'}</div>
+                        <div class="ticket-vehicle" style="font-size: 0.8rem; color: var(--accent-blue); margin-top: 2px;"><i class="fas fa-car-side"></i> ${vehicleType} &nbsp;·&nbsp; <i class="fas fa-id-card"></i> ${plateNumber}</div>
                     </div>
                     <div style="text-align: right;">
-                        <span class="status-badge completed">Completed</span>
-                        <div style="font-size:0.78em; color:var(--text-muted); margin-top:6px;">
+                        <span class="status-badge completed" style="background: rgba(16, 185, 129, 0.1); color: var(--accent-green); padding: 4px 10px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; border: 1px solid rgba(16, 185, 129, 0.2);">Completed</span>
+                        <div style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;">
                             <i class="fas fa-calendar-check"></i> ${completedAt}
                         </div>
                     </div>
                 </div>
 
-                <div class="ticket-metrics">
-                    <div class="metric-box">
-                        <div class="metric-label"><i class="fas fa-flag-checkered"></i> Start Time</div>
-                        <div class="metric-value">${acceptedAt}</div>
+                <div class="ticket-metrics" style="display: flex; gap: 12px; margin-bottom: 24px;">
+                    <div class="metric-box" style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); flex: 1; text-align: center;">
+                        <div class="metric-label" style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;"><i class="fas fa-flag-checkered"></i> Start Time</div>
+                        <div class="metric-value" style="font-size: 1rem; color: var(--accent-blue); font-weight: 700;">${acceptedAt}</div>
                     </div>
-                    <div class="metric-box">
-                        <div class="metric-label"><i class="fas fa-map-marker-alt"></i> Departure</div>
-                        <div class="metric-value">${pickedUpAt}</div>
+                    <div class="metric-box" style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); flex: 1; text-align: center;">
+                        <div class="metric-label" style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;"><i class="fas fa-flag"></i> Arrival</div>
+                        <div class="metric-value" style="font-size: 1rem; color: var(--accent-green); font-weight: 700;">${arrivalAt}</div>
                     </div>
-                    <div class="metric-box">
-                        <div class="metric-label"><i class="fas fa-flag"></i> Arrival</div>
-                        <div class="metric-value">${arrivalAt}</div>
-                    </div>
-                    <div class="metric-box">
-                        <div class="metric-label"><i class="fas fa-road"></i> Distance</div>
-                        <div class="metric-value">${totalKm} km</div>
+                    <div class="metric-box" style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); flex: 1; text-align: center;">
+                        <div class="metric-label" style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;"><i class="fas fa-road"></i> Distance</div>
+                        <div class="metric-value" style="font-size: 1rem; color: var(--accent-teal); font-weight: 700;">${totalKm} km</div>
                     </div>
                 </div>
 
-                <div class="ticket-route">
-                    <i class="fas fa-map-marker-alt" style="color:var(--accent-blue);"></i>
-                    <span>${ticket.pickup_location || '—'}</span>
-                    <span class="route-arrow"><i class="fas fa-long-arrow-alt-right"></i></span>
-                    <i class="fas fa-flag-checkered" style="color:var(--accent-green);"></i>
-                    <span>${ticket.dropoff_location || '—'}</span>
-                </div>
-                <div class="ticket-client">
+                ${routeHtml}
+
+                <div class="ticket-client" style="margin-top: 15px; font-size: 0.85rem; color: var(--text-muted); border-top: 1px solid rgba(255,255,255,0.05); padding-top: 12px;">
                     <i class="fas fa-user-tie"></i> Client: ${ticket.client_name || '—'} &nbsp;
                     ${ticket.schedule_date ? `· <i class="fas fa-calendar"></i> ${ticket.schedule_date} ${ticket.schedule_time || ''}` : ''}
                 </div>
 
                 ${ticket.route_polyline ? `
-                    <button class="btn-view-route" onclick="viewTripRoute('${ticket.id}', '${ticket.route_polyline}', '${ticket.driver_name}')">
-                        <i class="fas fa-map-marked-alt"></i> View Traveled Route Map
+                    <button class="btn-view-route" onclick="viewTripRoute('${ticket.id}', '${ticket.route_polyline}', '${ticket.driver_name}')" style="width: 100%; margin-top: 15px; background: rgba(20, 184, 166, 0.1); border: 1px solid rgba(20, 184, 166, 0.3); color: var(--accent-teal); padding: 10px; border-radius: 6px; cursor: pointer; transition: all 0.3s ease;">
+                        <i class="fas fa-map-marked-alt"></i> View Full Traveled Route Map
                     </button>
                 ` : ''}
             </div>

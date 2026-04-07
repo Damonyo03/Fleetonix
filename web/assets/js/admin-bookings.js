@@ -115,30 +115,30 @@ async function showCreateBookingModal(clients) {
         </div>
 
 
-        <div id="pickup_points_container">
-            <div class="form-group pickup-point" style="position: relative;">
-                <label for="pickup_location_1">Pickup Location 1 (Primary)</label>
-                <div class="input-with-action">
-                    <input type="text" id="pickup_location_1" class="form-input pickup-input" placeholder="Search for primary pickup..." required autocomplete="off">
-                    <button type="button" class="btn-input-action locate-btn" title="Use current location"><i class="fas fa-location-crosshairs"></i></button>
+        <div id="segments_container">
+            <div class="segment-group" style="margin-bottom: 24px; padding: 16px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px;">
+                <div style="font-size: 0.75rem; font-weight: 800; color: var(--accent-blue); margin-bottom: 12px; text-transform: uppercase;">Segment 1 (Primary)</div>
+                <div class="form-group pickup-point" style="position: relative;">
+                    <label>Pickup Location</label>
+                    <div class="input-with-action">
+                        <input type="text" class="form-input pickup-input" placeholder="Search for pickup..." required autocomplete="off">
+                    </div>
+                    <input type="hidden" class="lat-input" value="0">
+                    <input type="hidden" class="lng-input" value="0">
                 </div>
-                <input type="hidden" class="lat-input" value="0">
-                <input type="hidden" class="lng-input" value="0">
+                <div class="form-group dropoff-point" style="position: relative;">
+                    <label>Dropoff Location</label>
+                    <div class="input-with-action">
+                        <input type="text" class="form-input dropoff-input" placeholder="Search for dropoff..." required autocomplete="off">
+                    </div>
+                    <input type="hidden" class="drop-lat-input" value="0">
+                    <input type="hidden" class="drop-lng-input" value="0">
+                </div>
             </div>
         </div>
-        <button type="button" id="add_pickup_point" class="btn-secondary" style="margin-bottom: 20px; padding: 8px 16px; font-size: 0.85em;">
-            <i class="fas fa-plus"></i> Add Another Pickup Point
+        <button type="button" id="add_segment" class="btn-secondary" style="margin-bottom: 20px; padding: 8px 16px; font-size: 0.85em;">
+            <i class="fas fa-plus-circle"></i> Add Another Segment (Pickup & Dropoff)
         </button>
-
-        <div class="form-group" style="position: relative;">
-            <label for="dropoff_location">Dropoff Location</label>
-            <div class="input-with-action">
-                <input type="text" id="dropoff_location" class="form-input" placeholder="Search for dropoff address..." required autocomplete="off">
-                <button type="button" class="btn-input-action" id="locateDropoff" title="Use current location"><i class="fas fa-location-crosshairs"></i></button>
-            </div>
-            <input type="hidden" id="dropoff_latitude" value="0">
-            <input type="hidden" id="dropoff_longitude" value="0">
-        </div>
 
         <div class="modal-form-row">
             <div class="form-group">
@@ -219,29 +219,17 @@ async function showCreateBookingModal(clients) {
             }
         }
 
-        const pickupElement = document.getElementById('pickup_location_1') || document.getElementById('pickup_location');
-        const pickup = pickupElement ? pickupElement.value.trim() : "";
-        const dropoffElement = document.getElementById('dropoff_location');
-        const dropoff = dropoffElement ? dropoffElement.value.trim() : "";
-        if (!pickup || !dropoff) throw new Error("Please enter pickup and dropoff locations.");
-
-        const date = document.getElementById('pickup_date').value;
-        const time = document.getElementById('pickup_time').value;
-        if (!date || !time) throw new Error("Please enter a date and time.");
-
-        const driverId = document.getElementById('modal_driver').value;
-        const autoDispatch = document.getElementById('modal_auto_dispatch').checked;
-
-        const pickupPoints = Array.from(document.querySelectorAll('.pickup-point')).map((el, i) => ({
-            name: el.querySelector('.pickup-input').value,
-            latitude: parseFloat(el.querySelector('.lat-input').value) || 0,
-            longitude: parseFloat(el.querySelector('.lng-input').value) || 0,
+        const segments = Array.from(document.querySelectorAll('.segment-group')).map((el, i) => ({
+            pickup: el.querySelector('.pickup-input').value,
+            pickup_latitude: parseFloat(el.querySelector('.lat-input').value) || 0,
+            pickup_longitude: parseFloat(el.querySelector('.lng-input').value) || 0,
+            dropoff: el.querySelector('.dropoff-input').value,
+            dropoff_latitude: parseFloat(el.querySelector('.drop-lat-input').value) || 0,
+            dropoff_longitude: parseFloat(el.querySelector('.drop-lng-input').value) || 0,
             order: i + 1
         }));
 
-        const isOfficial = document.getElementById('modal_is_official').checked;
-
-        if (pickupPoints.some(p => !p.name)) throw new Error("Please fill in all pickup locations.");
+        if (segments.some(s => !s.pickup || !s.dropoff)) throw new Error("Please fill in all pickup and dropoff locations for each segment.");
 
         const bookingId = generateNumericId().toString();
         const data = sanitizeFirestoreData({
@@ -253,14 +241,13 @@ async function showCreateBookingModal(clients) {
             contractor: 'Jettsan',
             isOfficial: isOfficial,
 
-            pickup_points: pickupPoints,
-            pickup_location: pickupPoints[0].name,
-            pickup_latitude: pickupPoints[0].latitude,
-            pickup_longitude: pickupPoints[0].longitude,
-
-            dropoff_location: dropoff,
-            dropoff_latitude: parseFloat(document.getElementById('dropoff_latitude').value) || 0,
-            dropoff_longitude: parseFloat(document.getElementById('dropoff_longitude').value) || 0,
+            segments: segments,
+            pickup_location: segments[0].pickup,
+            pickup_latitude: segments[0].pickup_latitude,
+            pickup_longitude: segments[0].pickup_longitude,
+            dropoff_location: segments[segments.length - 1].dropoff,
+            dropoff_latitude: segments[segments.length - 1].dropoff_latitude,
+            dropoff_longitude: segments[segments.length - 1].dropoff_longitude,
 
             pickup_date: date,
             pickup_time: time,
@@ -301,12 +288,13 @@ async function showCreateBookingModal(clients) {
                 car_color: dData.car_color || "",
                 trip_phase: "pending",
                 status: "pending",
-                pickup_location: pickup,
-                pickup_latitude: pickupPoints[0].latitude,
-                pickup_longitude: pickupPoints[0].longitude,
-                dropoff_location: dropoff,
-                dropoff_latitude: parseFloat(document.getElementById('dropoff_latitude').value) || 0,
-                dropoff_longitude: parseFloat(document.getElementById('dropoff_longitude').value) || 0,
+                segments: segments,
+                pickup_location: segments[0].pickup,
+                pickup_latitude: segments[0].pickup_latitude,
+                pickup_longitude: segments[0].pickup_longitude,
+                dropoff_location: segments[segments.length - 1].dropoff,
+                dropoff_latitude: segments[segments.length - 1].dropoff_latitude,
+                dropoff_longitude: segments[segments.length - 1].dropoff_longitude,
                 schedule_date: date,
                 schedule_time: time,
                 passengers: parseInt(document.getElementById('passengers').value) || 1,
@@ -352,34 +340,43 @@ async function showCreateBookingModal(clients) {
 
     // Initialize Dynamic UI components
     setTimeout(async () => {
-        // Dynamic Pickup Points
-        const addPickupBtn = document.getElementById('add_pickup_point');
-        const container = document.getElementById('pickup_points_container');
-        let pickupCount = 1;
+        // Dynamic Segments
+        const addSegmentBtn = document.getElementById('add_segment');
+        const container = document.getElementById('segments_container');
+        let segmentCount = 1;
 
-        if (addPickupBtn && container) {
-            addPickupBtn.onclick = () => {
-                pickupCount++;
+        if (addSegmentBtn && container) {
+            addSegmentBtn.onclick = () => {
+                segmentCount++;
                 const div = document.createElement('div');
-                div.className = 'form-group pickup-point';
-                div.style.position = 'relative';
+                div.className = 'segment-group';
+                div.style.cssText = 'margin-bottom: 24px; padding: 16px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; position: relative;';
                 div.innerHTML = `
-                    <label>Pickup Location ${pickupCount}</label>
-                    <div class="input-with-action">
-                        <input type="text" class="form-input pickup-input" placeholder="Search for secondary pickup..." required autocomplete="off">
-                        <button type="button" class="btn-input-action remove-pickup" title="Remove"><i class="fas fa-trash-can"></i></button>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div style="font-size: 0.75rem; font-weight: 800; color: var(--accent-blue); text-transform: uppercase;">Segment ${segmentCount}</div>
+                        <button type="button" class="btn-icon remove-segment" style="color: var(--accent-error);"><i class="fas fa-trash"></i></button>
                     </div>
-                    <input type="hidden" class="lat-input" value="0">
-                    <input type="hidden" class="lng-input" value="0">
+                    <div class="form-group pickup-point" style="position: relative;">
+                        <label>Pickup Location</label>
+                        <input type="text" class="form-input pickup-input" placeholder="Secondary pickup..." required autocomplete="off">
+                        <input type="hidden" class="lat-input" value="0">
+                        <input type="hidden" class="lng-input" value="0">
+                    </div>
+                    <div class="form-group dropoff-point" style="position: relative;">
+                        <label>Dropoff Location</label>
+                        <input type="text" class="form-input dropoff-input" placeholder="Secondary dropoff..." required autocomplete="off">
+                        <input type="hidden" class="drop-lat-input" value="0">
+                        <input type="hidden" class="drop-lng-input" value="0">
+                    </div>
                 `;
                 container.appendChild(div);
 
-                const input = div.querySelector('.pickup-input');
+                // Re-init autocompletes if needed
                 if (window.initAutocompleteForInput) {
-                    window.initAutocompleteForInput(input);
+                    div.querySelectorAll('input[type="text"]').forEach(input => window.initAutocompleteForInput(input));
                 }
                 
-                div.querySelector('.remove-pickup').onclick = () => div.remove();
+                div.querySelector('.remove-segment').onclick = () => div.remove();
             };
         }
 
