@@ -202,85 +202,83 @@ if (addDriverBtn) {
     addDriverBtn.onclick = () => {
         const content = `
             <div class="form-group">
-                <label>Driver Name</label>
-                <input type="text" id="modal_driver_name" class="form-input" required>
+                <label>Admin Insight</label>
+                <div class="alert alert-info" style="font-size: 0.85rem; padding: 12px; margin-bottom: 20px; display: block; border-left: 4px solid var(--accent-blue);">
+                    <i class="fas fa-shield-alt"></i> New accounts use temporary password: <strong style="color:var(--accent-blue);">driver123</strong>. 
+                    Drivers will be prompted to verify via OTP and reset their password upon first login.
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Full Name</label>
+                <input type="text" id="modal_driver_name" class="form-input" placeholder="e.g. John Doe" required>
             </div>
             <div class="form-grid-2">
                 <div class="form-group">
-                    <label>Vehicle Model</label>
-                    <input type="text" id="modal_vehicle" class="form-input" placeholder="e.g. Toyota Vios" required>
+                    <label>Driver Email</label>
+                    <input type="email" id="modal_email" class="form-input" placeholder="e.g. driver@fleet.com" required>
                 </div>
                 <div class="form-group">
-                    <label>Car Color</label>
-                    <input type="text" id="modal_color" class="form-input" placeholder="e.g. White" required>
+                    <label>Phone Number</label>
+                    <input type="text" id="modal_phone" class="form-input" placeholder="e.g. 09123456789" required>
+                </div>
+            </div>
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label>License Number</label>
+                    <input type="text" id="modal_license" class="form-input" placeholder="Enter DL number" required>
+                </div>
+                <div class="form-group">
+                    <label>Plate Number</label>
+                    <input type="text" id="modal_plate" class="form-input" placeholder="e.g. ABC 1234" required>
                 </div>
             </div>
             <div class="form-group">
-                <label>Plate Number</label>
-                <input type="text" id="modal_plate" class="form-input" required>
-            </div>
-            <div class="form-group">
-                <label>Car Details (Optional)</label>
-                <input type="text" id="modal_car_details" class="form-input" placeholder="e.g. Manual, 2023 Model">
-            </div>
-            <div class="form-group">
-                <label>Profile Image URL (Optional)</label>
-                <input type="url" id="modal_image_url" class="form-input" placeholder="https://example.com/image.jpg">
-            </div>
-            <div class="form-group">
-                <label>Phone Number</label>
-                <input type="text" id="modal_phone" class="form-input" required>
-            </div>
-            <div class="form-group">
-                <label>Driver Email (for Mobile Login)</label>
-                <input type="email" id="modal_email" class="form-input" required>
-            </div>
-            <div class="form-group">
-                <label>Password (At least 6 characters)</label>
-                <input type="password" id="modal_password" class="form-input" required minlength="6">
+                <label>Vehicle Model / Assigned Vehicle</label>
+                <input type="text" id="modal_vehicle" class="form-input" placeholder="e.g. Toyota Vios 2023" required>
             </div>
         `;
 
-        showModal('driver-modal', 'Add New Driver', content, async () => {
+        showModal('driver-modal', 'Register New Fleet Driver', content, async () => {
             const name = document.getElementById('modal_driver_name').value;
-            const vehicle = document.getElementById('modal_vehicle').value;
-            const plate = document.getElementById('modal_plate').value;
-            const phone = document.getElementById('modal_phone').value;
             const email = document.getElementById('modal_email').value.toLowerCase().trim();
-            const password = document.getElementById('modal_password').value;
-
-            if (password.length < 6) {
-                alert("Password must be at least 6 characters long.");
-                return;
-            }
+            const phone = document.getElementById('modal_phone').value;
+            const license = document.getElementById('modal_license').value;
+            const plate = document.getElementById('modal_plate').value;
+            const vehicle = document.getElementById('modal_vehicle').value;
+            const password = "driver123";
 
             try {
+                // Secondary app creation
                 const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
                 const driverId = userCredential.user.uid;
+                const companyId = "jettsan"; // Static for NSCRP requirement
 
-                const companyId = "jettsan";
-
+                // Create Driver Document
                 await setDoc(doc(db, "drivers", driverId), {
                     driver_name: name,
-                    vehicle_assigned: vehicle,
-                    car_color: document.getElementById('modal_color').value,
-                    car_details: document.getElementById('modal_car_details').value || "",
-                    profile_image_url: document.getElementById('modal_image_url').value || "",
-                    plate_number: plate,
-                    driver_phone: phone,
                     driver_email: email,
-                    accredited_company_id: companyId || "",
+                    driver_phone: phone,
+                    license_number: license,
+                    plate_number: plate,
+                    vehicle_assigned: vehicle,
+                    accredited_company_id: companyId,
                     current_status: "offline",
-                    created_at: serverTimestamp()
+                    isFirstLogin: true,
+                    is_currently_timed_in: false,
+                    created_at: serverTimestamp(),
+                    updated_at: serverTimestamp()
                 });
                 
+                // Create User Meta-Data Document
                 await setDoc(doc(db, "users", driverId), {
                     full_name: name,
                     email: email,
+                    phone: phone,
                     user_type: "driver",
                     role: "driver",
-                    accredited_company_id: companyId || "",
                     status: "active",
+                    isFirstLogin: true,
+                    accredited_company_id: companyId,
                     created_at: serverTimestamp()
                 });
 
@@ -288,15 +286,16 @@ if (addDriverBtn) {
 
                 await addDoc(collection(db, "activity"), {
                     type: 'system',
-                    title: 'New Driver Created',
-                    message: `Admin created driver: ${name} (${email})`,
+                    title: 'New Driver Account Created',
+                    message: `Admin manually provisioned driver: ${name} (${email})`,
                     timestamp: serverTimestamp()
                 });
 
-                alert("Driver created successfully!");
+                alert("Driver account provisioned successfully! Give the driver their email and the default password: driver123");
+                location.reload(); // Refresh to show new driver
             } catch (error) {
-                console.error("Error creating driver account:", error);
-                alert("Failed to create driver account: " + error.message);
+                console.error("Provisioning error:", error);
+                alert("Critical: Failed to provision account. " + error.message);
             }
         });
     };

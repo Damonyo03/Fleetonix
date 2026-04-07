@@ -62,11 +62,6 @@ fun AuthFlow() {
     var otpData by remember { mutableStateOf<ForgotPasswordData?>(null) }
     var verifiedOtpCode by remember { mutableStateOf("") }
     
-    var showRegister by rememberSaveable { mutableStateOf(false) }
-    var showRegisterOTP by rememberSaveable { mutableStateOf(false) }
-    var pendingRegistrationData by remember { mutableStateOf<UserRegistrationData?>(null) }
-    var pendingRegistrationEmail by rememberSaveable { mutableStateOf<String?>(null) }
-    
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -227,9 +222,7 @@ fun AuthFlow() {
     val currentState = when {
         showSplash -> "splash"
         currentUser == null -> {
-            if (showRegisterOTP) "register_otp"
-            else if (showRegister) "register"
-            else if (showResetPassword) "reset_password"
+            if (showResetPassword) "reset_password"
             else if (showForgotPasswordOTP) "forgot_password_otp"
             else if (showForgotPassword) "forgot_password"
             else "login"
@@ -290,42 +283,8 @@ fun AuthFlow() {
                 },
                 onForgotPassword = {
                     showForgotPassword = true
-                },
-                onRegister = {
-                    showRegister = true
                 }
             )
-            "register" -> {
-                RegisterScreen(
-                    onOTPSent = { data, email ->
-                        pendingRegistrationData = data
-                        pendingRegistrationEmail = email
-                        showRegisterOTP = true
-                        showRegister = false
-                    },
-                    onBackToLogin = {
-                        showRegister = false
-                    }
-                )
-            }
-            "register_otp" -> {
-                val data = pendingRegistrationData
-                val email = pendingRegistrationEmail
-                if (data != null && email != null) {
-                    RegisterOTPVerifyScreen(
-                        userData = data,
-                        email = email,
-                        onRegistrationComplete = {
-                            showRegisterOTP = false
-                            showRegister = false
-                        },
-                        onBack = {
-                            showRegisterOTP = false
-                            showRegister = true
-                        }
-                    )
-                }
-            }
             "forgot_password" -> ForgotPasswordScreen(
                 onOTPSent = { data ->
                     otpData = data

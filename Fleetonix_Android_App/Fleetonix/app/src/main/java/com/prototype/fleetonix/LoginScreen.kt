@@ -61,8 +61,7 @@ import kotlinx.coroutines.tasks.await
 @Composable
 fun LoginScreen(
     onLoginSuccess: () -> Unit,
-    onForgotPassword: () -> Unit = {},
-    onRegister: () -> Unit = {}
+    onForgotPassword: () -> Unit = {}
 ) {
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
@@ -243,12 +242,6 @@ fun LoginScreen(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
-            TextButton(
-                onClick = onRegister,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Don't have an account? Register", color = AccentTeal)
-            }
         }
     }
 }
