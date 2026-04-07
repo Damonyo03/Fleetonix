@@ -354,7 +354,7 @@ function initStats() {
         if (monthlyBookingsEl) monthlyBookingsEl.innerText = monthCount;
     });
 
-    unsubscribeStats.push(unsubUsers, unsubPartners, unsubAccidents, unsubBookings, unsubSchedules, unsubCompleted);
+    unsubscribeStats.push(unsubUsers, unsubAccidents, unsubBookings, unsubSchedules, unsubCompleted);
 }
 
 function animateMarkerTo(marker, newPos) {
@@ -453,29 +453,64 @@ function initMap() {
         });
     });
 
+    // Refresh online list every minute
     setInterval(() => {
         updateOnlineDriversList();
         updateOnlineDisplay();
     }, 60000);
+
+    // Ghost driver cleanup: remove map markers whose heartbeat is older than 5 minutes
+    const GHOST_THRESHOLD_MS = 5 * 60 * 1000;
+    setInterval(() => {
+        const now = Date.now();
+        Object.keys(driverMarkers).forEach(id => {
+            const d = allDriversData[id];
+            if (!d) return;
+            const lastMs = d.last_updated
+                ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated)))
+                : 0;
+            if (!isNaN(lastMs) && lastMs > 0 && (now - lastMs) > GHOST_THRESHOLD_MS) {
+                // Heartbeat expired — hide marker to prevent ghosting
+                driverMarkers[id].setVisible(false);
+                console.log(`[Ghost Cleanup] Hiding stale marker for driver ${d.driver_name || id} (last seen ${Math.round((now - lastMs) / 60000)}m ago)`);
+            }
+        });
+        updateOnlineDriversList();
+        updateOnlineDisplay();
+    }, 30000); // Run every 30 seconds
 }
 
 function updateDriverState(id, data, source) {
     if (!allDriversData[id]) {
         allDriversData[id] = { id: id, driver_name: 'Loading...' };
     }
+    const existing = allDriversData[id]; // safe reference to current state
     
     if (source === 'metadata') {
-        Object.assign(allDriversData[id], {
-            driver_name: data.driver_name || existing.driver_name || 'Loading Driver...',
-            current_status: data.current_status,
-            vehicle_assigned: data.vehicle_assigned,
-            plate_number: data.plate_number,
+        Object.assign(existing, {
+            driver_name: data.driver_name || data.full_name || existing.driver_name || 'Unknown Driver',
+            current_status: data.current_status || existing.current_status,
+            current_trip_phase: data.current_trip_phase || existing.current_trip_phase,
+            vehicle_assigned: data.vehicle_assigned || existing.vehicle_assigned,
+            plate_number: data.plate_number || existing.plate_number,
             driver_email: data.driver_email?.toLowerCase()?.trim() || existing.driver_email,
             profile_image_url: data.profile_image_url || existing.profile_image_url
         });
     } else if (source === 'location') {
-        const existingStatus = allDriversData[id].current_status || 'offline';
-        Object.assign(allDriversData[id], {
+        const lastMs = data.last_updated
+            ? (data.last_updated.toMillis ? data.last_updated.toMillis() : (data.last_updated.seconds ? data.last_updated.seconds * 1000 : Number(data.last_updated)))
+            : 0;
+        const isStale = isNaN(lastMs) || lastMs === 0 || (Date.now() - lastMs) > (5 * 60 * 1000);
+        
+        if (isStale) {
+            // Location is stale — update timestamp but keep marker hidden
+            existing.last_updated = data.last_updated;
+            if (driverMarkers[id]) driverMarkers[id].setVisible(false);
+            return;
+        }
+
+        const existingStatus = existing.current_status || 'offline';
+        Object.assign(existing, {
             current_latitude: data.current_latitude,
             current_longitude: data.current_longitude,
             current_speed: data.current_speed,
@@ -491,6 +526,8 @@ function updateDriverState(id, data, source) {
     updateOnlineDisplay();
 }
 
+const HEARTBEAT_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes — ghost driver threshold
+
 function refreshMarker(id) {
     const d = allDriversData[id];
     if (!d || !d.current_latitude || !d.current_longitude) return;
@@ -499,25 +536,36 @@ function refreshMarker(id) {
     const status = d.current_trip_phase || d.current_status || 'available';
     
     // Traffic Color Coding (NSCRP Rule)
-    // Green > 40kmh, Orange 10-40kmh, Red < 10kmh
     const speedKmh = (d.current_speed || 0) * 3.6;
-    let trafficColor = '#10b981'; // Default Green (Normal)
-    if (speedKmh < 10) trafficColor = '#ef4444'; // Red (Heavy Traffic)
-    else if (speedKmh < 40) trafficColor = '#f59e0b'; // Orange (Light Traffic)
+    let trafficColor = '#10b981';
+    if (speedKmh < 10) trafficColor = '#ef4444';
+    else if (speedKmh < 40) trafficColor = '#f59e0b';
 
     const markerIcon = getMarkerIcon(status, trafficColor);
 
     const now = Date.now();
-    const tenMins = 10 * 60 * 1000;
-    const lastActive = d.last_updated ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated))) : 0;
+    const lastActive = d.last_updated
+        ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated)))
+        : 0;
     
+    // ── Ghost Driver Guard ──────────────────────────────────────────────────────
+    // If heartbeat is older than 5 minutes, hide the marker and bail out.
+    const heartbeatAge = now - lastActive;
+    if (isNaN(lastActive) || lastActive === 0 || heartbeatAge > HEARTBEAT_EXPIRY_MS) {
+        if (driverMarkers[id]) {
+            driverMarkers[id].setVisible(false);
+        }
+        return; // Do not render a ghost marker
+    }
+    // ────────────────────────────────────────────────────────────────────────────
+
     // Availability Logic: Heartbeat + DTR Status
     const email = d.driver_email?.toLowerCase()?.trim();
     const dtr = driverDTRStatus[email];
     const isOnDuty = dtr ? dtr.action === 'time_in' : false;
     
-    const isRecentlyActive = !isNaN(lastActive) && (now - lastActive) < (15 * 60 * 1000); // Relaxed to 15 mins for better reliability
-    const isOnline = isRecentlyActive || isOnDuty || status !== 'offline';
+    const isRecentlyActive = heartbeatAge < HEARTBEAT_EXPIRY_MS;
+    const isOnline = isRecentlyActive || isOnDuty;
     const isAccident = d.current_status === 'accident' || d.is_accident === true;
     const isCompleted = d.current_trip_phase === 'completed' || d.current_status === 'completed';
 
@@ -646,38 +694,64 @@ function getInfoWindowContent(driver) {
     const status = driver.current_trip_phase || driver.current_status || 'available';
     const speedKmh = ((driver.current_speed || 0) * 3.6).toFixed(1);
     const heading = Math.round(driver.current_heading || 0);
+
+    // Resolve display name — prefer stored driver_name over email fallback
+    const displayName = (driver.driver_name && driver.driver_name !== 'Loading...' && driver.driver_name !== 'Loading Driver...')
+        ? driver.driver_name
+        : (driverDTRStatus[driver.driver_email?.toLowerCase()?.trim()]?.name || driver.driver_email || 'Fleet Driver');
+
+    // Resolve vehicle info
+    const vehicleInfo = driver.vehicle_assigned
+        ? `${driver.vehicle_assigned}${driver.plate_number ? ' · ' + driver.plate_number : ''}`
+        : 'No Vehicle Assigned';
+
+    // Last seen formatted
+    let lastSeenText = '';
+    if (driver.last_updated) {
+        const lastMs = driver.last_updated.toMillis ? driver.last_updated.toMillis() : (driver.last_updated.seconds ? driver.last_updated.seconds * 1000 : Number(driver.last_updated));
+        const ageMins = Math.round((Date.now() - lastMs) / 60000);
+        const timeStr = new Date(lastMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        lastSeenText = `${timeStr} (${ageMins}m ago)`;
+    }
     
     return `
-        <div class="map-info-window" style="color: #333; padding: 12px; min-width: 220px; font-family: 'Inter', sans-serif;">
+        <div class="map-info-window" style="color: #333; padding: 12px; min-width: 240px; font-family: 'Inter', sans-serif;">
             <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; border-bottom:1px solid #eee; padding-bottom:8px;">
-                <div style="width:40px; height:40px; border-radius:50%; background:var(--card-blue); display:flex; align-items:center; justify-content:center; overflow:hidden;">
-                    ${driver.profile_image_url ? `<img src="${driver.profile_image_url}" style="width:100%; height:100%; object-fit:cover;">` : `<i class="fas fa-user-circle" style="font-size:24px; color:var(--accent-teal);"></i>`}
+                <div style="width:42px; height:42px; border-radius:50%; background:#e2e8f0; display:flex; align-items:center; justify-content:center; overflow:hidden; flex-shrink:0;">
+                    ${driver.profile_image_url
+                        ? `<img src="${driver.profile_image_url}" style="width:100%; height:100%; object-fit:cover;">`
+                        : `<i class="fas fa-user-circle" style="font-size:26px; color:#64748b;"></i>`
+                    }
                 </div>
                 <div>
-                    <strong style="display: block; font-size: 15px; color:var(--midnight);">${driver.driver_name || driver.driver_email || 'Fleet Driver'}</strong>
-                    <span style="font-size: 11px; color: #666;">ID: ${driver.id.substring(0,8)}...</span>
+                    <strong style="display:block; font-size:15px; color:#1e293b;">${displayName}</strong>
+                    <span style="font-size:11px; color:#64748b;">${driver.driver_email || ''}</span>
                 </div>
             </div>
-            <div style="margin-bottom: 10px;">
+            <div style="margin-bottom:10px;">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span style="font-size: 11px; color: #888; text-transform:uppercase; letter-spacing:0.5px;">Current Status</span>
-                    <span style="color: ${getStatusColor(status)}; font-weight: 700; font-size: 11px; background:${getStatusColor(status)}15; padding:2px 8px; border-radius:10px;">${status.replace(/_/g, ' ').toUpperCase()}</span>
+                    <span style="font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">Status</span>
+                    <span style="color:${getStatusColor(status)}; font-weight:700; font-size:11px; background:${getStatusColor(status)}18; padding:2px 9px; border-radius:10px;">${status.replace(/_/g, ' ').toUpperCase()}</span>
                 </div>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
-                <div style="font-size: 11px; color: #555; background:#f8fafc; padding:6px; border-radius:6px;">
-                    <i class="fas fa-tachometer-alt" style="color:var(--accent-blue); width:14px;"></i> <strong>${speedKmh}</strong> <small>km/h</small>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
+                <div style="font-size:11px; color:#475569; background:#f8fafc; padding:7px; border-radius:7px;">
+                    <i class="fas fa-tachometer-alt" style="color:#3b82f6; width:14px;"></i> <strong>${speedKmh}</strong> <small>km/h</small>
                 </div>
-                <div style="font-size: 11px; color: #555; background:#f8fafc; padding:6px; border-radius:6px;">
-                    <i class="fas fa-compass" style="color:var(--accent-blue); width:14px;"></i> <strong>${heading}°</strong> <small>HDG</small>
+                <div style="font-size:11px; color:#475569; background:#f8fafc; padding:7px; border-radius:7px;">
+                    <i class="fas fa-compass" style="color:#3b82f6; width:14px;"></i> <strong>${heading}&deg;</strong> <small>HDG</small>
                 </div>
-                <div style="font-size: 11px; color: #555; background:#f8fafc; padding:6px; border-radius:6px; grid-column: 1 / span 2;">
-                    <i class="fas fa-car" style="color:var(--accent-teal); width:14px;"></i> ${driver.vehicle_assigned || 'No Vehicle'} · ${driver.plate_number || 'No Plate'}
+                <div style="font-size:11px; color:#475569; background:#f0fdf4; padding:7px; border-radius:7px; grid-column:1 / span 2;">
+                    <i class="fas fa-car" style="color:#10b981; width:14px;"></i> ${vehicleInfo}
                 </div>
             </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; border-top:1px solid #f1f5f9; padding-top:8px;">
-                <span style="font-size: 10px; color: #94a3b8;">${driver.wifi_ssid ? `<i class="fas fa-wifi"></i> ${driver.wifi_ssid}` : 'Satellite Sync'}</span>
-                ${driver.last_updated ? `<span style="font-size: 9px; color: #94a3b8;">Updated: ${new Date(driver.last_updated.seconds ? driver.last_updated.seconds * 1000 : (driver.toMillis ? driver.toMillis() : Number(driver.last_updated))).toLocaleTimeString()}</span>` : ''}
+            <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid #f1f5f9; padding-top:8px;">
+                <span style="font-size:10px; color:#94a3b8;">
+                    ${driver.wifi_ssid ? `<i class="fas fa-wifi"></i> ${driver.wifi_ssid}` : '<i class="fas fa-satellite"></i> Satellite'}
+                </span>
+                <span style="font-size:9px; color:${lastSeenText.includes('ago') && parseInt(lastSeenText) > 3 ? '#f59e0b' : '#94a3b8'}">
+                    ${lastSeenText ? `&#128337; ${lastSeenText}` : ''}
+                </span>
             </div>
         </div>
     `;
