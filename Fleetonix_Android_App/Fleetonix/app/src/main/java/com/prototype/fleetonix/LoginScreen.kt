@@ -98,7 +98,7 @@ fun LoginScreen(
                     
                         // Login successful - OTP suppressed as requested
                         if (BuildConfig.DEBUG) {
-                            Log.d("LoginScreen", "Login successful for ${user.email} (OTP generation skipped)")
+                            Log.d("LoginScreen", "Login successful for ${user.email}. Handing over to AuthFlow.")
                         }
                 }
                 

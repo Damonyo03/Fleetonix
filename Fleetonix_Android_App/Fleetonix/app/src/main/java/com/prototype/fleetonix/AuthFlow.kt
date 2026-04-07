@@ -52,6 +52,10 @@ fun AuthFlow() {
     var userRole by rememberSaveable { mutableStateOf<String?>(null) }
     var showSplash by remember { mutableStateOf(true) }
     
+    // First Login Security State
+    var isFirstLoginMode by rememberSaveable { mutableStateOf(false) }
+    var needsPasswordReset by rememberSaveable { mutableStateOf(false) }
+    
     var feedData by remember { mutableStateOf<List<DriverSchedule>>(emptyList()) }
     var feedLoading by remember { mutableStateOf(false) }
     var feedError by remember { mutableStateOf<String?>(null) }
@@ -116,9 +120,18 @@ fun AuthFlow() {
                             userData = doc.data
                             userRole = doc.getString("user_type")
                             Log.d("AuthFlow", "User role identified: $userRole")
-                            // Bypass OTP verification for driver logins for now (as requested)
+                            
+                            val isFirstTime = (doc.getBoolean("isFirstLogin") ?: false)
+                            
                             if (userRole == "driver") {
-                                isDriverVerified = true 
+                                if (isFirstTime) {
+                                    isFirstLoginMode = true
+                                    isDriverVerified = false
+                                    Log.d("AuthFlow", "First login detected for driver. Enforcing security flow.")
+                                } else {
+                                    isFirstLoginMode = false
+                                    isDriverVerified = true 
+                                }
                             }
                         } else {
                             Log.w("AuthFlow", "User record not found in Firestore for $email. Signing out.")
@@ -230,6 +243,7 @@ fun AuthFlow() {
         userRole == null -> "loading_role"
         userRole != "driver" -> "unauthorized"
         userRole == "driver" && !isDriverVerified -> "verify_otp"
+        isFirstLoginMode && needsPasswordReset -> "force_reset"
         showHistory -> "history"
         else -> "dashboard"
     }
@@ -337,10 +351,43 @@ fun AuthFlow() {
                     userEmail = currentUser?.email ?: "",
                     onVerified = {
                         isDriverVerified = true
+                        if (isFirstLoginMode) {
+                            needsPasswordReset = true
+                        }
                     },
                     onBack = {
                         auth.signOut()
                         currentUser = null
+                    }
+                )
+            }
+            "force_reset" -> {
+                ResetPasswordScreen(
+                    userId = currentUser?.uid ?: "",
+                    otpCode = "FIRST_LOGIN", // Flag to indicate forced reset
+                    userEmail = currentUser?.email ?: "",
+                    onPasswordReset = {
+                        scope.launch {
+                            try {
+                                // Update Firestore - First login completed
+                                val uid = currentUser?.uid
+                                if (uid != null) {
+                                    db.collection("users").document(uid).update("isFirstLogin", false).await()
+                                    isFirstLoginMode = false
+                                    needsPasswordReset = false
+                                    Log.d("AuthFlow", "First login onboarding complete. Transitioning to dashboard.")
+                                }
+                            } catch (e: Exception) {
+                                Log.e("AuthFlow", "Failed to update isFirstLogin status", e)
+                            }
+                        }
+                    },
+                    onBack = {
+                        // Can't go back once in forced reset unless logging out
+                        auth.signOut()
+                        currentUser = null
+                        isFirstLoginMode = false
+                        needsPasswordReset = false
                     }
                 )
             }
