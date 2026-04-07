@@ -2024,7 +2024,8 @@ fun DriverDashboard(
                                                 "driver_uid" to (auth.currentUser?.uid ?: ""),
                                                 "driver_email" to (auth.currentUser?.email?.lowercase()?.trim() ?: ""),
                                                 "driver_name" to liveDriverName,
-                                                "client_name" to (nextSchedule?.client?.name ?: "Unknown"),
+                                                "passenger_name" to (nextSchedule?.passenger_name ?: nextSchedule?.client_name ?: "Unknown"),
+                                                "client_name" to (nextSchedule?.client_name ?: "Jettsan"),
                                                 "vehicle_plate" to (session.driver?.plateNumber ?: ""),
                                                 "pickup_location" to (nextSchedule?.pickup_location?.firstOrNull()?.address ?: "Unknown"),
                                                 "dropoff_location" to (nextSchedule?.dropoff_location?.address ?: "Unknown"),
@@ -2104,10 +2105,10 @@ fun DriverDashboard(
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // Client info only (Privacy mode)
+                                // Passenger info only
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = nextSchedule?.client_name ?: "Passenger Assignment",
+                                        text = nextSchedule?.passenger_name ?: nextSchedule?.client_name ?: "Passenger Assignment",
                                         color = TextPrimary,
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold
@@ -2390,7 +2391,7 @@ fun DriverDashboard(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text("Passenger: ${nextSchedule?.client_name ?: "Fleet Assign"}", color = Color.White, fontWeight = FontWeight.Bold)
+                                    Text("Passenger: ${nextSchedule?.passenger_name ?: nextSchedule?.client_name ?: "Fleet Assign"}", color = Color.White, fontWeight = FontWeight.Bold)
                                     Text("Pickup: ${nextSchedule?.pickup_location?.firstOrNull()?.address ?: "Pending"}", color = TextSecondary)
                                     Text("Dropoff: ${nextSchedule?.dropoff_location?.address ?: "Pending"}", color = TextSecondary)
                                 }
@@ -2439,7 +2440,8 @@ fun DriverDashboard(
                                                     "driver_uid" to (auth.currentUser?.uid ?: ""),
                                                     "driver_email" to (auth.currentUser?.email?.lowercase()?.trim() ?: ""),
                                                     "driver_name" to liveDriverName,
-                                                    "client_name" to (nextSchedule?.client?.name ?: "Unknown"),
+                                                    "passenger_name" to (nextSchedule?.passenger_name ?: nextSchedule?.client_name ?: "Unknown"),
+                                                    "client_name" to (nextSchedule?.client_name ?: "Jettsan"),
                                                     "vehicle_plate" to (session.driver?.plateNumber ?: ""),
                                                     "pickup_location" to (nextSchedule?.pickup_location?.firstOrNull()?.address ?: "Unknown"),
                                                     "dropoff_location" to (nextSchedule?.dropoff_location?.address ?: "Unknown"),
@@ -2549,7 +2551,8 @@ fun DriverDashboard(
                                 "driver_uid" to (auth.currentUser?.uid ?: ""),
                                 "driver_email" to (auth.currentUser?.email?.lowercase()?.trim() ?: ""),
                                 "driver_name" to liveDriverName,
-                                "client_name" to (nextSchedule?.client_name ?: "Unknown"),
+                                "passenger_name" to (nextSchedule?.passenger_name ?: nextSchedule?.client_name ?: "Unknown"),
+                                "client_name" to (nextSchedule?.client_name ?: "Jettsan"),
                                 "vehicle_plate" to (session.driver?.plateNumber ?: ""),
                                 "pickup_location" to (nextSchedule?.pickup_location?.firstOrNull()?.address ?: "Unknown"),
                                 "dropoff_location" to (nextSchedule?.dropoff_location?.address ?: "Unknown"),

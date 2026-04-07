@@ -185,7 +185,7 @@ fun HistoryCard(item: TripHistoryItem, onClick: () -> Unit) {
                 )
             }
             Spacer(Modifier.height(12.dp))
-            Text(item.clientName, color = TextPrimary, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+            Text(item.passengerName, color = TextPrimary, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
             Spacer(Modifier.height(8.dp))
             
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -205,7 +205,7 @@ fun HistoryCard(item: TripHistoryItem, onClick: () -> Unit) {
 
 data class TripHistoryItem(
     val id: String,
-    val clientName: String,
+    val passengerName: String,
     val driverName: String,
     val totalKm: Double,
     val departureTime: String,
@@ -225,7 +225,7 @@ fun buildTripItem(doc: com.google.firebase.firestore.DocumentSnapshot): TripHist
         val ldt = LocalDateTime.ofInstant(createdAt.toInstant(), java.time.ZoneId.systemDefault())
         TripHistoryItem(
             id = doc.id,
-            clientName = data["client_name"] as? String ?: "Unknown",
+            passengerName = data["passenger_name"] as? String ?: data["client_name"] as? String ?: "Unknown",
             driverName = data["driver_name"] as? String ?: "Driver",
             totalKm = (data["total_km"] as? Number)?.toDouble() ?: 0.0,
             departureTime = data["time_of_departure"] as? String ?: "--:--",

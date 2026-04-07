@@ -1,0 +1,42 @@
+Fleetonix/app/src/main/java/com/prototype/fleetonix/ApiService.kt:import okhttp3.OkHttpClient
+Fleetonix/app/src/main/java/com/prototype/fleetonix/ApiService.kt:    private val client = OkHttpClient.Builder()
+Fleetonix/app/src/main/java/com/prototype/fleetonix/ApiService.kt:        .client(client)
+Fleetonix/app/src/main/java/com/prototype/fleetonix/AuthFlow.kt:                            client = DriverClientInfo(
+Fleetonix/app/src/main/java/com/prototype/fleetonix/AuthFlow.kt:                                name = data["client_name"] as? String
+Fleetonix/app/src/main/java/com/prototype/fleetonix/AuthFlow.kt:                            client_name = data["client_name"] as? String,
+Fleetonix/app/src/main/java/com/prototype/fleetonix/AuthFlow.kt:                            text = "This app is exclusively for drivers. Your account is registered as a Client or Admin. Please use the Web Dashboard instead.",
+Fleetonix/app/src/main/java/com/prototype/fleetonix/DataModels.kt:    @SerializedName("client_name") val client_name: String? = null,
+Fleetonix/app/src/main/java/com/prototype/fleetonix/DataModels.kt:    val client: DriverClientInfo? = null
+Fleetonix/app/src/main/java/com/prototype/fleetonix/DataModels.kt:data class DriverClientInfo(
+Fleetonix/app/src/main/java/com/prototype/fleetonix/DriverDashboard.kt:                val locationClient = LocationServices.getFusedLocationProviderClient(context)
+Fleetonix/app/src/main/java/com/prototype/fleetonix/DriverDashboard.kt:                locationClient.lastLocation.addOnSuccessListener { location ->
+Fleetonix/app/src/main/java/com/prototype/fleetonix/DriverDashboard.kt:                val locationClient = LocationServices.getFusedLocationProviderClient(context)
+Fleetonix/app/src/main/java/com/prototype/fleetonix/DriverDashboard.kt:                    val locationTask = locationClient.getCurrentLocation(
+Fleetonix/app/src/main/java/com/prototype/fleetonix/DriverDashboard.kt:    val locationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+Fleetonix/app/src/main/java/com/prototype/fleetonix/DriverDashboard.kt:                val loc = LocationServices.getFusedLocationProviderClient(context).lastLocation.await()
+Fleetonix/app/src/main/java/com/prototype/fleetonix/DriverDashboard.kt:                val locationClient = LocationServices.getFusedLocationProviderClient(context)
+Fleetonix/app/src/main/java/com/prototype/fleetonix/DriverDashboard.kt:                    val locationTask = locationClient.getCurrentLocation(
+Fleetonix/app/src/main/java/com/prototype/fleetonix/DriverDashboard.kt:                                                "passenger_name" to (nextSchedule?.passenger_name ?: nextSchedule?.client_name ?: "Unknown"),
+Fleetonix/app/src/main/java/com/prototype/fleetonix/DriverDashboard.kt:                                                "client_name" to (nextSchedule?.client_name ?: "Jettsan"),
+Fleetonix/app/src/main/java/com/prototype/fleetonix/DriverDashboard.kt:                                        text = nextSchedule?.passenger_name ?: nextSchedule?.client_name ?: "Passenger Assignment",
+Fleetonix/app/src/main/java/com/prototype/fleetonix/DriverDashboard.kt:                                    Text("Passenger: ${nextSchedule?.client_name ?: "Fleet Assign"}", color = Color.White, fontWeight = FontWeight.Bold)
+Fleetonix/app/src/main/java/com/prototype/fleetonix/DriverDashboard.kt:                                                    "client_name" to (nextSchedule?.client?.name ?: "Unknown"),
+Fleetonix/app/src/main/java/com/prototype/fleetonix/DriverDashboard.kt:                                "client_name" to (nextSchedule?.client_name ?: "Unknown"),
+Fleetonix/app/src/main/java/com/prototype/fleetonix/DriverDashboard.kt:                Text("CLIENT VERIFICATION", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color.White)
+Fleetonix/app/src/main/java/com/prototype/fleetonix/LocationGate.kt:        !gpsEnabled -> "Please turn on your device GPS so we can track trips and notify clients."
+Fleetonix/app/src/main/java/com/prototype/fleetonix/LocationService.kt:import com.google.android.gms.location.FusedLocationProviderClient
+Fleetonix/app/src/main/java/com/prototype/fleetonix/LocationService.kt:import com.google.android.gms.location.GeofencingClient
+Fleetonix/app/src/main/java/com/prototype/fleetonix/LocationService.kt:    private lateinit var fusedLocationClient: FusedLocationProviderClient
+Fleetonix/app/src/main/java/com/prototype/fleetonix/LocationService.kt:    private lateinit var geofencingClient: GeofencingClient
+Fleetonix/app/src/main/java/com/prototype/fleetonix/LocationService.kt:        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+Fleetonix/app/src/main/java/com/prototype/fleetonix/LocationService.kt:        geofencingClient = LocationServices.getGeofencingClient(this)
+Fleetonix/app/src/main/java/com/prototype/fleetonix/LocationService.kt:            fusedLocationClient.requestLocationUpdates(
+Fleetonix/app/src/main/java/com/prototype/fleetonix/LocationService.kt:        fusedLocationClient.removeLocationUpdates(locationCallback)
+Fleetonix/app/src/main/java/com/prototype/fleetonix/LocationService.kt:     * @param location The Location object received from FusedLocationProviderClient.
+Fleetonix/app/src/main/java/com/prototype/fleetonix/LocationService.kt:            geofencingClient.addGeofences(request, pendingIntent).run {
+Fleetonix/app/src/main/java/com/prototype/fleetonix/LocationService.kt:        geofencingClient.removeGeofences(pendingIntent)
+Fleetonix/app/src/main/java/com/prototype/fleetonix/RegisterScreen.kt:                    modifier = Modifier.clickable { selectedRole = "client" }
+Fleetonix/app/src/main/java/com/prototype/fleetonix/RegisterScreen.kt:                        selected = selectedRole == "client",
+Fleetonix/app/src/main/java/com/prototype/fleetonix/RegisterScreen.kt:                        onClick = { selectedRole = "client" },
+Fleetonix/app/src/main/java/com/prototype/fleetonix/RegisterScreen.kt:                    Text("Client", color = TextPrimary)
+Fleetonix/app/src/main/java/com/prototype/fleetonix/TripHistoryScreen.kt:            passengerName = data["passenger_name"] as? String ?: data["client_name"] as? String ?: "Unknown",

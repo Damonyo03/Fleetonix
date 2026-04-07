@@ -70,7 +70,7 @@ function initExportFeature() {
                 return {
                     "Trip ID": d.id,
                     "Driver": s.driver_name || 'N/A',
-                    "Client": s.client_name || 'N/A',
+                    "Passenger": s.passenger_name || s.client_name || 'N/A',
                     "Pickup": s.pickup_location || 'N/A',
                     "Time": s.schedule_time || 'N/A',
                     "Status": s.status || 'scheduled',
@@ -171,7 +171,7 @@ function renderSchedules(docs) {
         return `
             <tr>
                 <td>${sched.driver_name || 'N/A'}</td>
-                <td>${sched.isOfficial ? '<span class="status-badge available">Official</span>' : '<span class="status-badge info">Fleet Assign</span>'}</td>
+                <td>${sched.passenger_name || sched.client_name || (sched.isOfficial ? 'Official' : 'Fleet Assign')}</td>
                 <td>${sched.pickup_location?.address || (Array.isArray(sched.pickup_location) ? sched.pickup_location[0]?.address : sched.pickup_location) || 'N/A'}</td>
                 <td>${sched.schedule_time || 'N/A'}</td>
                 <td>${statusHtml}</td>

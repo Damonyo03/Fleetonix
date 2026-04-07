@@ -192,45 +192,15 @@ fun RegisterScreen(
 
 
             Text(
-                text = "I am registering as a:",
+                text = "Registering as a Driver",
                 color = TextSecondary,
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 textAlign = TextAlign.Start
             )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { selectedRole = "driver" }
-                ) {
-                    RadioButton(
-                        selected = selectedRole == "driver",
-                        onClick = { selectedRole = "driver" },
-                        colors = RadioButtonDefaults.colors(
-                            selectedColor = AccentTeal,
-                            unselectedColor = TextSecondary
-                        )
-                    )
-                    Text("Driver", color = TextPrimary)
-                }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { selectedRole = "client" }
-                ) {
-                    RadioButton(
-                        selected = selectedRole == "client",
-                        onClick = { selectedRole = "client" },
-                        colors = RadioButtonDefaults.colors(
-                            selectedColor = AccentTeal,
-                            unselectedColor = TextSecondary
-                        )
-                    )
-                    Text("Client", color = TextPrimary)
-                }
-            }
+            Spacer(modifier = Modifier.height(4.dp))
+            // Role selection removed as registration is now exclusively for drivers.
+            // All bookings are now passenger-centric and guest-based.
 
             OutlinedTextField(
                 value = password,

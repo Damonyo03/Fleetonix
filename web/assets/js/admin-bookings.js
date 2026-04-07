@@ -94,35 +94,26 @@ async function showCreateBookingModal(clients) {
 
     const content = `
         <div class="form-group">
-            <label style="display: block; margin-bottom: 10px; font-weight: 600;">Client Type</label>
-            <div style="display: flex; gap: 20px; background: rgba(0, 212, 255, 0.05); padding: 12px; border-radius: 8px; border: 1px solid rgba(0, 212, 255, 0.1);">
-                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                    <input type="radio" name="client_type" value="existing" checked style="width: auto;"> Registered Client
-                </label>
-                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                    <input type="radio" name="client_type" value="new" style="width: auto;"> New / Guest
-                </label>
+            <label for="modal_passenger_name">Passenger Name</label>
+            <input type="text" id="modal_passenger_name" class="form-input" placeholder="Enter full name..." required>
+        </div>
+        
+        <div class="modal-form-row">
+            <div class="form-group">
+                <label for="modal_passenger_email">Passenger Email (Optional)</label>
+                <input type="email" id="modal_passenger_email" class="form-input" placeholder="email@example.com">
+            </div>
+            <div class="form-group">
+                <label for="modal_passenger_phone">Phone Number (Optional)</label>
+                <input type="tel" id="modal_passenger_phone" class="form-input" placeholder="+63 9XX XXX XXXX">
             </div>
         </div>
 
-        <div id="existing_client_section" class="form-group">
-            <label for="modal_client">Select Client</label>
-            <select id="modal_client" class="form-input">
-                <option value="">-- Choose a Client --</option>
-                ${clients.map(c => `<option value="${c.id}" data-name="${c.full_name}">${c.full_name}</option>`).join('')}
-            </select>
+        <div class="form-group">
+            <label for="modal_contractor">Contractor (Default: Jettsan)</label>
+            <input type="text" id="modal_contractor" class="form-input" value="Jettsan" readonly>
         </div>
 
-        <div id="new_client_section" style="display: none;">
-            <div class="form-group">
-                <label for="modal_guest_name">Passenger Name</label>
-                <input type="text" id="modal_guest_name" class="form-input" placeholder="Enter passenger name...">
-            </div>
-            <div class="form-group">
-                <label for="modal_contractor">Contractor (Default: Jettsan)</label>
-                <input type="text" id="modal_contractor" class="form-input" value="Jettsan" readonly>
-            </div>
-        </div>
 
         <div id="pickup_points_container">
             <div class="form-group pickup-point" style="position: relative;">
@@ -197,9 +188,11 @@ async function showCreateBookingModal(clients) {
     `;
 
     showModal('admin-booking-modal', 'New Client Booking', content, async () => {
-        const isExisting = document.querySelector('input[name="client_type"]:checked').value === 'existing';
-        const clientSelect = document.getElementById('modal_client');
-        const selectedOption = clientSelect?.options[clientSelect.selectedIndex];
+        const clientName = document.getElementById('modal_passenger_name').value.trim();
+        const clientEmail = document.getElementById('modal_passenger_email').value.trim();
+        const clientPhone = document.getElementById('modal_passenger_phone').value.trim();
+
+        if (!clientName) throw new Error("Please enter a passenger name.");
 
         const pickupDateInput = document.getElementById('pickup_date').value;
         const now = new Date();
@@ -226,14 +219,6 @@ async function showCreateBookingModal(clients) {
             }
         }
 
-        const clientId = isExisting ? (clientSelect?.value || '') : 'guest';
-        const clientName = isExisting
-            ? (selectedOption?.getAttribute('data-name') || selectedOption?.text || '')
-            : document.getElementById('modal_guest_name').value;
-
-        if (isExisting && !clientId) throw new Error("Please select a registered client.");
-        if (!isExisting && !clientName) throw new Error("Please enter a passenger name.");
-
         const pickup = document.getElementById('pickup_location').value.trim();
         const dropoff = document.getElementById('dropoff_location').value.trim();
         if (!pickup || !dropoff) throw new Error("Please enter pickup and dropoff locations.");
@@ -259,8 +244,10 @@ async function showCreateBookingModal(clients) {
         const bookingId = generateNumericId().toString();
         const data = sanitizeFirestoreData({
             booking_id: bookingId,
-            client_id: clientId,
+            client_id: 'guest',
             client_name: clientName,
+            client_email: clientEmail,
+            client_phone: clientPhone,
             contractor: 'Jettsan',
             isOfficial: isOfficial,
 
@@ -361,15 +348,8 @@ async function showCreateBookingModal(clients) {
         alert("Booking created successfully! " + (autoDispatch ? "It has been sent to dispatch." : "It is now pending approval."));
     });
 
-    // Initialize client type toggle logic
+    // Initialize Dynamic UI components
     setTimeout(async () => {
-        // Toggle Client Sections
-        const radios = document.querySelectorAll('input[name="client_type"]');
-        radios.forEach(r => r.addEventListener('change', (e) => {
-            document.getElementById('existing_client_section').style.display = e.target.value === 'existing' ? 'block' : 'none';
-            document.getElementById('new_client_section').style.display = e.target.value === 'new' ? 'block' : 'none';
-        }));
-
         // Dynamic Pickup Points
         const addPickupBtn = document.getElementById('add_pickup_point');
         const container = document.getElementById('pickup_points_container');
@@ -492,9 +472,10 @@ function renderBookings(docs) {
         const booking = d.data();
         const id = d.id;
         const statusClass = booking.status || 'pending';
+        const displayName = booking.passenger_name || booking.client_name || 'N/A';
         return `
             <tr>
-                <td>${booking.client_name || 'N/A'}</td>
+                <td>${displayName}</td>
                 <td>${booking.pickup_location || 'N/A'}</td>
                 <td>${booking.dropoff_location || 'N/A'}</td>
                 <td>${booking.pickup_date || 'N/A'} ${booking.pickup_time || ''}</td>
@@ -515,9 +496,10 @@ window.viewBookingDetails = async (id) => {
     const b = bookingDoc.data();
     showModal('view-booking-modal', `Booking #${id}`, `
         <div style="display:grid; gap:10px;">
-            <div><strong>Client:</strong> ${b.client_name || 'N/A'}</div>
-            <div><strong>Pickup:</strong> ${b.pickup_location || 'N/A'}</div>
-            <div><strong>Dropoff:</strong> ${b.dropoff_location || 'N/A'}</div>
+            <div><strong>Passenger:</strong> ${b.passenger_name || b.client_name || 'N/A'}</div>
+            ${b.passenger_email ? `<div><strong>Email:</strong> ${b.passenger_email}</div>` : ''}
+            ${b.passenger_phone ? `<div><strong>Phone:</strong> ${b.passenger_phone}</div>` : ''}
+            <div><strong>Contractor:</strong> ${b.client_name || 'Jettsan'}</div>
             <div><strong>Date/Time:</strong> ${b.pickup_date || ''} ${b.pickup_time || ''}</div>
             <div><strong>Pax:</strong> ${b.pax || 1}</div>
             <div><strong>Return?:</strong> ${b.return_to_pickup ? 'Yes' : 'No'}</div>

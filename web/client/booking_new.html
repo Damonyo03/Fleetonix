@@ -72,6 +72,22 @@
 
                 <div class="booking-form-card">
                     <form id="newBookingForm">
+                        <div class="form-group">
+                            <label for="passenger_name">Passenger Name *</label>
+                            <input type="text" id="passenger_name" class="form-input" placeholder="Enter passenger's full name" required>
+                        </div>
+
+                        <div class="modal-form-row">
+                            <div class="form-group">
+                                <label for="passenger_email">Passenger Email (Optional)</label>
+                                <input type="email" id="passenger_email" class="form-input" placeholder="For notifications">
+                            </div>
+                            <div class="form-group">
+                                <label for="passenger_phone">Passenger Phone (Optional)</label>
+                                <input type="tel" id="passenger_phone" class="form-input" placeholder="For urgent contact">
+                            </div>
+                        </div>
+
                         <div class="form-group" style="position: relative;">
                             <label for="pickup_location">Pickup Location</label>
                             <div class="input-with-action">

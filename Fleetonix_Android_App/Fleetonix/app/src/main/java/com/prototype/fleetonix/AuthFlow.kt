@@ -209,6 +209,9 @@ fun AuthFlow() {
                                 name = data["client_name"] as? String
                             ),
                             client_name = data["client_name"] as? String,
+                            passenger_name = data["passenger_name"] as? String,
+                            passenger_email = data["passenger_email"] as? String,
+                            passenger_phone = data["passenger_phone"] as? String,
                             return_to_pickup = data["return_to_pickup"] as? Boolean ?: false,
                             return_pickup_time = data["return_pickup_time"] as? String
                         )

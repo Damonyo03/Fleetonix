@@ -79,6 +79,9 @@ data class DriverSchedule(
     @SerializedName("total_km_travelled") val total_km_travelled: Double? = null,
     @SerializedName("completed_at") val completed_at: Any? = null,
     @SerializedName("client_name") val client_name: String? = null,
+    @SerializedName("passenger_name") val passenger_name: String? = null,
+    @SerializedName("passenger_email") val passenger_email: String? = null,
+    @SerializedName("passenger_phone") val passenger_phone: String? = null,
     val client: DriverClientInfo? = null
 )
 

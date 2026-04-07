@@ -54,6 +54,11 @@ if (bookingForm) {
         const return_to_pickup = document.getElementById('return_to_pickup').checked;
         const special_instructions = document.getElementById('special_instructions').value;
 
+        // New Passenger Fields
+        const passenger_name = document.getElementById('passenger_name').value || (currentUserData ? currentUserData.full_name : auth.currentUser.email.split('@')[0]);
+        const passenger_email = document.getElementById('passenger_email').value || '';
+        const passenger_phone = document.getElementById('passenger_phone').value || '';
+
         // 3:00 PM Cutoff Check (Only for Tomorrow)
         const now = new Date();
         const tomorrow = new Date();
@@ -78,6 +83,9 @@ if (bookingForm) {
             const bookingData = sanitizeFirestoreData({
                 client_id: auth.currentUser.uid,
                 client_name: currentUserData ? currentUserData.full_name : auth.currentUser.email.split('@')[0],
+                passenger_name,
+                passenger_email,
+                passenger_phone,
                 contractor: 'Jettsan',
                 isOfficial: false,
                 pickup_location,
