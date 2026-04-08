@@ -53,6 +53,11 @@ object PresenceManager {
     }
 
     fun updateBackgroundStatus(isBackground: Boolean) {
+        /**
+         * Updates the driver's background status.
+         * TODO: Consider implementing exponential backoff for presence updates if network errors occur
+         * to prevent battery drain in background specifically for low-connectivity areas.
+         */
         val user = auth.currentUser ?: return
         val email = user.email ?: return
         
