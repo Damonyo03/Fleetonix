@@ -25,6 +25,7 @@ import com.google.android.gms.location.GeofencingRequest
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.DocumentSnapshot
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -154,7 +155,8 @@ class LocationService : Service() {
             
             shakeDetector = ShakeDetector {
                 Log.e("LocationService", "ShakeDetector triggered! Setting incident_active to true.")
-                driverDocId?.let { email ->
+                if (driverEmail.isNotEmpty()) {
+                    val email = driverEmail
                     CoroutineScope(Dispatchers.IO).launch {
                         try {
                             val db = FirebaseFirestore.getInstance()
