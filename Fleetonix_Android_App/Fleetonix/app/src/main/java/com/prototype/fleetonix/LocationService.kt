@@ -28,6 +28,15 @@ import com.google.firebase.firestore.SetOptions
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.net.wifi.WifiInfo
+import android.net.wifi.WifiManager
+import android.location.Geocoder
+import java.util.Locale
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import android.hardware.SensorManager
 import android.net.wifi.WifiManager
 import android.net.ConnectivityManager
@@ -134,6 +143,8 @@ class LocationService : Service() {
         setupSensors()
     }
 
+    private var shakeDetector: ShakeDetector? = null
+
     private fun setupSensors() {
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
@@ -141,6 +152,28 @@ class LocationService : Service() {
         val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         accelerometer?.let {
             sensorManager.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_NORMAL)
+            
+            shakeDetector = ShakeDetector {
+                Log.e("LocationService", "ShakeDetector triggered! Setting incident_active to true.")
+                driverDocId?.let { email ->
+                    CoroutineScope(Dispatchers.IO).launch {
+                        try {
+                            val db = FirebaseFirestore.getInstance()
+                            db.collection("drivers")
+                                .whereEqualTo("driver_email", email)
+                                .get()
+                                .addOnSuccessListener { snapshot ->
+                                    for (doc in snapshot.documents) {
+                                        doc.reference.update("incident_active", true)
+                                    }
+                                }
+                        } catch (e: Exception) {
+                            Log.e("LocationService", "Failed to update incident_active", e)
+                        }
+                    }
+                }
+            }
+            sensorManager.registerListener(shakeDetector, it, SensorManager.SENSOR_DELAY_NORMAL)
         }
     }
 
@@ -319,33 +352,62 @@ class LocationService : Service() {
         val firestore = FirebaseFirestore.getInstance()
         val driverRef = firestore.collection("driver_locations").document(driverDocId)
 
-        val locationData = hashMapOf(
-            "current_latitude" to location.latitude,
-            "current_longitude" to location.longitude,
-            "current_speed" to smoothedSpeed,
-            "current_heading" to location.bearing,
-            "current_accuracy" to location.accuracy,
-            "acceleration_g" to currentGForce,
-            "wifi_ssid" to currentWifiSsid,
-            "wifi_rssi" to currentWifiRssi,
-            "is_background" to AppLifecycleObserver.isAppInBackground,
-            "last_updated" to FieldValue.serverTimestamp()
-        )
+        CoroutineScope(Dispatchers.IO).launch {
+            var humanReadableAddress = "Lat: ${String.format(Locale.US, "%.4f", location.latitude)}, Lng: ${String.format(Locale.US, "%.4f", location.longitude)}"
+            try {
+                val geocoder = Geocoder(applicationContext, Locale.getDefault())
+                val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
+                if (!addresses.isNullOrEmpty()) {
+                    val addr = addresses[0]
+                    val city = addr.locality ?: addr.subAdminArea ?: ""
+                    val thoroughfare = addr.thoroughfare ?: ""
+                    if (city.isNotEmpty() && thoroughfare.isNotEmpty()) {
+                        humanReadableAddress = "$thoroughfare, $city"
+                    } else if (city.isNotEmpty()) {
+                        humanReadableAddress = city
+                    } else if (thoroughfare.isNotEmpty()) {
+                        humanReadableAddress = thoroughfare
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("LocationService", "Geocoder failed", e)
+            }
 
-        // Also ping presence every few updates to keep status from going stale
-        if (System.currentTimeMillis() % 10 == 0L) { // Periodic ping
-            PresenceManager.updateStatus(true)
-        }
+            val locationData = hashMapOf(
+                "current_latitude" to location.latitude,
+                "current_longitude" to location.longitude,
+                "location_name" to humanReadableAddress,
+                "current_speed" to smoothedSpeed,
+                "current_heading" to location.bearing,
+                "current_accuracy" to location.accuracy,
+                "acceleration_g" to currentGForce,
+                "wifi_ssid" to currentWifiSsid,
+                "wifi_rssi" to currentWifiRssi,
+                "is_background" to AppLifecycleObserver.isAppInBackground,
+                "last_updated" to FieldValue.serverTimestamp()
+            )
 
-        driverRef.set(locationData, SetOptions.merge())
-            .addOnSuccessListener {
-                if (BuildConfig.DEBUG) {
-                    Log.d("LocationService", "Pushed Enriched Telematics: G=$currentGForce SSID=$currentWifiSsid")
+            // Also ping presence every few updates to keep status from going stale
+            if (System.currentTimeMillis() % 10 == 0L) { // Periodic ping
+                PresenceManager.updateStatus(true)
+            }
+
+            driverRef.set(locationData, SetOptions.merge())
+                .addOnSuccessListener {
+                    if (BuildConfig.DEBUG) {
+                        Log.d("LocationService", "Pushed Enriched Telematics: G=$currentGForce SSID=$currentWifiSsid")
+                    }
+                }
+                .addOnFailureListener { e ->
+                    Log.e("LocationService", "Error writing to driver_locations", e)
+                }
+                
+            firestore.collection("drivers").whereEqualTo("driver_email", driverDocId).get().addOnSuccessListener { snapshot ->
+                for (doc in snapshot.documents) {
+                    doc.reference.update("current_location_name", humanReadableAddress)
                 }
             }
-            .addOnFailureListener { e ->
-                Log.e("LocationService", "Error writing to driver_locations", e)
-            }
+        }
     }
 
     private fun pushToVehicleLogs(driverId: String, location: android.location.Location) {

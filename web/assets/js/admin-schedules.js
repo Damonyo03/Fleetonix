@@ -142,7 +142,7 @@ function initScheduleList() {
 
 function renderSchedules(docs) {
     if (docs.length === 0) {
-        scheduleTableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px;">No schedules found.</td></tr>';
+        scheduleTableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">No active schedules found.</td></tr>';
         return;
     }
 
@@ -168,14 +168,19 @@ function renderSchedules(docs) {
             statusHtml = `<span class="status-badge ${p.cls}">${p.label}</span>`;
         }
 
+        const isTrackingAvailable = sched.status !== 'completed' && sched.status !== 'cancelled';
+
         return `
             <tr>
-                <td>${sched.driver_name || 'N/A'}</td>
+                <td><div style="font-weight:700;">${sched.driver_name || 'N/A'}</div></td>
                 <td>${sched.passenger_name || sched.client_name || (sched.isOfficial ? 'Official' : 'Fleet Assign')}</td>
-                <td>${sched.pickup_location?.address || (Array.isArray(sched.pickup_location) ? sched.pickup_location[0]?.address : sched.pickup_location) || 'N/A'}</td>
+                <td><div style="font-size:0.85rem; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${sched.pickup_location?.address || 'N/A'}">${sched.pickup_location?.address || (Array.isArray(sched.pickup_location) ? sched.pickup_location[0]?.address : sched.pickup_location) || 'N/A'}</div></td>
                 <td>${sched.schedule_time || 'N/A'}</td>
                 <td>${statusHtml}</td>
-                <td class="table-actions">
+                <td class="table-actions" style="text-align: right;">
+                    <button class="btn-icon" title="Share Tracking Link" onclick="window.shareTrackingLink('${id}')" style="background: rgba(16, 185, 129, 0.1); color: var(--accent-green); display: ${isTrackingAvailable ? 'inline-block' : 'none'};">
+                        <i class="fas fa-share-alt"></i>
+                    </button>
                     <button class="btn-icon edit" title="Update Status" onclick="window.updateScheduleStatus('${id}')"><i class="fas fa-edit"></i></button>
                     <button class="btn-icon delete" title="Cancel Trip" onclick="window.deleteSchedule('${id}')"><i class="fas fa-times"></i></button>
                 </td>
@@ -183,6 +188,17 @@ function renderSchedules(docs) {
         `;
     }).join('');
 }
+
+window.shareTrackingLink = (id) => {
+    const trackingUrl = `${window.location.origin}/tracking.html?tripId=${id}`;
+    navigator.clipboard.writeText(trackingUrl).then(() => {
+        alert("Tracking link copied to clipboard!\n\nYou can now send this to the passenger.");
+    }).catch(err => {
+        console.error("Copy failed:", err);
+        prompt("Could not copy automatically. Copy this URL manually:", trackingUrl);
+    });
+};
+
 
 window.updateScheduleStatus = async (id) => {
     const snap = await getDoc(doc(db, "schedules", id));

@@ -329,18 +329,15 @@ window.clearFilters = function () {
 window.exportTripTickets = function () {
     const fromDate = document.getElementById('filterDateFrom').value;
     const toDate = document.getElementById('filterDateTo').value;
-    const driver = document.getElementById('filterDriver').value;
+    const selectedDriverName = document.getElementById('filterDriver').value;
 
-    // Use the currently filtered list if any, otherwise all tickets
-    // Actually, it's better to just apply current filters to allTickets
-    let filtered = [...allTickets];
-    if (driver) filtered = filtered.filter(t => t.driver_name === driver);
-    // ... we could use same logic as applyFilters but let's just use a global `currentFilteredTickets`
-
-    // For simplicity, let's just export what's currently being shown or re-filter
-    if (driver) {
-        filtered = filtered.filter(t => t.driver_name === driver);
+    if (!selectedDriverName) {
+        alert("Please select a specific driver to generate a formatted Trip Ticket ledger.");
+        return;
     }
+
+    let filtered = allTickets.filter(t => t.driver_name === selectedDriverName);
+    
     if (fromDate) {
         const from = new Date(fromDate);
         filtered = filtered.filter(t => {
@@ -357,10 +354,40 @@ window.exportTripTickets = function () {
         });
     }
 
+    if (filtered.length === 0) {
+        alert("No records found for this driver in the selected date range.");
+        return;
+    }
+
+    // Get context from the first ticket or a lookup
+    const firstTicket = filtered[0];
+    const vehicle = firstTicket.vehicle_assigned || firstTicket.vehicle_type || 'N/A';
+    const plate = firstTicket.plate_number || 'N/A';
+    
+    // Determine the month for the header
+    let reportMonth = "All Time";
+    if (fromDate) {
+        const d = new Date(fromDate);
+        reportMonth = d.toLocaleString('default', { month: 'long', year: 'numeric' });
+    }
+
+    const headerLines = [
+        `Vehicle Details: ${vehicle} (${plate})`,
+        `For the month of: ${reportMonth}`,
+        `Transport Officer: ${selectedDriverName}`
+    ];
+
     const exportData = mapTicketsForExport(filtered);
     const dateStr = new Date().toISOString().split('T')[0];
-    exportToExcel(exportData, `Fleetonix_Trip_Report_${dateStr}.xlsx`, 'Completed Trips');
+    
+    exportToExcel(
+        exportData, 
+        `Trip_Ticket_${selectedDriverName.replace(/\s+/g, '_')}_${dateStr}.xlsx`, 
+        'Trip Ledger',
+        headerLines
+    );
 };
+
 
 // Route Map Modal Management
 let routeMap = null;

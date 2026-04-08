@@ -100,7 +100,19 @@
                                 <label style="display:block; font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Verify New Password</label>
                                 <input type="password" id="confirmPassword" class="btn btn-secondary" style="width: 100%; text-align: left; text-transform: none; cursor: text;" required minlength="6">
                             </div>
-                            <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; margin-top: 8px;">
+
+                            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <h4 style="font-size: 0.85rem; margin-bottom: 4px;">Multi-Factor Authentication</h4>
+                                    <p style="font-size: 0.7rem; color: var(--text-muted);">Require OTP verification via mobile app during login.</p>
+                                </div>
+                                <label class="switch">
+                                    <input type="checkbox" id="mfaToggle">
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center; margin-top: 12px;">
                                 <i class="fas fa-key"></i> Update Credentials
                             </button>
                         </form>
@@ -108,6 +120,8 @@
 
                     <!-- System Maintenance -->
                     <div class="glass-card">
+                    <!-- System Maintenance -->
+                    <div class="glass-card" id="maintenanceSection" style="display: none;">
                         <div style="display:flex; align-items:center; gap:12px; margin-bottom:24px; padding-bottom:16px; border-bottom:1px solid var(--border-color);">
                             <i class="fas fa-terminal" style="color:var(--accent-purple); font-size:1.25rem;"></i>
                             <h3 style="font-size:1.125rem; font-weight:700;">Global Maintenance</h3>
@@ -117,18 +131,29 @@
                             <i class="fas fa-biohazard" style="font-size: 1.25rem; margin-top: 2px;"></i>
                             <div>
                                 <strong style="display:block; margin-bottom:4px;">Irreversible Data Deletion</strong>
-                                Clearing transactional data will permanently remove all bookings, schedules, and historical trip tickets from the cloud database. 
+                                Clearing transactional data will permanently remove all bookings, schedules, and historical trip tickets. 
                             </div>
                         </div>
 
                         <div class="maintenance-actions">
                             <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 8px;">
-                                Use the control below to reset the system's operational state. An automated JSON backup will be generated prior to execution.
+                                <strong>Factory Reset:</strong> Downloads a full JSON backup then wipes operational collections.
                             </p>
-                            <button id="clearDataBtn" class="btn btn-secondary" style="width: 100%; justify-content: center; border-color: rgba(255, 77, 77, 0.3); color: #ff6b6b; padding: 16px;">
-                                <i class="fas fa-trash-alt"></i> Perform Global Factory Reset
+                            <button id="clearDataBtn" class="btn btn-secondary" style="width: 100%; justify-content: center; border-color: rgba(255, 77, 77, 0.3); color: #ff6b6b; padding: 12px;">
+                                <i class="fas fa-trash-alt"></i> Execute Global Factory Reset
                             </button>
+
+                            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-color);">
+                                <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 8px;">
+                                    <strong>Restore Data:</strong> Re-upload previously downloaded backup files to recover transactional records.
+                                </p>
+                                <button id="restoreDataBtn" class="btn btn-primary" style="width: 100%; justify-content: center; background: rgba(0, 212, 255, 0.1); color: var(--accent-blue); border: 1px solid rgba(0, 212, 255, 0.3);">
+                                    <i class="fas fa-file-import"></i> Restore from JSON Backup
+                                </button>
+                                <input type="file" id="restoreFileInput" accept=".json" style="display: none;">
+                            </div>
                         </div>
+                    </div>
                     </div>
                 </div>
             </div>

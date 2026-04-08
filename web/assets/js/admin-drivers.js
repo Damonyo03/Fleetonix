@@ -15,180 +15,97 @@ const secondaryAuth = getAuth(secondaryApp);
 
 const driverGrid = document.getElementById('driverGrid');
 const driverSearch = document.getElementById('driverSearch');
+const brandSearch = document.getElementById('brandSearch');
+const colorSearch = document.getElementById('colorSearch');
+const typeFilter = document.getElementById('typeFilter');
 const statusFilter = document.getElementById('statusFilter');
 
 let currentUserData = null;
 let allDrivers = [];
-let activeCompanies = {};
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
-        if (!window.location.pathname.includes('login.html')) {
-            window.location.href = '../login.html';
-        }
+        window.location.href = '../login.html';
         return;
     }
 
     const userDoc = await getDoc(doc(db, "users", user.uid));
-    let userData = userDoc.exists() ? userDoc.data() : null;
-
-    if (!userData) {
-        const q = query(collection(db, "users"), where("email", "==", user.email));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-            userData = snap.docs[0].data();
-        }
-    }
-
-    const adminRoles = ['admin', 'super_admin'];
-    const role = userData?.user_type || userData?.role;
-
-    if (!userData || !adminRoles.includes(role)) {
-        console.error("Access Denied: Not an administrator.");
-        window.location.href = '../login.html?error=unauthorized';
-        return;
-    }
-
-    currentUserData = userData;
-    const name = userData.full_name || user.email.split('@')[0];
-    initLayout('Driver Management', name);
+    currentUserData = userDoc.exists() ? userDoc.data() : { role: 'admin' };
+    document.getElementById('adminDisplayName').textContent = currentUserData.full_name || "Administrator";
 
     initDriverList();
-
-    initDriverList();
-    
-    // Integrity Check (Super Admin only can auto-repair)
-    if (role === 'super_admin' || role === 'admin') {
-        setTimeout(repairMissingDriverProfiles, 2000);
-    }
 });
 
-async function repairMissingDriverProfiles() {
-    console.log("Analyzing driver database integrity...");
-    try {
-        const driversSnap = await getDocs(collection(db, "drivers"));
-        const usersSnap = await getDocs(query(collection(db, "users"), where("role", "==", "driver")));
-        
-        let driverEmails = new Map();
-        let duplicatesFound = 0;
-
-        // 1. Identify and remove duplicates from 'drivers' collection
-        for (const d of driversSnap.docs) {
-            const data = d.data();
-            const email = data.driver_email?.toLowerCase()?.trim();
-            if (!email) continue;
-
-            if (driverEmails.has(email)) {
-                // Duplicate found! 
-                const existing = driverEmails.get(email);
-                console.warn(`Removing duplicate ghost driver: ${email} (ID: ${d.id})`);
-                await deleteDoc(doc(db, "drivers", d.id));
-                duplicatesFound++;
-            } else {
-                driverEmails.set(email, { id: d.id, data });
-            }
-        }
-
-        if (duplicatesFound > 0) {
-            console.log(`Cleaned up ${duplicatesFound} duplicate driver accounts.`);
-        }
-
-        // 2. Repair missing profiles from 'users' collection
-        for (const u of usersSnap.docs) {
-            const userData = u.data();
-            const email = userData.email?.toLowerCase();
-            
-            if (email && !driverEmails.has(email)) {
-                console.log(`Repairing missing driver profile for: ${email}`);
-                await setDoc(doc(db, "drivers", u.id), {
-                    driver_name: userData.full_name || "New Driver",
-                    driver_email: email,
-                    current_status: "offline",
-                    vehicle_assigned: "Pending Assignment",
-                    plate_number: "N/A",
-                    created_at: serverTimestamp(),
-                    is_currently_timed_in: false
-                });
-                repairCount++;
-            }
-        }
-        if (repairCount > 0) {
-            console.log(`Database Integrity Shield: ${repairCount} driver profiles restored.`);
-            alert(`System Integrity Alert: ${repairCount} missing driver profiles have been automatically restored. Mobile app functionality is now active for these users.`);
-        }
-    } catch (e) {
-        console.error("Database integrity check failed:", e);
-    }
-}
-
 function initDriverList() {
-    const role = currentUserData.role || currentUserData.user_type;
-    const companyId = currentUserData.accredited_company_id;
-
-    let driverQuery = collection(db, "drivers");
-
-    // RBAC Filtering removed for NSCRP
-
-    onSnapshot(driverQuery, (snapshot) => {
+    onSnapshot(collection(db, "drivers"), (snapshot) => {
         allDrivers = snapshot.docs;
         applyFilters();
     });
 
-    if (driverSearch) driverSearch.addEventListener('input', applyFilters);
-    if (statusFilter) statusFilter.addEventListener('change', applyFilters);
+    [driverSearch, brandSearch, colorSearch, typeFilter, statusFilter].forEach(el => {
+        if (el) el.addEventListener('input', applyFilters);
+    });
 }
 
 function applyFilters() {
     if (!driverGrid) return;
-    const searchTerm = driverSearch.value.toLowerCase();
-    const status = statusFilter.value;
+    const search = driverSearch?.value.toLowerCase() || "";
+    const brand = brandSearch?.value.toLowerCase() || "";
+    const color = colorSearch?.value.toLowerCase() || "";
+    const type = typeFilter?.value || "all";
+    const status = statusFilter?.value || "all";
 
     const filtered = allDrivers.filter(d => {
         const data = d.data();
-        const matchesSearch = (data.driver_name || '').toLowerCase().includes(searchTerm) || 
-                             (data.plate_number || '').toLowerCase().includes(searchTerm) || 
-                             (data.vehicle_assigned || '').toLowerCase().includes(searchTerm);
+        const matchesSearch = (data.driver_name || '').toLowerCase().includes(search) || (data.plate_number || '').toLowerCase().includes(search);
+        const matchesBrand = !brand || (data.vehicle_assigned || '').toLowerCase().includes(brand);
+        const matchesColor = !color || (data.car_color || '').toLowerCase().includes(color);
+        const matchesType = type === 'all' || (data.car_details || '').includes(`${type}-seater`);
         const matchesStatus = status === 'all' || data.current_status === status;
-        return matchesSearch && matchesStatus;
+        
+        return matchesSearch && matchesBrand && matchesColor && matchesType && matchesStatus;
     });
     renderDrivers(filtered);
 }
 
 function renderDrivers(docs) {
     if (docs.length === 0) {
-        driverGrid.innerHTML = '<p style="text-align: center; grid-column: 1/-1; padding: 40px;">No drivers found.</p>';
+        driverGrid.innerHTML = '<div class="glass-card" style="grid-column: 1/-1; text-align: center; padding: 40px;">No drivers match your filters.</div>';
         return;
     }
 
     driverGrid.innerHTML = docs.map(d => {
         const driver = d.data();
         const id = d.id;
-        // Directly use Firestore's current_status — updated in real-time via onSnapshot
         const status = driver.current_status || 'offline';
         const displayStatus = status.replace(/_/g, ' ');
-        const isTimedIn = driver.is_currently_timed_in === true;
-
         return `
-            <div class="driver-card" id="dcard-${id}">
-                <div class="driver-status ${status}"></div>
-                <div class="driver-profile-header">
-                    <div class="driver-avatar-large">
-                        ${driver.profile_image_url ? `<img src="${driver.profile_image_url}" alt="${driver.driver_name}">` : `<i class="fas fa-user-circle"></i>`}
+            <div class="driver-card" style="background: var(--glass-bg); backdrop-filter: blur(12px); border-radius: var(--radius-lg); border: 1px solid var(--glass-border); padding: 24px; position: relative;">
+                <div class="status-dot ${status}"></div>
+                <div class="driver-header" style="display: flex; gap: 16px; align-items: center; margin-bottom: 16px;">
+                    <div class="avatar-large" style="width: 64px; height: 64px; border-radius: 50%; overflow: hidden; border: 2px solid var(--accent-blue);">
+                        ${driver.profile_image_url ? `<img src="${driver.profile_image_url}" style="width:100%; height:100%; object-fit:cover;">` : `<i class="fas fa-user-circle" style="font-size: 64px; color: var(--border-color);"></i>`}
+                    </div>
+                    <div>
+                        <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700;">${driver.driver_name}</h3>
+                        <p style="margin: 2px 0 0; font-size: 0.8rem; color: var(--accent-blue);"><i class="fas fa-id-card"></i> ${driver.plate_number}</p>
                     </div>
                 </div>
-                <div class="driver-info">
-                    <h3>${driver.driver_name || 'Unnamed Driver'}</h3>
-                    <p><i class="fas fa-truck-pickup"></i> ${driver.vehicle_assigned || 'No vehicle'} ${driver.car_color ? `(${driver.car_color})` : ''}</p>
-                    <p><i class="fas fa-id-card"></i> ${driver.plate_number || 'No plate'}</p>
-                    <p><i class="fas fa-phone"></i> ${driver.driver_phone || 'No phone'}</p>
-                    ${driver.car_details ? `<p class="car-details-small"><i class="fas fa-info-circle"></i> ${driver.car_details}</p>` : ''}
+                <div class="driver-stats-mini">
+                    <div class="stat-box">
+                        <span>Vehicle</span>
+                        <strong>${driver.vehicle_assigned || 'N/A'}</strong>
+                    </div>
+                    <div class="stat-box">
+                        <span>Type</span>
+                        <strong>${(driver.car_details || '').match(/\d-seater/) ? driver.car_details.match(/\d-seater/)[0] : 'Standard'}</strong>
+                    </div>
                 </div>
-                <div class="driver-meta">
-                    <span class="status-badge ${status}">${displayStatus}</span>
-                    ${isTimedIn ? `<span class="status-badge available" style="margin-left:4px; font-size:0.7em;"><i class="fas fa-clock"></i> Timed In</span>` : ''}
-                    <div class="card-actions">
-                        <button class="btn-icon edit" onclick="window.editDriver('${id}')" title="Edit Driver"><i class="fas fa-edit"></i></button>
-                        <button class="btn-icon delete" onclick="window.deleteDriver('${id}')" title="Delete Driver"><i class="fas fa-trash"></i></button>
+                <div style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center;">
+                    <span class="status-badge ${status}" style="text-transform: capitalize;">${displayStatus}</span>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn-icon" onclick="window.editDriver('${id}')" style="background: rgba(0,212,255,0.1); color: var(--accent-blue); border: none; padding: 8px; border-radius: 6px;"><i class="fas fa-edit"></i></button>
+                        <button class="btn-icon" onclick="window.deleteDriver('${id}')" style="background: rgba(255,71,87,0.1); color: var(--accent-error); border: none; padding: 8px; border-radius: 6px;"><i class="fas fa-trash"></i></button>
                     </div>
                 </div>
             </div>
@@ -196,82 +113,203 @@ function renderDrivers(docs) {
     }).join('');
 }
 
+// --- Driver Modal Helper ---
+function getDriverFormContent(driver = {}) {
+    return `
+        <div class="form-group" style="text-align: center; margin-bottom: 24px;">
+            <div id="image-drop-zone" style="width: 120px; height: 120px; border-radius: 50%; border: 2px dashed var(--accent-blue); margin: 0 auto 12px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; background: rgba(0,212,255,0.05); cursor: pointer;">
+                ${driver.profile_image_url ? `<img id="preview-image" src="${driver.profile_image_url}" style="width:100%; height:100%; object-fit:cover;">` : `<i class="fas fa-camera" style="font-size: 2rem; color: var(--accent-blue);"></i>`}
+                <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.5); font-size: 0.65rem; color: white; padding: 4px;">Update</div>
+            </div>
+            <input type="file" id="driver-image-input" accept="image/*" style="display: none;">
+            <p style="font-size: 0.75rem; color: var(--text-muted);">Drag and drop or click to upload photo</p>
+            <div id="cropper-container" style="display:none; margin-top: 12px;">
+                <img id="cropper-image" style="max-width: 100%;">
+                <button type="button" class="btn btn-primary" id="crop-confirm" style="margin-top: 10px; width: 100%;">Crop & Apply</button>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Driver Full Name</label>
+            <input type="text" id="modal_name" class="form-input" value="${driver.driver_name || ''}" required placeholder="John Doe">
+        </div>
+        
+        <div class="form-grid-2">
+            <div class="form-group">
+                <label>Plate Number</label>
+                <input type="text" id="modal_plate" class="form-input" value="${driver.plate_number || ''}" required placeholder="ABC 1234">
+            </div>
+            <div class="form-group">
+                <label>Car Color</label>
+                <input type="text" id="modal_color" class="form-input" value="${driver.car_color || ''}" placeholder="e.g. Metallic White">
+            </div>
+        </div>
+
+        <div class="form-grid-2">
+            <div class="form-group">
+                <label>Car Brand & Model</label>
+                <input type="text" id="modal_vehicle" class="form-input" value="${driver.vehicle_assigned || ''}" required placeholder="Toyota Innova">
+            </div>
+            <div class="form-group">
+                <label>Car Type</label>
+                <select id="modal_type" class="form-input">
+                    <option value="4-seater" ${(driver.car_details || '').includes('4-seater') ? 'selected' : ''}>4-Seater Sedan/SUV</option>
+                    <option value="6-seater" ${(driver.car_details || '').includes('6-seater') ? 'selected' : ''}>6-Seater MPV/Large SUV</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>License Number</label>
+            <input type="text" id="modal_license" class="form-input" value="${driver.license_number || ''}" required>
+        </div>
+
+        <div class="form-group">
+            <label>Mobile Number</label>
+            <input type="text" id="modal_phone" class="form-input" value="${driver.driver_phone || ''}" required placeholder="09xxxxxxxxx">
+        </div>
+
+        ${driver.driver_email ? `
+        <div class="form-group">
+            <label>Driver Email (Read-only)</label>
+            <input type="email" class="form-input" value="${driver.driver_email}" readonly style="opacity: 0.6; cursor: not-allowed;">
+        </div>
+        ` : `
+        <div class="form-group">
+            <label>Driver Email (Account login)</label>
+            <input type="email" id="modal_email" class="form-input" required placeholder="driver@fleetonix.com">
+        </div>
+        `}
+
+        <div class="form-group">
+            <label>Operating Status</label>
+            <div class="alert alert-info" style="font-size: 0.8rem; background: rgba(0, 212, 255, 0.05); border: 1px dashed var(--accent-blue); padding: 10px;">
+                <i class="fas fa-sync"></i> Current Status: <strong style="color: var(--accent-blue); text-transform: uppercase;">${(driver.current_status || 'Offline').replace('_',' ')}</strong>
+                <p style="margin: 4px 0 0; font-size: 0.7rem; color: var(--text-muted);">This status is strictly synchronized with the Driver's Android application activity and cannot be modified manually.</p>
+            </div>
+        </div>
+        <input type="hidden" id="cropped_image_base64">
+    `;
+}
+
+function initModalCropper() {
+    const dropZone = document.getElementById('image-drop-zone');
+    const input = document.getElementById('driver-image-input');
+    const cropperContainer = document.getElementById('cropper-container');
+    const cropperImage = document.getElementById('cropper-image');
+    let cropperInstance = null;
+
+    dropZone.onclick = () => input.click();
+
+    // Drag and Drop implementation
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = 'var(--accent-green)';
+        dropZone.style.background = 'rgba(16, 185, 129, 0.1)';
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.style.borderColor = 'var(--accent-blue)';
+        dropZone.style.background = 'rgba(0, 212, 255, 0.05)';
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = 'var(--accent-blue)';
+        dropZone.style.background = 'rgba(0, 212, 255, 0.05)';
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith('image/')) {
+            handleFile(file);
+        }
+    });
+
+    const handleFile = (file) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            cropperContainer.style.display = 'block';
+            cropperImage.src = event.target.result;
+            
+            if (cropperInstance) cropperInstance.destroy();
+            cropperInstance = new Cropper(cropperImage, {
+                aspectRatio: 1,
+                viewMode: 1,
+                autoCropArea: 1,
+            });
+        };
+        reader.readAsDataURL(file);
+    };
+
+    input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (file) handleFile(file);
+    };
+
+    document.getElementById('crop-confirm').onclick = () => {
+        const canvas = cropperInstance.getCroppedCanvas({ width: 256, height: 256 });
+        document.getElementById('preview-image').src = canvas.toDataURL();
+        document.getElementById('cropped_image_base64').value = canvas.toDataURL();
+        cropperContainer.style.display = 'none';
+        cropperInstance.destroy();
+    };
+}
+
+
+window.editDriver = async (id) => {
+    const snap = await getDoc(doc(db, "drivers", id));
+    if (!snap.exists()) return;
+    const driver = snap.data();
+
+    showModal('edit-driver-modal', `Edit Asset: ${driver.driver_name}`, getDriverFormContent(driver), async () => {
+        const croppedImg = document.getElementById('cropped_image_base64').value;
+        const updateData = {
+            driver_name: document.getElementById('modal_name').value,
+            plate_number: document.getElementById('modal_plate').value,
+            car_color: document.getElementById('modal_color').value,
+            vehicle_assigned: document.getElementById('modal_vehicle').value,
+            car_details: document.getElementById('modal_type').value,
+            license_number: document.getElementById('modal_license').value,
+            driver_phone: document.getElementById('modal_phone').value,
+            updated_at: serverTimestamp()
+        };
+        if (croppedImg) updateData.profile_image_url = croppedImg;
+
+        await updateDoc(doc(db, "drivers", id), updateData);
+        alert("Profile updated successfully!");
+    });
+    setTimeout(initModalCropper, 100);
+};
+
 const addDriverBtn = document.getElementById('addDriverBtn');
 if (addDriverBtn) {
     addDriverBtn.onclick = () => {
-        const content = `
-            <div class="form-group">
-                <label>Admin Insight</label>
-                <div class="alert alert-info" style="font-size: 0.85rem; padding: 12px; margin-bottom: 20px; display: block; border-left: 4px solid var(--accent-blue);">
-                    <i class="fas fa-shield-alt"></i> New accounts use temporary password: <strong style="color:var(--accent-blue);">driver123</strong>. 
-                    Drivers will be prompted to verify via OTP and reset their password upon first login.
-                </div>
-            </div>
-            <div class="form-group">
-                <label>Full Name</label>
-                <input type="text" id="modal_driver_name" class="form-input" placeholder="e.g. John Doe" required>
-            </div>
-            <div class="form-grid-2">
-                <div class="form-group">
-                    <label>Driver Email</label>
-                    <input type="email" id="modal_email" class="form-input" placeholder="e.g. driver@fleet.com" required>
-                </div>
-                <div class="form-group">
-                    <label>Phone Number</label>
-                    <input type="text" id="modal_phone" class="form-input" placeholder="e.g. 09123456789" required>
-                </div>
-            </div>
-            <div class="form-grid-2">
-                <div class="form-group">
-                    <label>License Number</label>
-                    <input type="text" id="modal_license" class="form-input" placeholder="Enter DL number" required>
-                </div>
-                <div class="form-group">
-                    <label>Plate Number</label>
-                    <input type="text" id="modal_plate" class="form-input" placeholder="e.g. ABC 1234" required>
-                </div>
-            </div>
-            <div class="form-group">
-                <label>Vehicle Model / Assigned Vehicle</label>
-                <input type="text" id="modal_vehicle" class="form-input" placeholder="e.g. Toyota Vios 2023" required>
-            </div>
-        `;
-
-        showModal('driver-modal', 'Register New Fleet Driver', content, async () => {
-            const name = document.getElementById('modal_driver_name').value;
+        showModal('add-driver-modal', 'Onboard New Driver', getDriverFormContent(), async () => {
             const email = document.getElementById('modal_email').value.toLowerCase().trim();
-            const phone = document.getElementById('modal_phone').value;
-            const license = document.getElementById('modal_license').value;
-            const plate = document.getElementById('modal_plate').value;
-            const vehicle = document.getElementById('modal_vehicle').value;
             const password = "driver123";
+            const name = document.getElementById('modal_name').value;
 
             try {
-                // Secondary app creation
                 const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
-                const driverId = userCredential.user.uid;
-                const companyId = "jettsan"; // Static for NSCRP requirement
+                const uid = userCredential.user.uid;
+                const croppedImg = document.getElementById('cropped_image_base64').value;
 
-                // Create Driver Document
-                await setDoc(doc(db, "drivers", driverId), {
+                await setDoc(doc(db, "drivers", uid), {
                     driver_name: name,
                     driver_email: email,
-                    driver_phone: phone,
-                    license_number: license,
-                    plate_number: plate,
-                    vehicle_assigned: vehicle,
+                    driver_phone: document.getElementById('modal_phone').value,
+                    plate_number: document.getElementById('modal_plate').value,
+                    car_color: document.getElementById('modal_color').value,
+                    vehicle_assigned: document.getElementById('modal_vehicle').value,
+                    car_details: document.getElementById('modal_type').value,
+                    license_number: document.getElementById('modal_license').value,
+                    profile_image_url: croppedImg || "",
                     current_status: "offline",
                     isFirstLogin: true,
-                    is_currently_timed_in: false,
-                    created_at: serverTimestamp(),
-                    updated_at: serverTimestamp()
+                    created_at: serverTimestamp()
                 });
-                
-                // Create User Meta-Data Document
-                await setDoc(doc(db, "users", driverId), {
+
+                await setDoc(doc(db, "users", uid), {
                     full_name: name,
                     email: email,
-                    phone: phone,
                     user_type: "driver",
                     role: "driver",
                     status: "active",
@@ -280,139 +318,20 @@ if (addDriverBtn) {
                 });
 
                 await signOut(secondaryAuth);
-
-                await addDoc(collection(db, "activity"), {
-                    type: 'system',
-                    title: 'New Driver Account Created',
-                    message: `Admin manually provisioned driver: ${name} (${email})`,
-                    timestamp: serverTimestamp()
-                });
-
-                alert("Driver account provisioned successfully! Give the driver their email and the default password: driver123");
-                location.reload(); // Refresh to show new driver
-            } catch (error) {
-                console.error("Provisioning error:", error);
-                alert("Critical: Failed to provision account. " + error.message);
+                alert("Driver onboarded! Temporary password is: driver123");
+                location.reload();
+            } catch (err) {
+                alert("Onboarding failed: " + err.message);
             }
         });
+        setTimeout(initModalCropper, 100);
     };
 }
 
-window.editDriver = async (id) => {
-    const snap = await getDoc(doc(db, "drivers", id));
-    if (!snap.exists()) return;
-    const driver = snap.data();
-
-    const content = `
-        <div class="form-group">
-            <label>Driver Name</label>
-            <input type="text" id="modal_driver_name" class="form-input" value="${driver.driver_name}" required>
-        </div>
-        <div class="form-grid-2">
-            <div class="form-group">
-                <label>Vehicle Model</label>
-                <input type="text" id="modal_vehicle" class="form-input" value="${driver.vehicle_assigned}" required>
-            </div>
-            <div class="form-group">
-                <label>Car Color</label>
-                <input type="text" id="modal_color" class="form-input" value="${driver.car_color || ''}" required>
-            </div>
-        </div>
-        <div class="form-group">
-            <label>Plate Number</label>
-            <input type="text" id="modal_plate" class="form-input" value="${driver.plate_number}" required>
-        </div>
-        <div class="form-group">
-            <label>Car Details (Optional)</label>
-            <input type="text" id="modal_car_details" class="form-input" value="${driver.car_details || ''}">
-        </div>
-        <div class="form-group">
-            <label>Profile Image URL (Optional)</label>
-            <input type="url" id="modal_image_url" class="form-input" value="${driver.profile_image_url || ''}">
-        </div>
-        <div class="form-group">
-            <label>Driver Email</label>
-            <input type="email" id="modal_email" class="form-input" value="${driver.driver_email || ''}" required>
-        </div>
-        <div class="form-group">
-            <label>Status</label>
-            <select id="modal_status" class="form-input">
-                <option value="available" ${driver.current_status === 'available' ? 'selected' : ''}>Available</option>
-                <option value="on_schedule" ${driver.current_status === 'on_schedule' ? 'selected' : ''}>On Schedule</option>
-                <option value="offline" ${driver.current_status === 'offline' ? 'selected' : ''}>Offline</option>
-            </select>
-        </div>
-    `;
-
-    showModal('driver-modal', 'Edit Driver', content, async () => {
-        const email = document.getElementById('modal_email').value.toLowerCase().trim();
-        await updateDoc(doc(db, "drivers", id), {
-            driver_name: document.getElementById('modal_driver_name').value,
-            vehicle_assigned: document.getElementById('modal_vehicle').value,
-            car_color: document.getElementById('modal_color').value,
-            car_details: document.getElementById('modal_car_details').value,
-            profile_image_url: document.getElementById('modal_image_url').value,
-            plate_number: document.getElementById('modal_plate').value,
-            driver_email: email,
-            current_status: document.getElementById('modal_status').value
-        });
-        
-        try {
-            await updateDoc(doc(db, "users", id), {
-                full_name: document.getElementById('modal_driver_name').value,
-                email: email
-            });
-        } catch (e) { console.log("User doc might not exist yet for this driver ID"); }
-
-        await addDoc(collection(db, "activity"), {
-            type: 'system',
-            title: 'Driver Updated',
-            message: `Admin updated info for driver: ${document.getElementById('modal_driver_name').value}`,
-            timestamp: serverTimestamp()
-        });
-    });
-};
-
 window.deleteDriver = async (id) => {
-    const snap = await getDoc(doc(db, "drivers", id));
-    if (!snap.exists()) {
-        alert("Error: Driver profile not found.");
-        return;
-    }
-    const driver = snap.data();
-
-    if (confirm(`Are you sure you want to permanently delete the driver account for ${driver.driver_name}? This will remove them from Fleet Monitoring and recalibrate organizational counts.`)) {
-        try {
-            // 1. Backend Purge (Auth + Logic)
-            const response = await fetch('https://us-central1-appfleetonix.cloudfunctions.net/adminDeleteUser', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    uid: id,
-                    email: driver.driver_email
-                })
-            });
-
-            const result = await response.json();
-            if (!result.success) {
-                // If Cloud Function fails, try to at least delete firestore docs if admin
-                console.warn("Cloud Purge failed, attempting manual Firestore cleanup:", result.message);
-                await deleteDoc(doc(db, "drivers", id));
-                try { await deleteDoc(doc(db, "users", id)); } catch(e){}
-            }
-
-            // 3. Activity Audit
-            await addDoc(collection(db, "activity"), {
-                type: 'system',
-                title: 'Driver Deleted',
-                message: `Super Admin purged driver: ${driver.driver_name} (ID: ${id})`,
-                timestamp: serverTimestamp()
-            });
-
-            alert("Driver account and profile successfully purged.");
-        } catch (error) {
-            console.error("Deletion error:", error);
-            alert("Failed to delete driver: " + error.message);
-        }
+    if (confirm("Permanently remove this driver and their assets? This action cannot be undone.")) {
+        await deleteDoc(doc(db, "drivers", id));
+        alert("Driver removed from system.");
     }
 };
+

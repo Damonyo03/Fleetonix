@@ -68,18 +68,27 @@
                     </button>
                 </div>
 
-                <!-- Unified Filters -->
-                <div class="glass-card" style="padding: 16px; margin-bottom: 32px; display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
-                    <div style="flex: 1; display: flex; align-items: center; gap: 12px; color: var(--text-secondary); font-size: 0.875rem;">
+                <div class="glass-card" style="padding: 16px; margin-bottom: 32px; display: flex; gap: 24px; flex-wrap: wrap; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 12px; color: var(--text-secondary); font-size: 0.875rem;">
                         <i class="fas fa-filter"></i>
-                        <span>Filter by status:</span>
+                        <span>Status:</span>
+                        <select id="statusFilter" class="btn btn-secondary" style="width: auto; text-align: left; text-transform: none; height: 38px;">
+                            <option value="all">All Statuses</option>
+                            <option value="pending">Pending Review</option>
+                            <option value="scheduled">Scheduled / Sent</option>
+                        </select>
                     </div>
-                    <select id="statusFilter" class="btn btn-secondary" style="width: auto; text-align: left; text-transform: none;">
-                        <option value="all">All Bookings</option>
-                        <option value="pending">Pending Review</option>
-                        <option value="approved">Approved & Ready</option>
-                        <option value="assigned">Assigned to Driver</option>
-                    </select>
+
+                    <div style="display: flex; align-items: center; gap: 12px; color: var(--text-secondary); font-size: 0.875rem;">
+                        <i class="fas fa-map-marked-alt"></i>
+                        <span>Operating Area:</span>
+                        <select id="areaFilter" class="btn btn-secondary" style="width: auto; text-align: left; text-transform: none; height: 38px;">
+                            <option value="all">All Areas</option>
+                            <option value="Metro Manila">Metro Manila – unrestricted</option>
+                            <option value="South">South – up to Calamba / Banlic</option>
+                            <option value="North">North – up to Clark / Mabalacat</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div class="table-container">
@@ -87,6 +96,7 @@
                         <thead>
                             <tr>
                                 <th>Passenger Name</th>
+                                <th>Area</th>
                                 <th>Pickup Info</th>
                                 <th>Destination</th>
                                 <th>Schedule Date</th>

@@ -1448,7 +1448,7 @@ fun DriverDashboard(
                     style = MaterialTheme.typography.headlineSmall
                 )
 
-                // Premium DTR (Daily Time Record) Card
+                // Automated DTR (Daily Time Record) Card
                 Card(
                     colors = CardDefaults.cardColors(containerColor = CardBlue),
                     modifier = Modifier.fillMaxWidth(),
@@ -1465,7 +1465,7 @@ fun DriverDashboard(
                         ) {
                             Column {
                                 Text(
-                                    text = "Daily Time Record",
+                                    text = "Automated Attendance",
                                     style = MaterialTheme.typography.titleMedium,
                                     color = TextPrimary
                                 )
@@ -1483,156 +1483,12 @@ fun DriverDashboard(
                             )
                         }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Button(
-                                onClick = {
-                                    if (!isTimedIn && !dtrCooldown) {
-                                        scope.launch {
-                                            isDtrLoading = true
-                                            try {
-                                                val uid = auth.currentUser?.uid ?: return@launch
-                                                val email = auth.currentUser?.email ?: ""
-                                                val now = LocalDateTime.now()
-                                                
-                                                val logData = hashMapOf(
-                                                    "driver_uid" to uid,
-                                                    "driver_email" to email,
-                                                    "driver_name" to liveDriverName,
-                                                    "accredited_company_id" to "jettsan",
-                                                    "action" to "time_in",
-                                                    "timestamp" to FieldValue.serverTimestamp(),
-                                                    "latitude" to currentLatitude,
-                                                    "longitude" to currentLongitude,
-                                                    "device_time" to now.toString()
-                                                )
-                                                
-                                                db.collection("dtr_logs").add(logData).await()
-                                                // Use set+merge so it creates the doc if it doesn't exist
-                                                db.collection("drivers").document(uid)
-                                                    .set(mapOf(
-                                                        "is_currently_timed_in" to true,
-                                                        "current_status" to "available"
-                                                    ), com.google.firebase.firestore.SetOptions.merge()).await()
-                                                
-                                                isTimedIn = true
-                                                tripActionSuccess = "Timed in successfully at ${now.format(DateTimeFormatter.ofPattern("hh:mm a"))}"
-                                                
-                                                dtrCooldown = true
-                                                delay(5000)
-                                                dtrCooldown = false
-                                            } catch (e: Exception) {
-                                                tripActionError = "Time-in failed: ${e.message}"
-                                            } finally {
-                                                isDtrLoading = false
-                                            }
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.weight(1f),
-                                enabled = !isTimedIn && !isDtrLoading && !dtrCooldown,
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
-                            ) {
-                                if (isDtrLoading && !isTimedIn) {
-                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White)
-                                } else {
-                                    Text("TIME IN")
-                                }
-                            }
-
-                            Button(
-                                onClick = {
-                                    if (isTimedIn && !dtrCooldown) {
-                                        scope.launch {
-                                            isDtrLoading = true
-                                            try {
-                                                val uid = auth.currentUser?.uid ?: return@launch
-                                                val email = auth.currentUser?.email ?: ""
-                                                val now = LocalDateTime.now()
-                                                
-                                                 val addr = getAddressFromLocation(currentLatitude, currentLongitude)
-                                                 
-                                                 // OT Calculation Logic (threshold: 5:30 PM)
-                                                 val timeThresholdMet = now.hour >= 17 && (now.hour > 17 || now.minute >= 30)
-                                                 // Hard block OT computation if 26h limit reached
-                                                 val isOvertime = timeThresholdMet && (monthlyOTHours < 26.0)
-                                                 
-                                                 // Total Hours Calculation
-                                                 var totalHours = 0.0
-                                                 lastTimeInObj?.let { start ->
-                                                     val duration = java.time.Duration.between(start, now)
-                                                     totalHours = duration.toMinutes() / 60.0
-                                                 }
-                                                 
-                                                 val logData = hashMapOf(
-                                                     "driver_uid" to uid,
-                                                     "driver_email" to email,
-                                                     "driver_name" to liveDriverName,
-                                                     "accredited_company_id" to "jettsan",
-                                                     "action" to "time_out",
-                                                     "timestamp" to FieldValue.serverTimestamp(),
-                                                     "latitude" to currentLatitude,
-                                                     "longitude" to currentLongitude,
-                                                     "location_name" to addr,
-                                                     "device_time" to now.toString(),
-                                                     "total_hours" to totalHours,
-                                                     "is_overtime" to isOvertime
-                                                 )
-                                                 
-                                                 db.collection("dtr_logs").add(logData).await()
-                                                 // Use set+merge so it creates the doc if it doesn't exist
-                                                 db.collection("drivers").document(uid)
-                                                     .set(mapOf(
-                                                         "is_currently_timed_in" to false,
-                                                         "current_status" to "offline",
-                                                         "last_time_out" to FieldValue.serverTimestamp(),
-                                                         "last_total_hours" to totalHours,
-                                                         "last_is_overtime" to isOvertime,
-                                                         "last_location_name" to addr
-                                                     ), com.google.firebase.firestore.SetOptions.merge()).await()
-                                                 
-                                                 isTimedIn = false
-                                                 lastTotalHours = totalHours
-                                                 lastIsOvertime = isOvertime
-                                                 lastAddress = addr
-                                                 
-                                                 val h = totalHours.toInt()
-                                                 val m = ((totalHours - h) * 60).toInt()
-                                                 tripActionSuccess = "Timed out. Total Shift: ${h}h ${m}m ${if(isOvertime) "(OT Included)" else ""}"
-                                                
-                                                dtrCooldown = true
-                                                delay(5000)
-                                                dtrCooldown = false
-                                            } catch (e: Exception) {
-                                                tripActionError = "Time-out failed: ${e.message}"
-                                            } finally {
-                                                isDtrLoading = false
-                                            }
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.weight(1f),
-                                enabled = isTimedIn && !isDtrLoading && !dtrCooldown,
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = AccentOrange)
-                            ) {
-                                if (isDtrLoading && isTimedIn) {
-                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White)
-                                } else {
-                                    Text("TIME OUT")
-                                }
-                            }
-                        }
-                        
                         Text(
-                            text = "Standard Shift: 7:00 AM - 5:00 PM. OT counted after 5:00 PM.",
+                            text = "Standard Shift: 7:00 AM - 5:00 PM. OT counted after 5:00 PM.\nTime-in is triggered on job acceptance. Active hours span pickup to drop-off.",
                             style = MaterialTheme.typography.labelSmall,
                             color = TextSecondary,
                             modifier = Modifier.fillMaxWidth(),
-                            textAlign = TextAlign.Center
+                            textAlign = TextAlign.Start
                         )
                     }
                 }
@@ -2082,6 +1938,32 @@ fun DriverDashboard(
                                                 )
                                             }
 
+                                            // ------------------------------------
+                                            // AUTOMATED DTR TIME-IN
+                                            // ------------------------------------
+                                            val uid = auth.currentUser?.uid ?: ""
+                                            if (uid.isNotEmpty() && !isTimedIn) {
+                                                val email = auth.currentUser?.email ?: ""
+                                                val nowStr = LocalDateTime.now().toString()
+                                                val logData = hashMapOf(
+                                                    "driver_uid" to uid,
+                                                    "driver_email" to email,
+                                                    "driver_name" to liveDriverName,
+                                                    "accredited_company_id" to "jettsan",
+                                                    "action" to "time_in",
+                                                    "timestamp" to FieldValue.serverTimestamp(),
+                                                    "latitude" to currentLatitude,
+                                                    "longitude" to currentLongitude,
+                                                    "device_time" to nowStr
+                                                )
+                                                db.collection("dtr_logs").add(logData).await()
+                                                db.collection("drivers").document(uid).set(mapOf(
+                                                    "is_currently_timed_in" to true
+                                                ), com.google.firebase.firestore.SetOptions.merge()).await()
+                                                isTimedIn = true
+                                            }
+                                            // ------------------------------------
+
                                             tripActionSuccess = "Booking accepted! Use the Start Trip button when ready to move."
                                         } catch (e: Exception) {
                                             tripActionError = "Failed to accept: ${e.message}"
@@ -2192,6 +2074,32 @@ fun DriverDashboard(
                                                              "accepted_at", acceptedAt
                                                          )
                                                      }
+
+                                                    // ------------------------------------
+                                                    // AUTOMATED DTR TIME-IN
+                                                    // ------------------------------------
+                                                    val uid = auth.currentUser?.uid ?: ""
+                                                    if (uid.isNotEmpty() && !isTimedIn) {
+                                                        val nowStr = LocalDateTime.now().toString()
+                                                        val logData = hashMapOf(
+                                                            "driver_uid" to uid,
+                                                            "driver_email" to email ?: "",
+                                                            "driver_name" to liveDriverName,
+                                                            "accredited_company_id" to "jettsan",
+                                                            "action" to "time_in",
+                                                            "timestamp" to FieldValue.serverTimestamp(),
+                                                            "latitude" to currentLatitude,
+                                                            "longitude" to currentLongitude,
+                                                            "device_time" to nowStr
+                                                        )
+                                                        db.collection("dtr_logs").add(logData).await()
+                                                        db.collection("drivers").document(uid).set(mapOf(
+                                                            "is_currently_timed_in" to true
+                                                        ), com.google.firebase.firestore.SetOptions.merge()).await()
+                                                        isTimedIn = true
+                                                    }
+                                                    // ------------------------------------
+
                                                     tripActionSuccess = "Booking accepted! Tap below to start pickup."
                                                     actualRoutePoints.clear() // Ready for new trip
                                                 } catch (e: Exception) {
@@ -2347,6 +2255,51 @@ fun DriverDashboard(
                                                              "current_trip_phase", nextP
                                                          )
                                                      }
+                                                     
+                                                     // ------------------------------------
+                                                     // AUTOMATED DTR TIME-OUT ON DROP OFF
+                                                     // ------------------------------------
+                                                     val uid = auth.currentUser?.uid ?: ""
+                                                     if (uid.isNotEmpty() && isTimedIn) {
+                                                         val now = LocalDateTime.now()
+                                                         val addr = getAddressFromLocation(currentLatitude, currentLongitude)
+                                                         val timeThresholdMet = now.hour >= 17
+                                                         val isOvertime = timeThresholdMet && (monthlyOTHours < 26.0)
+                                                         
+                                                         var totalHours = 0.0
+                                                         lastTimeInObj?.let { start ->
+                                                             totalHours = java.time.Duration.between(start, now).toMinutes() / 60.0
+                                                         }
+                                                         
+                                                         val logData = hashMapOf(
+                                                             "driver_uid" to uid,
+                                                             "driver_email" to email ?: "",
+                                                             "driver_name" to liveDriverName,
+                                                             "accredited_company_id" to "jettsan",
+                                                             "action" to "time_out",
+                                                             "timestamp" to FieldValue.serverTimestamp(),
+                                                             "latitude" to currentLatitude,
+                                                             "longitude" to currentLongitude,
+                                                             "location_name" to addr,
+                                                             "device_time" to now.toString(),
+                                                             "total_hours" to totalHours,
+                                                             "is_overtime" to isOvertime
+                                                         )
+                                                         db.collection("dtr_logs").add(logData).await()
+                                                         db.collection("drivers").document(uid).set(mapOf(
+                                                             "is_currently_timed_in" to false,
+                                                             "last_time_out" to FieldValue.serverTimestamp(),
+                                                             "last_total_hours" to totalHours,
+                                                             "last_is_overtime" to isOvertime,
+                                                             "last_location_name" to addr
+                                                         ), com.google.firebase.firestore.SetOptions.merge()).await()
+                                                         isTimedIn = false
+                                                         lastTotalHours = totalHours
+                                                         lastIsOvertime = isOvertime
+                                                         lastAddress = addr
+                                                     }
+                                                     // ------------------------------------
+
                                                      tripActionSuccess = if (returnReq) "Arrived! Return required." else "Arrived! Trip ready to complete."
                                                  } catch (e: Exception) {
                                                      tripActionError = "Failed: ${e.message}"
@@ -2496,6 +2449,32 @@ fun DriverDashboard(
                                                         "active_ticket_id", activeTicketId
                                                     )
                                                 }
+
+                                                // ------------------------------------
+                                                // AUTOMATED DTR TIME-IN
+                                                // ------------------------------------
+                                                val uid = auth.currentUser?.uid ?: ""
+                                                if (uid.isNotEmpty() && !isTimedIn) {
+                                                    val nowStr = LocalDateTime.now().toString()
+                                                    val logData = hashMapOf(
+                                                        "driver_uid" to uid,
+                                                        "driver_email" to (email ?: ""),
+                                                        "driver_name" to liveDriverName,
+                                                        "accredited_company_id" to "jettsan",
+                                                        "action" to "time_in",
+                                                        "timestamp" to FieldValue.serverTimestamp(),
+                                                        "latitude" to currentLatitude,
+                                                        "longitude" to currentLongitude,
+                                                        "device_time" to nowStr
+                                                    )
+                                                    db.collection("dtr_logs").add(logData).await()
+                                                    db.collection("drivers").document(uid).set(mapOf(
+                                                        "is_currently_timed_in" to true
+                                                    ), com.google.firebase.firestore.SetOptions.merge()).await()
+                                                    isTimedIn = true
+                                                }
+                                                // ------------------------------------
+
                                                 showNewTaskOverlay = false
                                                 tripActionSuccess = "Booking accepted! You can now start the trip when ready."
                                             } catch (e: Exception) {

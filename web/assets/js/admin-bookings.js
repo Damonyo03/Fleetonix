@@ -109,15 +109,26 @@ async function showCreateBookingModal(clients) {
             </div>
         </div>
 
-        <div class="form-group">
-            <label for="modal_contractor">Contractor (Default: Jettsan)</label>
-            <input type="text" id="modal_contractor" class="form-input" value="Jettsan" readonly>
+        <div class="modal-form-row">
+            <div class="form-group">
+                <label for="modal_contractor">Contractor</label>
+                <input type="text" id="modal_contractor" class="form-input" value="Jettsan" readonly>
+            </div>
+            <div class="form-group">
+                <label for="modal_operating_area">Target Operating Area</label>
+                <select id="modal_operating_area" class="form-input" required>
+                    <option value="">-- Select Area --</option>
+                    <option value="Metro Manila">Metro Manila – unrestricted</option>
+                    <option value="South">South – up to Calamba / Banlic</option>
+                    <option value="North">North – up to Clark / Mabalacat</option>
+                </select>
+            </div>
         </div>
 
 
         <div id="segments_container">
             <div class="segment-group" style="margin-bottom: 24px; padding: 16px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px;">
-                <div style="font-size: 0.75rem; font-weight: 800; color: var(--accent-blue); margin-bottom: 12px; text-transform: uppercase;">Segment 1 (Primary)</div>
+                <div style="font-size: 0.75rem; font-weight: 800; color: var(--accent-blue); margin-bottom: 12px; text-transform: uppercase;">Booking 1 (Primary)</div>
                 <div class="form-group pickup-point" style="position: relative;">
                     <label>Pickup Location</label>
                     <div class="input-with-action">
@@ -137,13 +148,13 @@ async function showCreateBookingModal(clients) {
             </div>
         </div>
         <button type="button" id="add_segment" class="btn-secondary" style="margin-bottom: 20px; padding: 8px 16px; font-size: 0.85em;">
-            <i class="fas fa-plus-circle"></i> Add Another Segment (Pickup & Dropoff)
+            <i class="fas fa-plus-circle"></i> Add Secondary Stop (Pickup & Dropoff)
         </button>
 
         <div class="modal-form-row">
             <div class="form-group">
-                <label for="pickup_date">Pickup Date</label>
-                <input type="date" id="pickup_date" class="form-input" value="${today}" required>
+                <label for="pickup_date">Pickup Date (Today/Tomorrow Only)</label>
+                <input type="date" id="pickup_date" class="form-input" value="${today}" min="${today}" max="${tomorrowStr}" required>
             </div>
             <div class="form-group">
                 <label for="pickup_time">Pickup Time</label>
@@ -232,13 +243,22 @@ async function showCreateBookingModal(clients) {
         if (segments.some(s => !s.pickup || !s.dropoff)) throw new Error("Please fill in all pickup and dropoff locations for each segment.");
 
         const bookingId = generateNumericId().toString();
+        const operatingArea = document.getElementById('modal_operating_area').value;
+        const date = document.getElementById('pickup_date').value;
+        const time = document.getElementById('pickup_time').value;
+        const driverId = document.getElementById('modal_driver').value;
+        const autoDispatch = document.getElementById('modal_auto_dispatch').checked;
+        const isOfficial = document.getElementById('modal_is_official').checked;
+
         const data = sanitizeFirestoreData({
             booking_id: bookingId,
+            numeric_booking_id: parseInt(bookingId),
             client_id: 'guest',
             client_name: clientName,
             client_email: clientEmail,
             client_phone: clientPhone,
             contractor: 'Jettsan',
+            operating_area: operatingArea,
             isOfficial: isOfficial,
 
             segments: segments,
@@ -278,8 +298,9 @@ async function showCreateBookingModal(clients) {
                 booking_id: bookingId,
                 numeric_booking_id: parseInt(bookingId), 
                 schedule_id: generateNumericId(),
-                client_id: clientId,
+                client_id: 'guest',
                 client_name: clientName,
+                operating_area: operatingArea,
                 driver_id: driverId,
                 driver_email: driverEmail.toLowerCase().trim(),
                 driver_name: driverName,
@@ -353,7 +374,7 @@ async function showCreateBookingModal(clients) {
                 div.style.cssText = 'margin-bottom: 24px; padding: 16px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; position: relative;';
                 div.innerHTML = `
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <div style="font-size: 0.75rem; font-weight: 800; color: var(--accent-blue); text-transform: uppercase;">Segment ${segmentCount}</div>
+                        <div style="font-size: 0.75rem; font-weight: 800; color: var(--accent-blue); text-transform: uppercase;">Booking ${segmentCount} (Secondary)</div>
                         <button type="button" class="btn-icon remove-segment" style="color: var(--accent-error);"><i class="fas fa-trash"></i></button>
                     </div>
                     <div class="form-group pickup-point" style="position: relative;">
@@ -449,15 +470,22 @@ function initBookingList() {
         applyFilters();
     });
 
-    if (statusFilter) {
-        statusFilter.addEventListener('change', applyFilters);
+    if (statusFilter) statusFilter.addEventListener('change', applyFilters);
+    if (document.getElementById('areaFilter')) {
+        document.getElementById('areaFilter').addEventListener('change', applyFilters);
     }
 }
 
 function applyFilters() {
     if (!bookingTableBody) return;
     const status = statusFilter?.value || 'all';
-    const filtered = allBookings.filter(d => status === 'all' || d.data().status === status);
+    const area = document.getElementById('areaFilter')?.value || 'all';
+    const filtered = allBookings.filter(d => {
+        const b = d.data();
+        const matchStatus = status === 'all' || b.status === status;
+        const matchArea = area === 'all' || b.operating_area === area;
+        return matchStatus && matchArea;
+    });
     renderBookings(filtered);
 }
 
@@ -476,6 +504,7 @@ function renderBookings(docs) {
         return `
             <tr>
                 <td>${displayName}</td>
+                <td><span class="badge badge-info" style="font-size: 0.65rem;">${booking.operating_area || 'Unassigned'}</span></td>
                 <td>${booking.pickup_location || 'N/A'}</td>
                 <td>${booking.dropoff_location || 'N/A'}</td>
                 <td>${booking.pickup_date || 'N/A'} ${booking.pickup_time || ''}</td>

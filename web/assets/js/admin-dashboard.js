@@ -588,7 +588,7 @@ function refreshMarker(id) {
     
     const isRecentlyActive = heartbeatAge < HEARTBEAT_EXPIRY_MS;
     const isOnline = isRecentlyActive || isOnDuty;
-    const isAccident = d.current_status === 'accident' || d.is_accident === true;
+    const isAccident = d.current_status === 'accident' || d.is_accident === true || d.incident_active === true;
     const isCompleted = d.current_trip_phase === 'completed' || d.current_status === 'completed';
 
     // Automated Cleanup for Completed Trips
@@ -622,7 +622,7 @@ function refreshMarker(id) {
                 accidentOverlays[id] = new MapOverlay(
                     pos, 
                     '<div class="accident-marker-inner">!</div>', 
-                    'accident-marker-container'
+                    'emergency-marker-container'
                 );
                 accidentOverlays[id].setMap(driversMap);
             } else {
@@ -993,6 +993,29 @@ function showQuickInfoPanel(driverId, driver) {
     }
     document.getElementById('qipLastSeen').textContent = lastSeenText;
 
+    // ── Sidebar Sync ────────────────────────────────────────────────────────
+    const sdPanel = document.getElementById('activeDriverDetails');
+    if (sdPanel) {
+        sdPanel.style.display = 'block';
+        document.getElementById('sdName').textContent = resolvedName;
+        document.getElementById('sdVehicle').textContent = vehicle;
+        
+        let locText = '--';
+        if (driver.location_name) {
+            locText = driver.location_name;
+        } else if (driver.current_latitude && driver.current_longitude) {
+            locText = `${Number(driver.current_latitude).toFixed(4)}, ${Number(driver.current_longitude).toFixed(4)}`;
+        }
+        document.getElementById('sdLocation').textContent = locText;
+        
+        const odoStart = driver.odometer_start !== undefined ? `${Number(driver.odometer_start).toFixed(1)} km` : '-- km';
+        const odoEnd = driver.odometer_end !== undefined ? `${Number(driver.odometer_end).toFixed(1)} km` : '-- km';
+        
+        document.getElementById('sdOdoStart').textContent = odoStart;
+        document.getElementById('sdOdoEnd').textContent = odoEnd;
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     // Re-center button
     const focusBtn = document.getElementById('qipFocusBtn');
     focusBtn.onclick = () => {
@@ -1071,6 +1094,7 @@ function renderRecentCompletedBookings(snapshot) {
         const pickupStr = getLocText(data.pickup_location);
         const dropoffStr = getLocText(data.dropoff_location);
         const driverName = data.driver_name || 'Fleet Driver';
+        const passengerName = data.passenger_name || data.client_name || 'Unknown Passenger';
         const updatedTime = data.updated_at?.toDate ? data.updated_at.toDate() : (data.updated_at?.seconds ? new Date(data.updated_at.seconds * 1000) : new Date());
         const completedTime = updatedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -1086,8 +1110,10 @@ function renderRecentCompletedBookings(snapshot) {
                         <i class="fas fa-long-arrow-alt-right" style="color: var(--text-muted); margin: 0 4px;"></i> 
                         ${dropoffStr}
                     </div>
-                    <div style="font-size:0.75rem; color:var(--text-muted);">
-                        <i class="fas fa-user-check"></i> ${driverName} · Arrived at ${completedTime}
+                    <div style="font-size:0.75rem; color:var(--text-muted); margin-top:6px; display:flex; flex-direction:column; gap:2px;">
+                        <div><i class="fas fa-id-card"></i> Driver: <strong>${driverName}</strong></div>
+                        <div><i class="fas fa-user"></i> Passenger: <strong>${passengerName}</strong></div>
+                        <div><i class="fas fa-clock"></i> Arrived: ${completedTime}</div>
                     </div>
                 </div>
                 <button class="btn btn-secondary btn-sm" onclick="window.location.href='trip-tickets.html?id=${id}'" style="padding: 6px 12px; font-size: 0.75rem;">

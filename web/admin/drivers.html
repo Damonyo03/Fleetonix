@@ -8,6 +8,9 @@
     <link rel="stylesheet" href="../assets/css/style.css">
     <link rel="stylesheet" href="../assets/css/admin.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Cropper.js for Driver Photos -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
     <style>
         .driver-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px; margin-top: 24px; }
         .driver-card { 
@@ -102,12 +105,27 @@
                 </div>
 
                 <!-- Unified Search & Filter Header -->
-                <div class="glass-card" style="padding: 16px; margin-bottom: 32px; display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
-                    <div style="flex: 1; min-width: 280px; position: relative;">
+                <div class="glass-card" style="padding: 16px; margin-bottom: 32px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+                    <div style="flex: 1; min-width: 200px; position: relative;">
                         <i class="fas fa-search" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
-                        <input type="text" id="driverSearch" class="btn btn-secondary" placeholder="Search by name, plate, or car..." style="width: 100%; text-align: left; padding-left: 48px; text-transform: none; cursor: text;">
+                        <input type="text" id="driverSearch" class="btn btn-secondary" placeholder="Search by name or plate..." style="width: 100%; text-align: left; padding-left: 48px; text-transform: none; cursor: text; height: 38px;">
                     </div>
-                    <select id="statusFilter" class="btn btn-secondary" style="width: auto; text-align: left; text-transform: none;">
+                    
+                    <div style="flex: 1; min-width: 150px;">
+                        <input type="text" id="brandSearch" class="btn btn-secondary" placeholder="Filter by Brand (e.g. Toyota)" style="width: 100%; text-align: left; text-transform: none; cursor: text; height: 38px;">
+                    </div>
+
+                    <div style="flex: 1; min-width: 150px;">
+                        <input type="text" id="colorSearch" class="btn btn-secondary" placeholder="Filter by Color (e.g. White)" style="width: 100%; text-align: left; text-transform: none; cursor: text; height: 38px;">
+                    </div>
+
+                    <select id="typeFilter" class="btn btn-secondary" style="width: auto; height: 38px;">
+                        <option value="all">Any Car Type</option>
+                        <option value="4">4-Seater</option>
+                        <option value="6">6-Seater</option>
+                    </select>
+
+                    <select id="statusFilter" class="btn btn-secondary" style="width: auto; height: 38px;">
                         <option value="all">All Status</option>
                         <option value="available">Available</option>
                         <option value="on_schedule">On Schedule</option>

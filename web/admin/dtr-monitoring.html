@@ -8,6 +8,8 @@
     <link rel="stylesheet" href="../assets/css/style.css">
     <link rel="stylesheet" href="../assets/css/admin.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- SheetJS for Excel Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         @media print {
             .sidebar, .header, .header-actions, .page-header p, .badge, .gps-link i, .menu-toggle { display: none !important; }
@@ -72,10 +74,18 @@
                         <h1>Attendance Dashboard</h1>
                         <p>Real-time GPS verified activity logs for your fleet.</p>
                     </div>
-                    <div class="header-actions" style="display: flex; gap: 12px;">
+                    <div class="header-actions" style="display: flex; gap: 12px; align-items: center;">
                         <input type="date" id="dateFilter" class="btn btn-secondary" style="width: auto; text-transform: none; text-align: left;">
+                        <select id="rangeFilter" class="btn btn-secondary" style="width: auto; height: 38px;">
+                            <option value="day">Day</option>
+                            <option value="week">Week</option>
+                            <option value="month">Month</option>
+                        </select>
                         <button class="btn btn-primary" onclick="initDTRLogs()" style="padding: 10px 24px;">
-                            <i class="fas fa-search"></i> Refresh Logs
+                            <i class="fas fa-search"></i> Refresh
+                        </button>
+                        <button class="btn btn-success" id="exportExcelBtn" style="padding: 10px 24px;">
+                            <i class="fas fa-file-excel"></i> Export
                         </button>
                     </div>
                 </div>
@@ -124,6 +134,7 @@
     <!-- Modal Placeholder -->
     <div id="modalContainer"></div>
 
+    <script src="../assets/js/export_utils.js"></script>
     <script type="module" src="../assets/js/admin.js"></script>
     <script type="module" src="../assets/js/admin-dtr-monitoring.js"></script>
 </body>

@@ -9,9 +9,11 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-const userTableBody = document.getElementById('userTableBody');
-const userSearch = document.getElementById('userSearch');
-const typeFilter = document.getElementById('typeFilter');
+const usersTableBody = document.getElementById('usersTableBody');
+const searchInput = document.getElementById('searchInput');
+const roleFilter = document.getElementById('roleFilter');
+
+let currentUserData = null;
 
 onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -20,7 +22,8 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     const userDoc = await getDoc(doc(db, "users", user.uid));
-    const name = userDoc.exists() ? userDoc.data().full_name : user.email.split('@')[0];
+    currentUserData = userDoc.exists() ? userDoc.data() : { role: 'admin' };
+    const name = currentUserData.full_name || user.email.split('@')[0];
     initLayout('User Management', name);
 
     initUserList();
@@ -33,57 +36,59 @@ function initUserList() {
         renderUsers(snapshot.docs);
     });
     
-    // Simple filter logic
     const applyFilters = () => {
-        const searchTerm = userSearch.value.toLowerCase();
-        const role = typeFilter.value;
+        const searchTerm = searchInput.value.toLowerCase();
+        const role = roleFilter.value;
 
-        // Use the active snapshot or a one-time get
         getDocs(collection(db, "users")).then(snap => {
             const filtered = snap.docs.filter(d => {
                 const data = d.data();
                 const fullName = data.full_name || '';
                 const email = data.email || '';
+                const userRole = data.role || data.user_type || '';
                 const matchesSearch = fullName.toLowerCase().includes(searchTerm) || email.toLowerCase().includes(searchTerm);
-                const matchesRole = role === 'all' || data.user_type === role;
+                const matchesRole = role === 'all' || userRole === role;
                 return matchesSearch && matchesRole;
             });
             renderUsers(filtered);
         });
     };
 
-    userSearch.addEventListener('input', applyFilters);
-    typeFilter.addEventListener('change', applyFilters);
+    if (searchInput) searchInput.addEventListener('input', applyFilters);
+    if (roleFilter) roleFilter.addEventListener('change', applyFilters);
 }
 
 function renderUsers(docs) {
-    if (!userTableBody) return;
+    if (!usersTableBody) return;
     if (docs.length === 0) {
-        userTableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px;">No users found.</td></tr>';
+        usersTableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px; color: var(--text-muted);">No matching records found.</td></tr>';
         return;
     }
 
-    userTableBody.innerHTML = docs.map(d => {
+    usersTableBody.innerHTML = docs.map(d => {
         const user = d.data();
         const id = d.id;
-        const createdDate = user.created_at ? new Date(user.created_at.seconds * 1000).toLocaleDateString() : 'N/A';
+        const role = user.role || user.user_type || 'user';
+        const createdDate = user.created_at ? new Date(user.created_at.seconds * 1000).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+        
         return `
             <tr>
-                <td>${user.full_name || 'N/A'}</td>
-                <td>${user.email || 'N/A'}</td>
-                <td><span class="role-badge ${user.user_type}">${user.user_type}</span></td>
-                <td><span class="status-badge ${user.status || 'active'}">${user.status || 'active'}</span></td>
-                <td>${createdDate}</td>
-                <td class="table-actions">
-                    <button class="btn-icon edit" onclick="window.editUser('${id}')"><i class="fas fa-edit"></i></button>
-                    <button class="btn-icon delete" onclick="window.deleteUser('${id}')"><i class="fas fa-trash"></i></button>
+                <td><div style="font-weight:700; color:var(--text-primary);">${user.full_name || 'N/A'}</div></td>
+                <td><code style="font-size:0.8rem; color:var(--accent-blue);">${user.email || 'N/A'}</code></td>
+                <td><span class="role-badge ${role}" style="text-transform: capitalize;">${role.replace('_', ' ')}</span></td>
+                <td><span style="font-size:0.85rem; color:var(--text-secondary); font-weight:600;">Jettsan</span></td>
+                <td><div style="font-size:0.85rem; color:var(--text-muted);"><i class="fas fa-calendar-alt"></i> ${createdDate}</div></td>
+                <td style="text-align: right;">
+                    <div style="display:flex; gap:8px; justify-content: flex-end;">
+                        <button class="btn-icon edit" onclick="window.editUser('${id}')" style="background: rgba(0,212,255,0.1); color: var(--accent-blue); border: none; padding: 6px; border-radius: 4px;"><i class="fas fa-edit"></i></button>
+                        <button class="btn-icon delete" onclick="window.deleteUser('${id}')" style="background: rgba(255,71,87,0.1); color: var(--accent-error); border: none; padding: 6px; border-radius: 4px;"><i class="fas fa-trash"></i></button>
+                    </div>
                 </td>
             </tr>
         `;
     }).join('');
 }
 
-// Global functions for HTML onclick
 window.editUser = async (id) => {
     try {
         const userSnap = await getDoc(doc(db, "users", id));
@@ -92,11 +97,11 @@ window.editUser = async (id) => {
 
         const content = `
             <div class="form-group">
-                <label>Full Name</label>
+                <label>Display Name</label>
                 <input type="text" id="modal_full_name" class="form-input" value="${user.full_name}" required>
             </div>
             <div class="form-group">
-                <label>Status</label>
+                <label>Account Status</label>
                 <select id="modal_status" class="form-input">
                     <option value="active" ${user.status === 'active' ? 'selected' : ''}>Active</option>
                     <option value="inactive" ${user.status === 'inactive' ? 'selected' : ''}>Inactive</option>
@@ -105,73 +110,91 @@ window.editUser = async (id) => {
             </div>
         `;
 
-        showModal('user-modal', 'Edit User', content, async () => {
-            const newName = document.getElementById('modal_full_name').value;
-            const newStatus = document.getElementById('modal_status').value;
+        showModal('user-modal', 'Edit System Access', content, async () => {
             await updateDoc(doc(db, "users", id), {
-                full_name: newName,
-                status: newStatus
+                full_name: document.getElementById('modal_full_name').value,
+                status: document.getElementById('modal_status').value
             });
+            alert("User updated successfully.");
         });
     } catch (error) {
         console.error("Error editing user:", error);
-        alert("Failed to load user data.");
     }
 };
 
 window.deleteUser = async (id) => {
+    // Stage 1: Standard Deletion Confirmation
     if (confirm("Are you sure you want to delete this user? This cannot be undone.")) {
-        try {
-            await deleteDoc(doc(db, "users", id));
-        } catch (error) {
-            console.error("Error deleting user:", error);
-            alert("Failed to delete user: " + error.message);
+        // Stage 2: Mandatory Backup Confirmation
+        const backupConfirm = confirm("CRITICAL: Have you manually backed up this user's profile and transactional history?\n\nProceeding without a backup will result in permanent data loss.");
+        
+        if (backupConfirm) {
+            try {
+                await deleteDoc(doc(db, "users", id));
+                alert("User record purged successfully.");
+            } catch (error) {
+                console.error("Error deleting user:", error);
+                alert("Deletion failed: " + error.message);
+            }
         }
     }
 };
 
-const addUserBtn = document.getElementById('addUserBtn');
-if (addUserBtn) {
-    addUserBtn.onclick = () => {
+const createUserBtn = document.getElementById('createUserBtn');
+if (createUserBtn) {
+    createUserBtn.onclick = () => {
+        const adminRole = currentUserData?.role || currentUserData?.user_type || 'admin';
+        
+        let roleOptions = '<option value="driver" selected>Driver</option>';
+        if (adminRole === 'super_admin') {
+            roleOptions = `
+                <option value="super_admin">Super Admin</option>
+                <option value="admin">Admin</option>
+                <option value="client">Client</option>
+                <option value="driver">Driver</option>
+            `;
+        }
+
         const content = `
             <div class="form-group">
                 <label>Full Name</label>
-                <input type="text" id="modal_full_name" class="form-input" placeholder="Enter full name" required>
+                <input type="text" id="modal_full_name" class="form-input" placeholder="e.g. John Doe" required>
             </div>
             <div class="form-group">
-                <label>Email</label>
-                <input type="email" id="modal_email" class="form-input" placeholder="user@example.com" required>
+                <label>Email Address</label>
+                <input type="email" id="modal_email" class="form-input" placeholder="user@fleetonix.com" required>
             </div>
             <div class="form-group">
-                <label>Role</label>
+                <label>Assign System Role</label>
                 <select id="modal_user_type" class="form-input">
-                    <option value="admin">Admin</option>
-                    <option value="client" selected>Client</option>
-                    <option value="driver">Driver</option>
+                    ${roleOptions}
                 </select>
             </div>
-            <p style="font-size: 0.8em; color: var(--text-muted); margin-top: 10px;">
-                Note: This creates a database record. The user should register via the sign-up page for Auth.
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 15px; font-style: italic;">
+                <i class="fas fa-info-circle"></i> Security Note: Initial account provisioning creates the database profile. The user must proceed with the first-time login flow to set their actual credentials.
             </p>
         `;
 
-        showModal('user-modal', 'Add New User', content, async () => {
+        showModal('user-modal', 'Provision System User', content, async () => {
             const name = document.getElementById('modal_full_name').value;
             const email = document.getElementById('modal_email').value;
             const type = document.getElementById('modal_user_type').value;
 
-            // Generate a document ID from email or let Firebase do it
             const userRef = doc(collection(db, "users"));
             await setDoc(userRef, {
                 full_name: name,
                 email: email,
+                role: type,
                 user_type: type,
+                contractor: "Jettsan",
                 status: "active",
                 created_at: serverTimestamp(),
-                uid: userRef.id // Placeholder UID
+                uid: userRef.id
             });
+            alert("New system user provisioned successfully.");
         });
     };
 }
+
 
 

@@ -1,0 +1,167 @@
+import { initializeApp } from "firebase/app";
+import { getFirestore, doc, onSnapshot, getDoc } from "firebase/firestore";
+
+// Using the same config as the rest of the app
+const firebaseConfig = {
+    apiKey: "AIzaSyBWal4kXhImWNvJL2jV4LG0FvftdN2J9DQ",
+    authDomain: "appfleetonix.firebaseapp.com",
+    projectId: "appfleetonix",
+    storageBucket: "appfleetonix.appspot.com",
+    messagingSenderId: "565011667041",
+    appId: "1:565011667041:web:d824d6215904fc7728ce83"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+let googleMap = null;
+let driverMarker = null;
+let destinationMarker = null;
+let tripId = new URLSearchParams(window.location.search).get('tripId');
+
+async function initTracking() {
+    if (!tripId) {
+        showError("Invalid or missing Trip ID.");
+        return;
+    }
+
+    document.getElementById('trip-id-display').textContent = `TRIP-ID: ${tripId.substring(0, 8).toUpperCase()}`;
+
+    // 1. Fetch Trip Details
+    const tripSnap = await getDoc(doc(db, "schedules", tripId));
+    if (!tripSnap.exists()) {
+        showError("Trip not found or has been completed.");
+        return;
+    }
+
+    const tripData = tripSnap.data();
+    updateTripUI(tripData);
+
+    // 2. Initialize Google Map
+    initMap(tripData);
+
+    // 3. Listen to Driver Location
+    if (tripData.driver_id) {
+        onSnapshot(doc(db, "driver_locations", tripData.driver_id), (locSnap) => {
+            if (locSnap.exists()) {
+                const loc = locSnap.data();
+                updateDriverLocation(loc);
+                document.getElementById('loading-overlay').style.display = 'none';
+            }
+        });
+    } else {
+        showError("No driver assigned to this trip yet.");
+    }
+}
+
+function initMap(tripData) {
+    const defaultPos = { lat: 14.5995, lng: 120.9842 }; // Manila
+    
+    googleMap = new google.maps.Map(document.getElementById("map"), {
+        zoom: 15,
+        center: defaultPos,
+        styles: [
+            { "elementType": "geometry", "stylers": [{ "color": "#212121" }] },
+            { "elementType": "labels.icon", "stylers": [{ "visibility": "off" }] },
+            { "elementType": "labels.text.fill", "stylers": [{ "color": "#757575" }] },
+            { "elementType": "labels.text.stroke", "stylers": [{ "color": "#212121" }] },
+            { "featureType": "administrative", "elementType": "geometry", "stylers": [{ "color": "#757575" }] },
+            { "featureType": "poi", "elementType": "geometry", "stylers": [{ "color": "#181818" }] },
+            { "featureType": "road", "elementType": "geometry.fill", "stylers": [{ "color": "#2c2c2c" }] },
+            { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{ "color": "#8a8a8a" }] },
+            { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#000000" }] }
+        ],
+        disableDefaultUI: true
+    });
+
+    // Destination Marker
+    if (tripData.dropoff_location && tripData.dropoff_location.lat) {
+        destinationMarker = new google.maps.Marker({
+            position: { lat: tripData.dropoff_location.lat, lng: tripData.dropoff_location.lng },
+            map: googleMap,
+            icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 10,
+                fillColor: "#00d4ff",
+                fillOpacity: 1,
+                strokeWeight: 2,
+                strokeColor: "#ffffff",
+            },
+            title: "Destination"
+        });
+    }
+}
+
+function updateDriverLocation(loc) {
+    const pos = { lat: loc.latitude, lng: loc.longitude };
+
+    if (!driverMarker) {
+        driverMarker = new google.maps.Marker({
+            position: pos,
+            map: googleMap,
+            icon: {
+                url: 'img/car-marker.png', // Custom car icon
+                scaledSize: new google.maps.Size(40, 40),
+                anchor: new google.maps.Point(20, 20)
+            }
+        });
+        googleMap.setCenter(pos);
+    } else {
+        // Smoothly move marker
+        animateMarker(driverMarker, pos);
+    }
+
+    // Adjust bounds to show both driver and destination
+    if (destinationMarker) {
+        const bounds = new google.maps.LatLngBounds();
+        bounds.extend(driverMarker.getPosition());
+        bounds.extend(destinationMarker.getPosition());
+        googleMap.fitBounds(bounds, 100);
+    }
+}
+
+function animateMarker(marker, newPos) {
+    const frames = 60;
+    const startPos = marker.getPosition().toJSON();
+    let currentFrame = 0;
+
+    const animate = () => {
+        currentFrame++;
+        const lat = startPos.lat + (newPos.lat - startPos.lat) * (currentFrame / frames);
+        const lng = startPos.lng + (newPos.lng - startPos.lng) * (currentFrame / frames);
+        marker.setPosition({ lat, lng });
+
+        if (currentFrame < frames) {
+            requestAnimationFrame(animate);
+        }
+    };
+    animate();
+}
+
+function updateTripUI(data) {
+    document.getElementById('pickup-text').textContent = data.pickup_location?.address || 'Standard Terminal';
+    document.getElementById('dropoff-text').textContent = data.dropoff_location?.address || 'Assigned Dropoff';
+    document.getElementById('driver-name').textContent = data.driver_name || 'Driver Assigned';
+    document.getElementById('vehicle-details').textContent = data.vehicle_details || 'Official Fleet Vehicle';
+    
+    if (data.driver_phone) {
+        document.getElementById('call-link').href = `tel:${data.driver_phone}`;
+    }
+    
+    if (data.driver_image) {
+        document.getElementById('driver-avatar').src = data.driver_image;
+    }
+}
+
+function showError(msg) {
+    const loader = document.getElementById('loading-overlay');
+    loader.innerHTML = `
+        <i class="fas fa-exclamation-triangle" style="font-size:3rem; color:#ff4757; margin-bottom:20px;"></i>
+        <p style="font-weight:700;">TRACKING UNAVAILABLE</p>
+        <p style="color:var(--text-muted); padding:0 40px; text-align:center;">${msg}</p>
+        <button onclick="location.reload()" class="btn btn-secondary" style="margin-top:20px;">Retry Connection</button>
+    `;
+}
+
+// Global initialization
+window.addEventListener('load', initTracking);
