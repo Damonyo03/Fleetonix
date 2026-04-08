@@ -26,6 +26,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.GeoPoint
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -430,6 +431,9 @@ class LocationService : Service() {
                 if (doc != null && doc.exists()) {
                     val updates = hashMapOf<String, Any>(
                         "current_location_name" to humanReadableAddress,
+                        "location" to GeoPoint(location.latitude, location.longitude),
+                        "status" to "online",
+                        "lastSeen" to FieldValue.serverTimestamp(),
                         "last_updated" to FieldValue.serverTimestamp()
                     )
                     

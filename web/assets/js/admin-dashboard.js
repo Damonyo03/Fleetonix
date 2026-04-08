@@ -416,54 +416,49 @@ function initMap() {
     driversMap = new google.maps.Map(mapElement, mapOptions);
     infoWindow = new google.maps.InfoWindow();
 
-    onSnapshot(collection(db, "drivers"), (snapshot) => {
+    // ────────────────────────────────────────────────────────────────────────
+    // NEW UNIFIED REAL-TIME DRIVER TRACKING (Standardized logic)
+    // ────────────────────────────────────────────────────────────────────────
+    const onlineDriversQuery = query(collection(db, "drivers"), where("status", "==", "online"));
+    onSnapshot(onlineDriversQuery, (snapshot) => {
         snapshot.docChanges().forEach(change => {
             const id = change.doc.id; // UID
             const data = change.doc.data();
-            const email = data.driver_email?.toLowerCase()?.trim();
             
-            if (email) {
-                const oldEmailEntry = allDriversData[email];
-                emailToUidMap[email] = id;
-                
-                // If we already have location under the email key, MOVE it to the UID key
-                if (oldEmailEntry && oldEmailEntry.current_latitude && !allDriversData[id]) {
-                    console.log(`Merging Email-based location for ${email} into UID-based profile ${id}`);
-                    allDriversData[id] = { ...oldEmailEntry, id: id };
-                    delete allDriversData[email];
-                    if (driverMarkers[email]) {
-                        driverMarkers[id] = driverMarkers[email];
-                        delete driverMarkers[email];
-                    }
+            if (change.type === "added" || change.type === "modified") {
+                // Ensure data has the correct fields for the dashboard
+                if (data.location) {
+                    data.current_latitude = data.location.latitude;
+                    data.current_longitude = data.location.longitude;
                 }
-            }
-            
-            if (change.type === "removed") {
-                delete allDriversData[id];
-                if (email) delete emailToUidMap[email];
+                // Map user-requested 'lastSeen' to the dashboard's internal 'last_updated'
+                if (data.lastSeen) data.last_updated = data.lastSeen;
+                
+                updateDriverState(id, data, 'realtime');
+            } else if (change.type === "removed") {
+                // Remove marker and cleanup offline driver
                 if (driverMarkers[id]) {
                     driverMarkers[id].setMap(null);
                     delete driverMarkers[id];
                 }
-                return;
+                delete allDriversData[id];
+                updateOnlineDriversList();
+                updateOnlineDisplay();
+                console.log(`[Real-time] Driver ${id} went offline. Marker removed.`);
             }
-            updateDriverState(id, data, 'metadata');
         });
     });
 
-    // ── Bridge Gap: Also listen to Users collection for basic driver info ────
-    // This ensures that even if the 'drivers' asset profile is missing, we still have a name.
+    // Fallback: Listen to Users collection for basic driver info (names/profiles)
     onSnapshot(query(collection(db, "users"), where("role", "==", "driver")), (snapshot) => {
         snapshot.docChanges().forEach(change => {
             if (change.type === "removed") return;
             const id = change.doc.id;
             const data = change.doc.data();
             const email = data.email?.toLowerCase()?.trim();
-            
             if (email) emailToUidMap[email] = id;
             
-            // Only update if we don't have better data from 'drivers' yet
-            if (!allDriversData[id] || ['Loading...', 'Fleet Driver', 'Loading Driver...'].includes(allDriversData[id].driver_name)) {
+            if (!allDriversData[id]) {
                 updateDriverState(id, {
                     driver_name: data.full_name || data.display_name || data.fullName,
                     driver_email: email
@@ -472,122 +467,43 @@ function initMap() {
         });
     });
 
-    onSnapshot(collection(db, "driver_locations"), (snapshot) => {
-        snapshot.docChanges().forEach(change => {
-            const docId = change.doc.id; // Email
-            const data = change.doc.data();
-            const emailKey = docId.toLowerCase().trim();
-            
-            // Resolve to UID if possible
-            let resolvedId = emailToUidMap[emailKey];
-            
-            // If not yet mapped, search in allDriversData for a matching email
-            if (!resolvedId) {
-                const existingDriver = Object.values(allDriversData).find(d => 
-                    d.driver_email?.toLowerCase()?.trim() === emailKey
-                );
-                if (existingDriver) {
-                    resolvedId = existingDriver.id;
-                    emailToUidMap[emailKey] = resolvedId;
-                } else {
-                    // Critical: Fallback to emailKey so location is NOT lost if UID mapping isn't ready
-                    resolvedId = emailKey;
-                }
-            }
-            
-            if (change.type === "removed") {
-                if (allDriversData[resolvedId]) {
-                    allDriversData[resolvedId].current_latitude = null;
-                    allDriversData[resolvedId].current_longitude = null;
-                }
-                refreshMarker(resolvedId);
-                return;
-            }
-            if (!data.driver_email && docId.includes('@')) {
-                data.driver_email = docId;
-            }
-            updateDriverState(resolvedId, data, 'location');
-        });
-    });
-
-    // Refresh online list every minute
+    // Periodically refresh list for time-based online counting
     setInterval(() => {
         updateOnlineDriversList();
         updateOnlineDisplay();
-    }, 60000);
-
-    // Ghost driver cleanup: remove map markers whose heartbeat is older than 15 minutes
-    const GHOST_THRESHOLD_MS = 15 * 60 * 1000;
-    setInterval(() => {
-        const now = Date.now();
-        Object.keys(driverMarkers).forEach(id => {
-            const d = allDriversData[id];
-            if (!d) return;
-            const lastMs = d.last_updated
-                ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated)))
-                : 0;
-            if (!isNaN(lastMs) && lastMs > 0 && (now - lastMs) > GHOST_THRESHOLD_MS) {
-                // Heartbeat expired — hide marker to prevent ghosting
-                if (driverMarkers[id].getVisible()) {
-                    driverMarkers[id].setVisible(false);
-                    console.log(`[Ghost Cleanup] Hiding stale marker for driver ${d.driver_name || id} (last seen ${Math.round((now - lastMs) / 60000)}m ago)`);
-                }
-            }
-        });
-        updateOnlineDriversList();
-        updateOnlineDisplay();
-    }, 30000); // Run every 30 seconds
+    }, 30000);
 }
 
 function updateDriverState(id, data, source) {
     if (!allDriversData[id]) {
         allDriversData[id] = { id: id, driver_name: 'Loading...' };
     }
-    const existing = allDriversData[id]; // safe reference to current state
+    const existing = allDriversData[id];
     
-    if (source === 'metadata') {
-        Object.assign(existing, {
-            driver_name: data.driver_name || data.full_name || existing.driver_name || 'Unknown Driver',
-            current_status: data.current_status || existing.current_status,
-            current_trip_phase: data.current_trip_phase || existing.current_trip_phase,
-            vehicle_assigned: data.vehicle_assigned || existing.vehicle_assigned,
-            plate_number: data.plate_number || existing.plate_number,
-            car_color: data.car_color || existing.car_color,
-            driver_email: data.driver_email?.toLowerCase()?.trim() || existing.driver_email,
-            profile_image_url: data.profile_image_url || existing.profile_image_url,
-            is_background: data.is_background !== undefined ? data.is_background : existing.is_background
-        });
-    } else if (source === 'location') {
-        const lastMs = data.last_updated
-            ? (data.last_updated.toMillis ? data.last_updated.toMillis() : (data.last_updated.seconds ? data.last_updated.seconds * 1000 : Number(data.last_updated)))
-            : 0;
-        const now = Date.now();
-        const isStale = isNaN(lastMs) || lastMs === 0 || (now - lastMs) > (15 * 60 * 1000);
-        
-        if (isStale) {
-            // Location is stale — update timestamp but ensure marker is hidden if already stale
-            existing.last_updated = data.last_updated;
-            if (driverMarkers[id]) driverMarkers[id].setVisible(false);
-            console.log(`[Location Update] Received stale update for ${id} (${Math.round((now-lastMs)/60000)}m old)`);
-            return;
-        }
+    // Unified data merge
+    Object.assign(existing, {
+        driver_name: data.driver_name || data.full_name || existing.driver_name || 'Fleet Driver',
+        current_status: data.current_status || existing.current_status || 'available',
+        status: data.status || existing.status,
+        current_trip_phase: data.current_trip_phase || existing.current_trip_phase,
+        vehicle_assigned: data.vehicle_assigned || existing.vehicle_assigned,
+        plate_number: data.plate_number || existing.plate_number,
+        car_color: data.car_color || existing.car_color,
+        driver_email: data.driver_email?.toLowerCase()?.trim() || existing.driver_email,
+        profile_image_url: data.profile_image_url || existing.profile_image_url,
+        is_background: data.is_background !== undefined ? data.is_background : existing.is_background,
+        current_latitude: data.current_latitude !== undefined ? data.current_latitude : existing.current_latitude,
+        current_longitude: data.current_longitude !== undefined ? data.current_longitude : existing.current_longitude,
+        current_speed: data.current_speed !== undefined ? data.current_speed : existing.current_speed,
+        current_heading: data.current_heading !== undefined ? data.current_heading : existing.current_heading,
+        last_updated: data.last_updated || existing.last_updated,
+        lastSeen: data.lastSeen || existing.lastSeen,
+        last_location_push: Date.now()
+    });
 
-        const existingStatus = existing.current_status || 'offline';
-        Object.assign(existing, {
-            current_latitude: data.current_latitude,
-            current_longitude: data.current_longitude,
-            current_speed: data.current_speed,
-            current_heading: data.current_heading,
-            wifi_ssid: data.wifi_ssid,
-            last_updated: data.last_updated,
-            is_background: data.is_background !== undefined ? data.is_background : existing.is_background,
-            current_status: existingStatus === 'offline' ? 'available' : existingStatus,
-            driver_email: data.driver_email?.toLowerCase()?.trim() || existing.driver_email || (id.includes('@') ? id : null),
-            last_location_push: Date.now() // Local timestamp for immediate heartbeat check
-        });
+    if (source === 'realtime') {
+        refreshMarker(id);
     }
-    
-    refreshMarker(id);
     updateOnlineDriversList();
     updateOnlineDisplay();
 }

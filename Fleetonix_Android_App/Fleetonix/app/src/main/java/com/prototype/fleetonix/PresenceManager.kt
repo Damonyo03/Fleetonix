@@ -35,7 +35,9 @@ object PresenceManager {
 
         val driverUpdateData = mutableMapOf<String, Any>(
             "current_status" to status,
-            "last_active" to timestamp
+            "status" to (if (isOnline) "online" else "offline"),
+            "last_active" to timestamp,
+            "lastSeen" to timestamp
         )
         isBackground?.let { driverUpdateData["is_background"] = it }
 
@@ -47,7 +49,7 @@ object PresenceManager {
                 }
             }
             
-        Log.d("PresenceManager", "Status updated: $status (Background: $isBackground) for $email")
+        Log.d("PresenceManager", "Status updated: $status [Real-time: ${if(isOnline) "online" else "offline"}] for $email")
     }
 
     fun updateBackgroundStatus(isBackground: Boolean) {
