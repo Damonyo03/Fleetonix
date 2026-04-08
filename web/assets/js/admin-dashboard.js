@@ -281,8 +281,28 @@ function initStats() {
                 delete activeSchedulesData[driverId];
                 if (allDriversData[driverId]) delete allDriversData[driverId].odometer_start;
             } else {
+                const stops = [];
+                if (data.segments && Array.isArray(data.segments)) {
+                    data.segments.forEach((seg, idx) => {
+                        stops.push({ 
+                            latitude: seg.pickup_latitude, 
+                            longitude: seg.pickup_longitude, 
+                            label: `P${idx + 1}` 
+                        });
+                        stops.push({ 
+                            latitude: seg.dropoff_latitude, 
+                            longitude: seg.dropoff_longitude, 
+                            label: `D${idx + 1}` 
+                        });
+                    });
+                } else {
+                    if (data.pickup_latitude && data.pickup_longitude) {
+                        stops.push({ latitude: data.pickup_latitude, longitude: data.pickup_longitude, label: 'P' });
+                    }
+                }
+
                 activeSchedulesData[driverId] = {
-                    stops: Array.isArray(data.pickup_location) ? data.pickup_location : (data.pickup_location ? [data.pickup_location] : []),
+                    stops: stops,
                     final: data.dropoff_location,
                     tripId: change.doc.id,
                     status: data.status
@@ -658,7 +678,7 @@ function refreshMarker(id) {
                         const stopPos = { lat: Number(stop.latitude), lng: Number(stop.longitude) };
                         const overlay = new MapOverlay(
                             stopPos,
-                            `<span>${index + 1}</span>`,
+                            `<span>${stop.label || (index + 1)}</span>`,
                             'stop-marker-numbered'
                         );
                         overlay.setMap(driversMap);

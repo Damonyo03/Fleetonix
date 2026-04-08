@@ -2385,29 +2385,52 @@ fun DriverDashboard(
                                                 try {
                                                      isMarkingDropoff = true
                                                      tripActionError = null
-                                                     val docRef = db.collection("schedules").document(docId)
-                                                     val doc = docRef.get().await()
-                                                     val returnReq = doc.getBoolean("return_to_pickup") ?: false
-                                                     val nextP = if (returnReq) "return_pickup" else "ready_to_complete"
-                                                     
-                                                     docRef.update("trip_phase", nextP, "dropped_off_at", FieldValue.serverTimestamp()).await()
-                                                     
-                                                     // Sync to drivers collection
-                                                     val email = auth.currentUser?.email
-                                                     if (email != null) {
-                                                         val dSnap = db.collection("drivers")
-                                                             .whereEqualTo("driver_email", email.lowercase().trim())
-                                                             .get().await()
-                                                         dSnap.documents.firstOrNull()?.reference?.update(
-                                                             "current_status", nextP,
-                                                             "current_trip_phase", nextP
-                                                         )
-                                                     }
-                                                     
-                                                     // Manual DTR transition: Automated Time-Out removed.
-                                                     // Handled by explicit buttons now.
-
-                                                     tripActionSuccess = if (returnReq) "Arrived! Return required." else "Arrived! Trip ready to complete."
+                                                      val docRef = db.collection("schedules").document(docId)
+                                                      val doc = docRef.get().await()
+                                                      
+                                                      val segments = doc.get("segments") as? List<*> ?: emptyList<Any>()
+                                                      val curIdx = (doc.get("current_segment_index") as? Number)?.toInt() ?: 0
+                                                      
+                                                      if (curIdx + 1 < segments.size) {
+                                                          // Progressive Multi-Segment logic
+                                                          val nextIdx = curIdx + 1
+                                                          docRef.update(
+                                                              "current_segment_index", nextIdx,
+                                                              "trip_phase", "moving_to_pickup"
+                                                          ).await()
+                                                          
+                                                          // Sync to drivers collection
+                                                          val email = auth.currentUser?.email
+                                                          if (email != null) {
+                                                              val dSnap = db.collection("drivers")
+                                                                  .whereEqualTo("driver_email", email.lowercase().trim())
+                                                                  .get().await()
+                                                              dSnap.documents.firstOrNull()?.reference?.update(
+                                                                  "current_status", "moving_to_pickup",
+                                                                  "current_trip_phase", "moving_to_pickup"
+                                                              )
+                                                          }
+                                                          tripActionSuccess = "Segment ${curIdx + 1} Done! Moving to Pickup ${nextIdx + 1}."
+                                                      } else {
+                                                          // Final Segment logic
+                                                          val returnReq = doc.getBoolean("return_to_pickup") ?: false
+                                                          val nextP = if (returnReq) "return_pickup" else "ready_to_complete"
+                                                          
+                                                          docRef.update("trip_phase", nextP, "total_segments_completed", segments.size, "dropped_off_at", FieldValue.serverTimestamp()).await()
+                                                          
+                                                          // Sync to drivers collection
+                                                          val email = auth.currentUser?.email
+                                                          if (email != null) {
+                                                              val dSnap = db.collection("drivers")
+                                                                  .whereEqualTo("driver_email", email.lowercase().trim())
+                                                                  .get().await()
+                                                              dSnap.documents.firstOrNull()?.reference?.update(
+                                                                  "current_status", nextP,
+                                                                  "current_trip_phase", nextP
+                                                              )
+                                                          }
+                                                          tripActionSuccess = if (returnReq) "Arrived! Return required." else "Arrived! Trip ready to complete."
+                                                      }
                                                  } catch (e: Exception) {
                                                      tripActionError = "Failed: ${e.message}"
                                                  } finally {

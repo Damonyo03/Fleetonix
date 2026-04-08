@@ -36,6 +36,7 @@ data class Assignment(
     val docId: String,
     val scheduleId: String,
     val tripPhase: String,
+    val currentSegmentIndex: Int,
     val scheduleDate: String?,
     val scheduleTime: String?,
     val clientName: String?,
@@ -205,7 +206,7 @@ fun AssignmentCard(
                 }
             }
 
-            // ── Route Timeline ──────────────────────────────────────
+            // ── Route Timeline (Multi-Segment Stepper) ────────────────
             if (assignment.segments.isNotEmpty()) {
                 Column(
                     modifier = Modifier
@@ -218,12 +219,16 @@ fun AssignmentCard(
                     verticalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
                     assignment.segments.forEachIndexed { index, segment ->
+                        val isCurrentSegment = index == assignment.currentSegmentIndex
+                        val isPastSegment = index < assignment.currentSegmentIndex
+                        
                         // Pickup point
                         TimelineRow(
                             label = "Pickup ${index + 1}",
                             address = segment.pickup,
-                            dotColor = AccentBlue,
-                            isFilled = true,
+                            dotColor = if (isPastSegment || (isCurrentSegment && phase.lowercase() != "pickup")) Color(0xFF10B981) else Color(0xFF00D4FF),
+                            isFilled = isPastSegment || (isCurrentSegment && phase.lowercase() != "pickup"),
+                            isCurrent = isCurrentSegment && phase.lowercase() == "pickup",
                             showLine = true
                         )
 
@@ -231,8 +236,9 @@ fun AssignmentCard(
                         TimelineRow(
                             label = "Drop-off ${index + 1}",
                             address = segment.dropoff,
-                            dotColor = if (index == assignment.segments.lastIndex) Color(0xFF10B981) else Color(0xFF6B7280),
-                            isFilled = index == assignment.segments.lastIndex,
+                            dotColor = if (isPastSegment) Color(0xFF10B981) else if (isCurrentSegment && phase.lowercase() == "dropoff") Color(0xFF00D4FF) else Color(0xFF6B7280),
+                            isFilled = isPastSegment,
+                            isCurrent = isCurrentSegment && phase.lowercase() == "dropoff",
                             showLine = index < assignment.segments.lastIndex
                         )
                     }
@@ -367,8 +373,20 @@ private fun TimelineRow(
     address: String,
     dotColor: Color,
     isFilled: Boolean,
+    isCurrent: Boolean = false,
     showLine: Boolean
 ) {
+    // Pulse animation for the current point
+    val pulseScale by androidx.compose.animation.core.rememberInfiniteTransition(label = "pulse")
+        .animateFloat(
+            initialValue = 1.0f,
+            targetValue = 1.4f,
+            animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                animation = tween(1000),
+                repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+            ),
+            label = "scale"
+        )
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -379,27 +397,43 @@ private fun TimelineRow(
             modifier = Modifier.width(16.dp)
         ) {
             Box(
-                modifier = Modifier
-                    .size(14.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (isFilled) dotColor else Color.Transparent
-                    )
-                    .then(
-                        if (!isFilled) Modifier.background(
-                            dotColor,
-                            CircleShape
-                        ).padding(2.dp) else Modifier
-                    ),
-                contentAlignment = Alignment.Center
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(24.dp) // Larger container to allow pulse overflow
             ) {
-                if (!isFilled) {
+                if (isCurrent) {
                     Box(
                         modifier = Modifier
-                            .size(8.dp)
+                            .size(16.dp)
+                            .graphicsLayer {
+                                scaleX = pulseScale
+                                scaleY = pulseScale
+                            }
                             .clip(CircleShape)
-                            .background(CardBlue)
+                            .background(dotColor.copy(alpha = 0.3f))
                     )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .clip(CircleShape)
+                        .background(if (isFilled || isCurrent) dotColor else Color.Transparent)
+                        .then(
+                            if (!isFilled && !isCurrent) Modifier
+                                .background(dotColor.copy(alpha = 0.4f), CircleShape)
+                                .padding(2.dp)
+                            else Modifier
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (!isFilled && !isCurrent) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(CardBlue)
+                        )
+                    }
                 }
             }
 
@@ -503,6 +537,7 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                             docId = doc.id,
                             scheduleId = (data["schedule_id"] as? Number)?.toString() ?: doc.id.take(8).uppercase(),
                             tripPhase = phase,
+                            currentSegmentIndex = (data["current_segment_index"] as? Number)?.toInt() ?: 0,
                             scheduleDate = data["schedule_date"] as? String,
                             scheduleTime = data["schedule_time"] as? String,
                             clientName = data["client_name"] as? String,

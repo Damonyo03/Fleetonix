@@ -47,7 +47,7 @@ export function exportToExcel(data, fileName, sheetName = 'Sheet1', headerLines 
         
         // Auto-size columns (Simplified)
         const maxLen = data.reduce((acc, row) => Math.max(acc, ...Object.values(row).map(v => (v || '').toString().length)), 10);
-        worksheet['!cols'] = Object.keys(data[0]).map(() => ({ wch: Math.min(maxLen, 30) }));
+        worksheet['!cols'] = Object.keys(data[0]).map(() => ({ wch: Math.min(maxLen, 120) })); // Increased cap to 120 for multi-segment routes
 
         XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
         XLSX.writeFile(workbook, fileName);
@@ -63,10 +63,17 @@ export function exportToExcel(data, fileName, sheetName = 'Sheet1', headerLines 
 export function mapTicketsForExport(tickets) {
     return tickets.map(t => {
         const date = t.schedule_date || (t.completed_at?.toDate ? t.completed_at.toDate().toLocaleDateString() : '—');
+        
+        // Handle Multi-Segment Format
+        let routeDescription = t.pickup_location || '—';
+        if (t.segments && Array.isArray(t.segments) && t.segments.length > 0) {
+            routeDescription = t.segments.map((s, i) => `[P${i+1}] ${s.pickup} -> [D${i+1}] ${s.dropoff}`).join(' | ');
+        }
+
         return {
             "Date/Day": date,
             "Departure Time": t.time_of_departure || t.accepted_at || '—',
-            "Pickup place": t.pickup_location || '—',
+            "Pickup place": routeDescription,
             "Arrived time": t.time_of_arrival || t.timeOfArrival || '—',
             "Passenger's name": t.client_name || t.passenger_name || '—',
             "Signature": "", // Placeholder for physical sign-off
