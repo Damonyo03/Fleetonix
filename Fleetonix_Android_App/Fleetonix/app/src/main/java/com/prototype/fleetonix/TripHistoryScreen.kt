@@ -52,20 +52,18 @@ fun TripHistoryScreen(
 
         isLoading = true
         
-        // Listen to BOTH UID and Email queries to ensure no records (like the 14.07km one) are missed
-        val validStatuses = listOf("completed", "Completed", "cancelled", "Cancelled", "rejected", "Rejected")
-        
+        // Fetch ALL tickets for this user and filter/sort in memory to avoid missing index errors
         val uidQuery = db.collection("trip_tickets")
             .whereEqualTo("driver_uid", uid)
-            .whereIn("status", validStatuses)
-            .orderBy("created_at", Query.Direction.DESCENDING)
+            .limit(100)
 
         val emailQuery = db.collection("trip_tickets")
             .whereEqualTo("driver_email", emailPruned)
-            .whereIn("status", validStatuses)
-            .orderBy("created_at", Query.Direction.DESCENDING)
+            .limit(100)
 
-        Log.d("TripHistory", "Starting queries for UID: $uid and Email: $emailPruned")
+        Log.d("TripHistory", "Starting simplified queries for UID: $uid and Email: $emailPruned")
+
+        val validStatuses = listOf("completed", "cancelled", "rejected")
 
         val uidListener = uidQuery.addSnapshotListener { snapshot, error ->
             if (error != null) {
@@ -75,7 +73,8 @@ fun TripHistoryScreen(
             }
             if (snapshot != null) {
                 val uidResults = snapshot.documents.mapNotNull { buildTripItem(it) }
-                // Merge and update
+                    .filter { it.status.lowercase() in validStatuses }
+                
                 tickets = (tickets + uidResults).distinctBy { it.id }.sortedByDescending { it.date }
                 isLoading = false
             }
@@ -88,17 +87,13 @@ fun TripHistoryScreen(
                 return@addSnapshotListener
             }
             if (snapshot != null) {
-                // IMPORTANT: Filter out trips with this email that belong to a DIFFERENT UID
-                // This prevents leakage from other accounts
                 val emailResults = snapshot.documents.mapNotNull { doc ->
                     val docUid = doc.getString("driver_uid")
                     if (docUid == null || docUid == "" || docUid == uid) {
                         buildTripItem(doc)
-                    } else {
-                        null
-                    }
-                }
-                // Merge and update
+                    } else null
+                }.filter { it.status.lowercase() in validStatuses }
+
                 tickets = (tickets + emailResults).distinctBy { it.id }.sortedByDescending { it.date }
                 isLoading = false
             }

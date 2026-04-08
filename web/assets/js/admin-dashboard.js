@@ -479,7 +479,21 @@ function initMap() {
             const emailKey = docId.toLowerCase().trim();
             
             // Resolve to UID if possible
-            const resolvedId = emailToUidMap[emailKey] || emailKey;
+            let resolvedId = emailToUidMap[emailKey];
+            
+            // If not mapped, search in allDriversData for a matching email
+            if (!resolvedId) {
+                const existingDriver = Object.values(allDriversData).find(d => 
+                    d.driver_email?.toLowerCase()?.trim() === emailKey
+                );
+                if (existingDriver) {
+                    resolvedId = existingDriver.id;
+                    emailToUidMap[emailKey] = resolvedId;
+                    console.log(`[Merging] Discovered mapping for ${emailKey} -> ${resolvedId} via reverse lookup`);
+                } else {
+                    resolvedId = emailKey;
+                }
+            }
             
             if (change.type === "removed") {
                 if (allDriversData[resolvedId]) {
@@ -503,20 +517,21 @@ function initMap() {
     }, 60000);
 
     // Ghost driver cleanup: remove map markers whose heartbeat is older than 15 minutes
-        // Relaxed threshold: 15 minutes to account for background app delays
-        const GHOST_THRESHOLD_MS = 15 * 60 * 1000;
-        setInterval(() => {
-            const now = Date.now();
-            Object.keys(driverMarkers).forEach(id => {
-                const d = allDriversData[id];
-                if (!d) return;
-                const lastMs = d.last_updated
-                    ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated)))
-                    : 0;
-                if (!isNaN(lastMs) && lastMs > 0 && (now - lastMs) > GHOST_THRESHOLD_MS) {
+    const GHOST_THRESHOLD_MS = 15 * 60 * 1000;
+    setInterval(() => {
+        const now = Date.now();
+        Object.keys(driverMarkers).forEach(id => {
+            const d = allDriversData[id];
+            if (!d) return;
+            const lastMs = d.last_updated
+                ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated)))
+                : 0;
+            if (!isNaN(lastMs) && lastMs > 0 && (now - lastMs) > GHOST_THRESHOLD_MS) {
                 // Heartbeat expired — hide marker to prevent ghosting
-                driverMarkers[id].setVisible(false);
-                console.log(`[Ghost Cleanup] Hiding stale marker for driver ${d.driver_name || id} (last seen ${Math.round((now - lastMs) / 60000)}m ago)`);
+                if (driverMarkers[id].getVisible()) {
+                    driverMarkers[id].setVisible(false);
+                    console.log(`[Ghost Cleanup] Hiding stale marker for driver ${d.driver_name || id} (last seen ${Math.round((now - lastMs) / 60000)}m ago)`);
+                }
             }
         });
         updateOnlineDriversList();
@@ -546,12 +561,14 @@ function updateDriverState(id, data, source) {
         const lastMs = data.last_updated
             ? (data.last_updated.toMillis ? data.last_updated.toMillis() : (data.last_updated.seconds ? data.last_updated.seconds * 1000 : Number(data.last_updated)))
             : 0;
-        const isStale = isNaN(lastMs) || lastMs === 0 || (Date.now() - lastMs) > (15 * 60 * 1000);
+        const now = Date.now();
+        const isStale = isNaN(lastMs) || lastMs === 0 || (now - lastMs) > (15 * 60 * 1000);
         
         if (isStale) {
-            // Location is stale — update timestamp but keep marker hidden
+            // Location is stale — update timestamp but ensure marker is hidden if already stale
             existing.last_updated = data.last_updated;
             if (driverMarkers[id]) driverMarkers[id].setVisible(false);
+            console.log(`[Location Update] Received stale update for ${id} (${Math.round((now-lastMs)/60000)}m old)`);
             return;
         }
 

@@ -43,16 +43,15 @@ fun DTRHistoryScreen(
         if (uid != null || email != null) {
             isLoading = true
             
-            // Listen to both UID and Email
+            // Listen to both UID and Email without orderBy to avoid index requirements
             val uidSub = if (uid != null) {
                 db.collection("dtr_logs")
                     .whereEqualTo("driver_uid", uid)
-                    .orderBy("timestamp", Query.Direction.DESCENDING)
-                    .limit(50)
+                    .limit(100)
                     .addSnapshotListener { snapshot, _ ->
                         if (snapshot != null) {
                             val uidLogs = snapshot.documents.map { it.data ?: emptyMap() }
-                            logs = (logs + uidLogs).distinctBy { it["timestamp"].toString() + it["action"].toString() }
+                            logs = (logs + uidLogs).distinctBy { it["timestamp"].toString() + (it["action"] ?: "") }
                                 .sortedByDescending { (it["timestamp"] as? com.google.firebase.Timestamp)?.seconds ?: 0L }
                             isLoading = false
                         }
@@ -62,12 +61,11 @@ fun DTRHistoryScreen(
             val emailSub = if (email != null) {
                 db.collection("dtr_logs")
                     .whereEqualTo("driver_email", email)
-                    .orderBy("timestamp", Query.Direction.DESCENDING)
-                    .limit(50)
+                    .limit(100)
                     .addSnapshotListener { snapshot, _ ->
                         if (snapshot != null) {
                             val emailLogs = snapshot.documents.map { it.data ?: emptyMap() }
-                            logs = (logs + emailLogs).distinctBy { it["timestamp"].toString() + it["action"].toString() }
+                            logs = (logs + emailLogs).distinctBy { it["timestamp"].toString() + (it["action"] ?: "") }
                                 .sortedByDescending { (it["timestamp"] as? com.google.firebase.Timestamp)?.seconds ?: 0L }
                             isLoading = false
                         }
