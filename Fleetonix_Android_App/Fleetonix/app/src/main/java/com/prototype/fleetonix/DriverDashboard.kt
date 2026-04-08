@@ -2372,10 +2372,35 @@ fun DriverDashboard(
                                 colors = CardDefaults.cardColors(containerColor = CardBlue),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text("Passenger: ${nextSchedule?.passenger_name ?: nextSchedule?.client_name ?: "Fleet Assign"}", color = Color.White, fontWeight = FontWeight.Bold)
-                                    Text("Pickup: ${nextSchedule?.pickup_location?.firstOrNull()?.address ?: "Pending"}", color = TextSecondary)
-                                    Text("Dropoff: ${nextSchedule?.dropoff_location?.address ?: "Pending"}", color = TextSecondary)
+                                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Text("Passenger: ${nextSchedule?.passenger_name ?: nextSchedule?.client_name ?: "Fleet Assign"}", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                                    
+                                    if (!nextSchedule?.passenger_phone.isNullOrBlank()) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Icon(Icons.Default.Phone, contentDescription = null, tint = AccentTeal, modifier = Modifier.size(16.dp))
+                                            Text(nextSchedule?.passenger_phone!!, color = AccentTeal, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+
+                                    Divider(color = Color.White.copy(alpha = 0.1f))
+
+                                    // Multi-segment timeline in popup
+                                    if (!nextSchedule?.segments.isNullOrEmpty()) {
+                                        nextSchedule?.segments?.forEachIndexed { index, segment ->
+                                            Text("S${index + 1}: ${segment.pickup} ➔ ${segment.dropoff}", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                                        }
+                                    } else {
+                                        Text("Pickup: ${nextSchedule?.pickup_location?.firstOrNull()?.address ?: "Pending"}", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                                        Text("Dropoff: ${nextSchedule?.dropoff_location?.address ?: "Pending"}", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                                    }
+
+                                    if (!nextSchedule?.special_instructions.isNullOrBlank()) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Icon(Icons.Default.Info, contentDescription = null, tint = Color(0xFFFFB347), modifier = Modifier.size(14.dp))
+                                            Text(nextSchedule?.special_instructions!!, color = Color(0xFFFFB347), style = MaterialTheme.typography.bodySmall)
+                                        }
+                                    }
                                 }
                             }
                             if (!isJobAcceptable) {

@@ -82,7 +82,14 @@ data class DriverSchedule(
     @SerializedName("passenger_name") val passenger_name: String? = null,
     @SerializedName("passenger_email") val passenger_email: String? = null,
     @SerializedName("passenger_phone") val passenger_phone: String? = null,
+    @SerializedName("special_instructions") val special_instructions: String? = null,
+    val segments: List<DriverSegment>? = null,
     val client: DriverClientInfo? = null
+)
+
+data class DriverSegment(
+    val pickup: String? = null,
+    val dropoff: String? = null
 )
 
 data class PickupPoint(

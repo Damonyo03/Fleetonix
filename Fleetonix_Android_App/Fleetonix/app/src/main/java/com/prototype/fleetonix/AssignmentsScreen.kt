@@ -83,7 +83,10 @@ private fun phaseColor(phase: String): Color = when (phase.lowercase()) {
 // Assignment Card
 // ─────────────────────────────────────────────────────────────
 @Composable
-fun AssignmentCard(assignment: Assignment) {
+fun AssignmentCard(
+    assignment: Assignment,
+    onAcceptJob: (Assignment) -> Unit
+) {
     val phase = assignment.tripPhase
     val badgeColor by animateColorAsState(
         targetValue = phaseColor(phase),
@@ -145,19 +148,44 @@ fun AssignmentCard(assignment: Assignment) {
                     if (!assignment.passengerName.isNullOrBlank()) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(
-                                Icons.Default.Person,
-                                contentDescription = null,
-                                tint = TextSecondary,
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Text(
-                                text = assignment.passengerName,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondary
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Person,
+                                    contentDescription = null,
+                                    tint = TextSecondary,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Text(
+                                    text = assignment.passengerName,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondary
+                                )
+                            }
+                            
+                            if (!assignment.passengerPhone.isNullOrBlank()) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Phone,
+                                        contentDescription = null,
+                                        tint = AccentTeal,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Text(
+                                        text = assignment.passengerPhone,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = AccentTeal,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -310,6 +338,20 @@ fun AssignmentCard(assignment: Assignment) {
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
+                }
+            }
+
+            // ── Accept Button ───────────────────────────────────────
+            if (phase == "pending") {
+                Button(
+                    onClick = { onAcceptJob(assignment) },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
+                ) {
+                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("ACCEPT JOB", fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -623,7 +665,7 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                                 SectionHeader(title = "Active", icon = Icons.Default.DirectionsCar, color = AccentTeal)
                             }
                             items(activeItems, key = { it.docId }) { a ->
-                                AssignmentCard(assignment = a)
+                                AssignmentCard(assignment = a, onAcceptJob = {})
                             }
                         }
 
@@ -634,7 +676,22 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                                 SectionHeader(title = "Upcoming", icon = Icons.Default.Schedule, color = Color(0xFFFFB347))
                             }
                             items(pendingItems, key = { it.docId }) { a ->
-                                AssignmentCard(assignment = a)
+                                AssignmentCard(
+                                    assignment = a,
+                                    onAcceptJob = { clickedItem ->
+                                        isLoading = true
+                                        db.collection("schedules").document(clickedItem.docId).update(
+                                            "status", "accepted",
+                                            "trip_phase", "accepted",
+                                            "accepted_at", com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                        ).addOnSuccessListener {
+                                            onBack()
+                                        }.addOnFailureListener { e ->
+                                            errorMsg = "Failed to accept job: ${e.message}"
+                                            isLoading = false
+                                        }
+                                    }
+                                )
                             }
                         }
 
@@ -645,7 +702,7 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                                 SectionHeader(title = "Completed", icon = Icons.Default.CheckCircle, color = Color(0xFF10B981))
                             }
                             items(completedItems, key = { it.docId }) { a ->
-                                AssignmentCard(assignment = a)
+                                AssignmentCard(assignment = a, onAcceptJob = {})
                             }
                         }
                     }

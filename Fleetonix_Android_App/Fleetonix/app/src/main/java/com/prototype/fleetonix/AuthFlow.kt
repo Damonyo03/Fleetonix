@@ -197,6 +197,15 @@ fun AuthFlow() {
                                   ?: (data["numeric_booking_id"] as? Number)?.toInt()
                                   ?: doc.id.hashCode()
 
+                        // Parse segments
+                        @Suppress("UNCHECKED_CAST")
+                        val segmentsList = data["segments"] as? List<Map<String, Any?>>
+                        val segments = segmentsList?.mapNotNull { seg ->
+                            val p = seg["pickup"] as? String ?: return@mapNotNull null
+                            val d = seg["dropoff"] as? String ?: return@mapNotNull null
+                            DriverSegment(pickup = p, dropoff = d)
+                        } ?: emptyList()
+
                         DriverSchedule(
                             docId = doc.id,
                             scheduleId = sId,
@@ -222,8 +231,11 @@ fun AuthFlow() {
                             passenger_name = data["passenger_name"] as? String,
                             passenger_email = data["passenger_email"] as? String,
                             passenger_phone = data["passenger_phone"] as? String,
+                            special_instructions = data["special_instructions"] as? String,
                             return_to_pickup = data["return_to_pickup"] as? Boolean ?: false,
-                            return_pickup_time = data["return_pickup_time"] as? String
+                            return_pickup_time = data["return_pickup_time"] as? String,
+                            segments = segments,
+                            isOfficial = data["isOfficial"] as? Boolean ?: false
                         )
 
                     }.sortedWith(compareByDescending<DriverSchedule> { 
