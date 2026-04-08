@@ -1,0 +1,9 @@
+Starting Cleanup Process
+2026-04-08T08:36:45.893Z - Fetching active drivers...
+2026-04-08T08:36:47.155Z - Found 1 active driver emails and 1 UIDs.
+2026-04-08T08:36:47.158Z - Scanning trip_tickets...
+2026-04-08T08:36:47.272Z - Total tickets found: 0
+2026-04-08T08:36:47.281Z - --- CLEANUP SUMMARY ---
+2026-04-08T08:36:47.288Z - Deleted: 0 stale/orphan tickets.
+2026-04-08T08:36:47.298Z - Preserved: 0 valid/recent tickets.
+2026-04-08T08:36:47.306Z - --- COMPLETE ---

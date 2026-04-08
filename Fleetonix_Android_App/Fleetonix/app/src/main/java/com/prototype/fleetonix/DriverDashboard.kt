@@ -122,13 +122,12 @@ fun TripTicketDialog(
                     TicketRow("Arrival", timeOfArrival)
                 }
 
-                    Text(
-                        "TRIP ROUTE (TOTAL ${"%.2f".format(totalKm)} KM)",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextSecondary,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+                Text(
+                    "TRIP ROUTE (TOTAL ${"%.2f".format(totalKm)} KM)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                    fontWeight = FontWeight.Bold
+                )
 
                 if (!segments.isNullOrEmpty()) {
                     Column(
@@ -157,71 +156,69 @@ fun TripTicketDialog(
                         }
                     }
                 } else {
-
-                // Map Route Visualization
-                if (routePoints.isNotEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                    ) {
-                        val cameraPositionState = rememberCameraPositionState {
-                            val center = if (routePoints.isNotEmpty()) routePoints[routePoints.size / 2] else LatLng(0.0, 0.0)
-                            position = CameraPosition.fromLatLngZoom(center, 13f)
-                        }
-                        
-                        LaunchedEffect(routePoints) {
-                            if (routePoints.size >= 2) {
-                                try {
-                                    val boundsBuilder = LatLngBounds.builder()
-                                    routePoints.forEach { boundsBuilder.include(it) }
-                                    cameraPositionState.animate(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 50))
-                                } catch (e: Exception) {
-                                    android.util.Log.e("TripTicketDialog", "Failed to build bounds", e)
+                    // Map Route Visualization
+                    if (routePoints.isNotEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                        ) {
+                            val cameraPositionState = rememberCameraPositionState {
+                                val center = if (routePoints.isNotEmpty()) routePoints[routePoints.lastIndex / 2] else LatLng(0.0, 0.0)
+                                position = CameraPosition.fromLatLngZoom(center, 13f)
+                            }
+                            
+                            LaunchedEffect(routePoints) {
+                                if (routePoints.size >= 2) {
+                                    try {
+                                        val boundsBuilder = LatLngBounds.builder()
+                                        routePoints.forEach { boundsBuilder.include(it) }
+                                        cameraPositionState.animate(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 50))
+                                    } catch (e: Exception) {
+                                        android.util.Log.e("TripTicketDialog", "Failed to build bounds", e)
+                                    }
                                 }
                             }
-                        }
 
-                        GoogleMap(
-                            modifier = Modifier.fillMaxSize(),
-                            cameraPositionState = cameraPositionState,
-                            uiSettings = MapUiSettings(zoomControlsEnabled = false, rotationGesturesEnabled = false),
-                            properties = MapProperties(mapStyleOptions = MapStyleOptions(MapStyles.AUBERGINE))
+                            GoogleMap(
+                                modifier = Modifier.fillMaxSize(),
+                                cameraPositionState = cameraPositionState,
+                                uiSettings = MapUiSettings(zoomControlsEnabled = false, rotationGesturesEnabled = false),
+                                properties = MapProperties(mapStyleOptions = MapStyleOptions(MapStyles.AUBERGINE))
+                            ) {
+                                Polyline(
+                                    points = routePoints,
+                                    color = AccentTeal,
+                                    width = 10f,
+                                    jointType = JointType.ROUND
+                                )
+                                
+                                // Green Start Pin
+                                Marker(
+                                    state = MarkerState(position = routePoints.first()),
+                                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN),
+                                    title = "Start"
+                                )
+                                // Red End Pin
+                                Marker(
+                                    state = MarkerState(position = routePoints.last()),
+                                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED),
+                                    title = "End"
+                                )
+                            }
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .background(Midnight, RoundedCornerShape(16.dp)),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Polyline(
-                                points = routePoints,
-                                color = AccentTeal,
-                                width = 10f,
-                                jointType = JointType.ROUND
-                            )
-                            
-                            // Green Start Pin
-                            Marker(
-                                state = MarkerState(position = routePoints.first()),
-                                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN),
-                                title = "Start"
-                            )
-                            // Red End Pin
-                            Marker(
-                                state = MarkerState(position = routePoints.last()),
-                                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED),
-                                title = "End"
-                            )
+                            Text("Route visualization unavailable", color = TextSecondary)
                         }
                     }
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .background(Midnight, RoundedCornerShape(16.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("Route visualization unavailable", color = TextSecondary)
-                    }
-                }
-
                 }
 
                 // Confirm Button
