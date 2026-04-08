@@ -53,15 +53,16 @@ fun TripHistoryScreen(
         isLoading = true
         
         // Listen to BOTH UID and Email queries to ensure no records (like the 14.07km one) are missed
+        // Relaxed query: Remove isOfficial requirement to show historical trips
         val uidQuery = db.collection("trip_tickets")
             .whereEqualTo("driver_uid", uid)
-            .whereEqualTo("isOfficial", true)
             .orderBy("created_at", Query.Direction.DESCENDING)
 
         val emailQuery = db.collection("trip_tickets")
             .whereEqualTo("driver_email", emailPruned)
-            .whereEqualTo("isOfficial", true)
             .orderBy("created_at", Query.Direction.DESCENDING)
+
+        Log.d("TripHistory", "Starting queries for UID: $uid and Email: $emailPruned")
 
         val uidListener = uidQuery.addSnapshotListener { snapshot, error ->
             if (error != null) {
