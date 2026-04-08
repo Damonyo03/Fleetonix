@@ -55,7 +55,7 @@ function initDriverList() {
                 const userData = userDoc.data();
                 try {
                     await setDoc(doc(db, "drivers", userDoc.id), {
-                        driver_name: userData.full_name || 'Fleet Driver',
+                        driver_name: userData.full_name || userData.fullName || 'Fleet Driver',
                         driver_email: userData.email?.toLowerCase()?.trim() || '',
                         driver_phone: userData.phone || '09xxxxxxxxx',
                         plate_number: 'PENDING',

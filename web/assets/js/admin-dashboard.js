@@ -463,9 +463,9 @@ function initMap() {
             if (email) emailToUidMap[email] = id;
             
             // Only update if we don't have better data from 'drivers' yet
-            if (!allDriversData[id] || allDriversData[id].driver_name === 'Loading...') {
+            if (!allDriversData[id] || ['Loading...', 'Fleet Driver', 'Loading Driver...'].includes(allDriversData[id].driver_name)) {
                 updateDriverState(id, {
-                    driver_name: data.full_name || data.display_name,
+                    driver_name: data.full_name || data.display_name || data.fullName,
                     driver_email: email
                 }, 'metadata');
             }
@@ -945,7 +945,7 @@ function showQuickInfoPanel(driverId, driver) {
 
     // Name
     const email = driver.driver_email?.toLowerCase()?.trim() || '';
-    const resolvedName = (driver.driver_name && !['Loading...', 'Loading Driver...'].includes(driver.driver_name))
+    const resolvedName = (driver.driver_name && !['Loading...', 'Loading Driver...', 'Fleet Driver'].includes(driver.driver_name))
         ? driver.driver_name
         : (driverDTRStatus[email]?.name || driver.driver_email || 'Fleet Driver');
     document.getElementById('qipName').textContent = resolvedName;
