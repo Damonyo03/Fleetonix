@@ -1,6 +1,7 @@
 package com.prototype.fleetonix
 
 import android.os.Build
+import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -62,7 +63,12 @@ fun TripHistoryScreen(
             .whereEqualTo("isOfficial", true)
             .orderBy("created_at", Query.Direction.DESCENDING)
 
-        val uidListener = uidQuery.addSnapshotListener { snapshot, _ ->
+        val uidListener = uidQuery.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                Log.e("TripHistoryScreen", "UID Query failed: ${error.message}")
+                isLoading = false
+                return@addSnapshotListener
+            }
             if (snapshot != null) {
                 val uidResults = snapshot.documents.mapNotNull { buildTripItem(it) }
                 // Merge and update
@@ -71,10 +77,15 @@ fun TripHistoryScreen(
             }
         }
 
-        val emailListener = emailQuery.addSnapshotListener { snapshot, _ ->
+        val emailListener = emailQuery.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                Log.e("TripHistoryScreen", "Email Query failed: ${error.message}")
+                isLoading = false
+                return@addSnapshotListener
+            }
             if (snapshot != null) {
                 // IMPORTANT: Filter out trips with this email that belong to a DIFFERENT UID
-                // This prevents leakage from other accounts (like the April 03 trips which are "not his")
+                // This prevents leakage from other accounts
                 val emailResults = snapshot.documents.mapNotNull { doc ->
                     val docUid = doc.getString("driver_uid")
                     if (docUid == null || docUid == "" || docUid == uid) {

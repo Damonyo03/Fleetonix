@@ -2457,6 +2457,7 @@ fun DriverDashboard(
                                                     "total_km" to 0.0,
                                                     "route_polyline" to "",
                                                     "status" to "in_progress",
+                                                    "isOfficial" to true,
                                                     "created_at" to FieldValue.serverTimestamp()
                                                 )
                                                 val ticketRef = db.collection("trip_tickets").add(initialTicketData).await()

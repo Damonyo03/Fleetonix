@@ -37,9 +37,41 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 function initDriverList() {
+    // 1. Listen to the Assets (drivers collection)
     onSnapshot(collection(db, "drivers"), (snapshot) => {
         allDrivers = snapshot.docs;
         applyFilters();
+    });
+
+    // 2. Cross-reference with the Users collection to find "Orphan" drivers
+    // This solves the issue where existing drivers are not being "read" because they lack an asset profile.
+    onSnapshot(query(collection(db, "users"), where("role", "==", "driver")), async (snapshot) => {
+        const onboardedUids = allDrivers.map(d => d.id);
+        const orphanDocs = snapshot.docs.filter(doc => !onboardedUids.includes(doc.id));
+
+        if (orphanDocs.length > 0) {
+            console.log(`Found ${orphanDocs.length} orphan drivers. Auto-provisioning basic asset profiles...`);
+            for (const userDoc of orphanDocs) {
+                const userData = userDoc.data();
+                try {
+                    await setDoc(doc(db, "drivers", userDoc.id), {
+                        driver_name: userData.full_name || 'Fleet Driver',
+                        driver_email: userData.email?.toLowerCase()?.trim() || '',
+                        driver_phone: userData.phone || '09xxxxxxxxx',
+                        plate_number: 'PENDING',
+                        car_color: 'N/A',
+                        vehicle_assigned: 'Unassigned',
+                        car_details: 'Standard',
+                        license_number: 'PENDING',
+                        current_status: "offline",
+                        isAutoProvisioned: true,
+                        created_at: serverTimestamp()
+                    });
+                } catch (e) {
+                    console.error("Auto-provisioning failed for:", userDoc.id, e);
+                }
+            }
+        }
     });
 
     [driverSearch, brandSearch, colorSearch, typeFilter, statusFilter].forEach(el => {

@@ -451,6 +451,27 @@ function initMap() {
         });
     });
 
+    // ── Bridge Gap: Also listen to Users collection for basic driver info ────
+    // This ensures that even if the 'drivers' asset profile is missing, we still have a name.
+    onSnapshot(query(collection(db, "users"), where("role", "==", "driver")), (snapshot) => {
+        snapshot.docChanges().forEach(change => {
+            if (change.type === "removed") return;
+            const id = change.doc.id;
+            const data = change.doc.data();
+            const email = data.email?.toLowerCase()?.trim();
+            
+            if (email) emailToUidMap[email] = id;
+            
+            // Only update if we don't have better data from 'drivers' yet
+            if (!allDriversData[id] || allDriversData[id].driver_name === 'Loading...') {
+                updateDriverState(id, {
+                    driver_name: data.full_name || data.display_name,
+                    driver_email: email
+                }, 'metadata');
+            }
+        });
+    });
+
     onSnapshot(collection(db, "driver_locations"), (snapshot) => {
         snapshot.docChanges().forEach(change => {
             const docId = change.doc.id; // Email
