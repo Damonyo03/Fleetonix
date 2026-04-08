@@ -53,13 +53,15 @@ fun TripHistoryScreen(
         isLoading = true
         
         // Listen to BOTH UID and Email queries to ensure no records (like the 14.07km one) are missed
-        // Relaxed query: Remove isOfficial requirement to show historical trips
+        // Query including multiple statuses: completed, cancelled, rejected
         val uidQuery = db.collection("trip_tickets")
             .whereEqualTo("driver_uid", uid)
+            .whereIn("status", listOf("completed", "cancelled", "rejected"))
             .orderBy("created_at", Query.Direction.DESCENDING)
 
         val emailQuery = db.collection("trip_tickets")
             .whereEqualTo("driver_email", emailPruned)
+            .whereIn("status", listOf("completed", "cancelled", "rejected"))
             .orderBy("created_at", Query.Direction.DESCENDING)
 
         Log.d("TripHistory", "Starting queries for UID: $uid and Email: $emailPruned")
@@ -206,10 +208,38 @@ fun HistoryCard(item: TripHistoryItem, onClick: () -> Unit) {
                 Text(item.pickup, color = TextSecondary, fontSize = 13.sp, maxLines = 1)
             }
             Spacer(Modifier.height(4.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Timeline, null, tint = AccentOrange, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(item.dropoff, color = TextSecondary, fontSize = 13.sp, maxLines = 1)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Timeline, null, tint = AccentOrange, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(item.dropoff, color = TextSecondary, fontSize = 13.sp, maxLines = 1)
+                }
+                
+                // Status Badge
+                val (statusColor, containerColor) = when (item.status.lowercase()) {
+                    "completed" -> Color(0xFF10B981) to Color(0xFF10B981).copy(alpha = 0.1f)
+                    "cancelled", "rejected" -> Color(0xFFEF4444) to Color(0xFFEF4444).copy(alpha = 0.1f)
+                    "in_progress" -> Color(0xFFF59E0B) to Color(0xFFF59E0B).copy(alpha = 0.1f)
+                    else -> TextSecondary to Color.Gray.copy(alpha = 0.1f)
+                }
+                
+                Surface(
+                    color = containerColor,
+                    shape = RoundedCornerShape(8.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, statusColor.copy(alpha = 0.3f))
+                ) {
+                    Text(
+                        text = item.status.uppercase(),
+                        color = statusColor,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                    )
+                }
             }
         }
     }
@@ -224,6 +254,7 @@ data class TripHistoryItem(
     val arrivalTime: String,
     val pickup: String,
     val dropoff: String,
+    val status: String,
     val polyline: String,
     val date: LocalDateTime,
     val plate: String
@@ -244,6 +275,7 @@ fun buildTripItem(doc: com.google.firebase.firestore.DocumentSnapshot): TripHist
             arrivalTime = data["time_of_arrival"] as? String ?: "--:--",
             pickup = data["pickup_location"] as? String ?: "Unknown",
             dropoff = data["dropoff_location"] as? String ?: "Unknown",
+            status = data["status"] as? String ?: "Completed",
             polyline = data["route_polyline"] as? String ?: "",
             date = ldt,
             plate = data["vehicle_plate"] as? String ?: "N/A"

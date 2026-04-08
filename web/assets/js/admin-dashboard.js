@@ -499,17 +499,18 @@ function initMap() {
         updateOnlineDisplay();
     }, 60000);
 
-    // Ghost driver cleanup: remove map markers whose heartbeat is older than 5 minutes
-    const GHOST_THRESHOLD_MS = 5 * 60 * 1000;
-    setInterval(() => {
-        const now = Date.now();
-        Object.keys(driverMarkers).forEach(id => {
-            const d = allDriversData[id];
-            if (!d) return;
-            const lastMs = d.last_updated
-                ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated)))
-                : 0;
-            if (!isNaN(lastMs) && lastMs > 0 && (now - lastMs) > GHOST_THRESHOLD_MS) {
+    // Ghost driver cleanup: remove map markers whose heartbeat is older than 15 minutes
+        // Relaxed threshold: 15 minutes to account for background app delays
+        const GHOST_THRESHOLD_MS = 15 * 60 * 1000;
+        setInterval(() => {
+            const now = Date.now();
+            Object.keys(driverMarkers).forEach(id => {
+                const d = allDriversData[id];
+                if (!d) return;
+                const lastMs = d.last_updated
+                    ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated)))
+                    : 0;
+                if (!isNaN(lastMs) && lastMs > 0 && (now - lastMs) > GHOST_THRESHOLD_MS) {
                 // Heartbeat expired — hide marker to prevent ghosting
                 driverMarkers[id].setVisible(false);
                 console.log(`[Ghost Cleanup] Hiding stale marker for driver ${d.driver_name || id} (last seen ${Math.round((now - lastMs) / 60000)}m ago)`);
@@ -542,7 +543,7 @@ function updateDriverState(id, data, source) {
         const lastMs = data.last_updated
             ? (data.last_updated.toMillis ? data.last_updated.toMillis() : (data.last_updated.seconds ? data.last_updated.seconds * 1000 : Number(data.last_updated)))
             : 0;
-        const isStale = isNaN(lastMs) || lastMs === 0 || (Date.now() - lastMs) > (5 * 60 * 1000);
+        const isStale = isNaN(lastMs) || lastMs === 0 || (Date.now() - lastMs) > (15 * 60 * 1000);
         
         if (isStale) {
             // Location is stale — update timestamp but keep marker hidden
@@ -569,7 +570,7 @@ function updateDriverState(id, data, source) {
     updateOnlineDisplay();
 }
 
-const HEARTBEAT_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes — ghost driver threshold
+const HEARTBEAT_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes — ghost driver threshold
 
 function refreshMarker(id) {
     const d = allDriversData[id];
@@ -592,13 +593,18 @@ function refreshMarker(id) {
         : 0;
     
     // ── Ghost Driver Guard ──────────────────────────────────────────────────────
-    // If heartbeat is older than 5 minutes, hide the marker and bail out.
+    // If heartbeat is older than 15 minutes, hide the marker and bail out.
     const heartbeatAge = now - lastActive;
     if (isNaN(lastActive) || lastActive === 0 || heartbeatAge > HEARTBEAT_EXPIRY_MS) {
         if (driverMarkers[id]) {
             driverMarkers[id].setVisible(false);
         }
         return; // Do not render a ghost marker
+    } else {
+        // Explicitly set to visible if within heartbeat range
+        if (driverMarkers[id]) {
+            driverMarkers[id].setVisible(true);
+        }
     }
     // ────────────────────────────────────────────────────────────────────────────
 
