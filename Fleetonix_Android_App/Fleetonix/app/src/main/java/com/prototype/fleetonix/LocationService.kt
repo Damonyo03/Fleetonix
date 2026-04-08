@@ -60,6 +60,8 @@ class LocationService : Service() {
     private lateinit var sensorManager: SensorManager
     private lateinit var wifiManager: WifiManager
     private val telematicsProcessor = TelematicsProcessor()
+    private var wakeLock: android.os.PowerManager.WakeLock? = null
+
 
     private var totalDistanceMetres = 0f
     private var lastLocation: android.location.Location? = null
@@ -325,7 +327,15 @@ class LocationService : Service() {
 
         startLocationUpdates()
 
+        // Acquire WakeLock to prevent CPU sleep during background tracking
+        val powerManager = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        wakeLock = powerManager.newWakeLock(
+            android.os.PowerManager.PARTIAL_WAKE_LOCK,
+            "Fleetonix:LocationTrackingLock"
+        ).apply { acquire() }
+
         return START_STICKY
+
     }
 
     private fun startLocationUpdates() {
@@ -349,7 +359,12 @@ class LocationService : Service() {
         super.onDestroy()
         fusedLocationClient.removeLocationUpdates(locationCallback)
         sensorManager.unregisterListener(sensorListener)
+
+        // Release WakeLock when service is stopped
+        wakeLock?.let { if (it.isHeld) it.release() }
+        wakeLock = null
     }
+
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         // App was swiped away, but service is in foreground and should persist.

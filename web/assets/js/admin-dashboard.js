@@ -23,6 +23,11 @@ let activeSchedulesData = {};      // driverId -> { stops:[], final:{}, tripId:"
 let driverPaths = {};              // driverId -> [{lat, lng, speedKmh}]
 let driverPolylineSegments = {};   // driverId -> [google.maps.Polyline] (colored segments)
 let activeQuickInfoDriverId = null; // currently pinned Quick Info driver
+let uiUpdateTimeout = null;
+let listUpdateTimeout = null;
+// Throttling for map markers
+let markerUpdateQueue = new Set();
+let markerUpdateTimeout = null;
 
 // Fix Issue 4: Properly declared module-level globals (avoids ReferenceError in strict mode)
 let selectedContractorId = null;
@@ -498,7 +503,28 @@ function initMap() {
         updateOnlineDriversList();
         updateOnlineDisplay();
     }, 30000);
+
+    // Global Cleanup Loop: Purge ghost drivers every 5 minutes
+    setInterval(() => {
+        const now = Date.now();
+        Object.keys(allDriversData).forEach(id => {
+            const d = allDriversData[id];
+            const lastActive = d.last_updated
+                ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated)))
+                : 0;
+            const lastActiveMs = Math.max(lastActive, d.last_location_push || 0);
+            
+            if (now - lastActiveMs > HEARTBEAT_EXPIRY_MS) {
+                if (driverMarkers[id]) {
+                    driverMarkers[id].setMap(null);
+                    delete driverMarkers[id];
+                }
+                // We keep metadata in allDriversData but marker is purged
+            }
+        });
+    }, 5 * 60 * 1000);
 }
+
 
 function updateDriverState(id, data, source) {
     if (!allDriversData[id]) {
@@ -528,11 +554,33 @@ function updateDriverState(id, data, source) {
     });
 
     if (source === 'realtime') {
-        refreshMarker(id);
+        markerUpdateQueue.add(id);
+        if (!markerUpdateTimeout) {
+            markerUpdateTimeout = setTimeout(() => {
+                markerUpdateQueue.forEach(uid => refreshMarker(uid));
+                markerUpdateQueue.clear();
+                markerUpdateTimeout = null;
+            }, 300); // 300ms batching for smooth map performance
+        }
     }
-    updateOnlineDriversList();
-    updateOnlineDisplay();
+    
+    // Throttled UI Updates
+    if (!listUpdateTimeout) {
+        listUpdateTimeout = setTimeout(() => {
+            updateOnlineDriversList();
+            listUpdateTimeout = null;
+        }, 1500); // Refresh list every 1.5s
+    }
+    
+    if (!uiUpdateTimeout) {
+        uiUpdateTimeout = setTimeout(() => {
+            updateOnlineDisplay();
+            uiUpdateTimeout = null;
+        }, 3000); // Refresh headers every 3s
+    }
 }
+
+
 
 const HEARTBEAT_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes — ghost driver threshold
 
