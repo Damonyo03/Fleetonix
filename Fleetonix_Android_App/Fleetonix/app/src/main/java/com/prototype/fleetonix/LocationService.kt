@@ -400,7 +400,20 @@ class LocationService : Service() {
                 
             firestore.collection("drivers").whereEqualTo("driver_email", driverDocId).get().addOnSuccessListener { snapshot ->
                 for (doc in snapshot.documents) {
-                    doc.reference.update("current_location_name", humanReadableAddress)
+                    val updates = hashMapOf<String, Any>(
+                        "current_location_name" to humanReadableAddress,
+                        "last_updated" to FieldValue.serverTimestamp()
+                    )
+                    
+                    // Increment continuous odometer if distance changed
+                    lastLocation?.let { last ->
+                        val distanceKm = last.distanceTo(location) / 1000.0
+                        if (distanceKm > 0) {
+                            updates["current_mileage"] = FieldValue.increment(distanceKm)
+                        }
+                    }
+                    
+                    doc.reference.update(updates)
                 }
             }
         }

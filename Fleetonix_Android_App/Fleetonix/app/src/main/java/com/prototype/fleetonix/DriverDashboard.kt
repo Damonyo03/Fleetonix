@@ -284,9 +284,10 @@ fun DriverDashboard(
 
     // NSCRP States
     var monthlyOTHours by remember { mutableStateOf(0.0) }
+    var liveOdometer by remember { mutableStateOf(0.0) }
     var startOdometer by remember { mutableStateOf("") }
     var endOdometer by remember { mutableStateOf("") }
-    var lastVehicleMileage by remember { mutableStateOf(0.0) }
+    var lastVehicleMileage by remember { mutableStateOf(0.0) } // Legacy ref for compatibility
     var showOdometerDialog by remember { mutableStateOf(false) }
     var showSignatureDialog by remember { mutableStateOf(false) }
     var signatureBase64 by remember { mutableStateOf<String?>(null) }
@@ -345,16 +346,17 @@ fun DriverDashboard(
                 Log.d("DriverDashboard", "Monthly OT Hours: $monthlyOTHours / 26.0")
             }
             
-        // 4. Fetch Last Vehicle Mileage and DTR status
-        db.collection("drivers").document(uid).get().addOnSuccessListener { doc ->
-            lastVehicleMileage = doc.getDouble("current_mileage") ?: 0.0
-            isTimedIn = doc.getBoolean("is_currently_timed_in") ?: false
-            
-            // If timed in, try to reconstruct lastTimeInObj from last_time_in field
-            val lastTimeInTS = doc.getTimestamp("last_time_in")
-            if (lastTimeInTS != null) {
-                lastTimeInObj = LocalDateTime.ofInstant(lastTimeInTS.toDate().toInstant(), ZoneId.systemDefault())
-                Log.d("DriverDashboard", "Recovered last time-in: $lastTimeInObj")
+        // 4. Real-time Odometer & DTR status listener
+        db.collection("drivers").document(uid).addSnapshotListener { doc, err ->
+            if (doc != null && doc.exists()) {
+                liveOdometer = doc.getDouble("current_mileage") ?: 0.0
+                lastVehicleMileage = liveOdometer
+                isTimedIn = doc.getBoolean("is_currently_timed_in") ?: false
+                
+                val lastTimeInTS = doc.getTimestamp("last_time_in")
+                if (lastTimeInTS != null) {
+                    lastTimeInObj = LocalDateTime.ofInstant(lastTimeInTS.toDate().toInstant(), ZoneId.systemDefault())
+                }
             }
         }
     }
@@ -1662,8 +1664,8 @@ fun DriverDashboard(
                         modifier = Modifier.weight(1f)
                     )
                     StatCard(
-                        title = "Distance",
-                        value = String.format("%.2f KM", totalDistanceMetres / 1000.0),
+                        title = "Odometer",
+                        value = String.format("%.2f KM", liveOdometer),
                         accentColor = AccentBlue,
                         modifier = Modifier.weight(1f)
                     )

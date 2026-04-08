@@ -129,8 +129,8 @@ function renderDrivers(docs) {
                         <strong>${driver.vehicle_assigned || 'N/A'}</strong>
                     </div>
                     <div class="stat-box">
-                        <span>Type</span>
-                        <strong>${(driver.car_details || '').match(/\d-seater/) ? driver.car_details.match(/\d-seater/)[0] : 'Standard'}</strong>
+                        <span>Odometer</span>
+                        <strong>${(driver.current_mileage || 0).toFixed(2)} KM</strong>
                     </div>
                 </div>
                 <div style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center;">
@@ -182,6 +182,13 @@ function getDriverFormContent(driver = {}) {
                 <label>Car Brand & Model</label>
                 <input type="text" id="modal_vehicle" class="form-input" value="${driver.vehicle_assigned || ''}" required placeholder="Toyota Innova">
             </div>
+            <div class="form-group">
+                <label>Actual Odometer (KM)</label>
+                <input type="number" step="0.01" id="modal_mileage" class="form-input" value="${driver.current_mileage || 0}" required>
+            </div>
+        </div>
+
+        <div class="form-grid-2">
             <div class="form-group">
                 <label>Car Type</label>
                 <select id="modal_type" class="form-input">
@@ -301,6 +308,7 @@ window.editDriver = async (id) => {
             car_details: document.getElementById('modal_type').value,
             license_number: document.getElementById('modal_license').value,
             driver_phone: document.getElementById('modal_phone').value,
+            current_mileage: parseFloat(document.getElementById('modal_mileage').value) || 0,
             updated_at: serverTimestamp()
         };
         if (croppedImg) updateData.profile_image_url = croppedImg;
