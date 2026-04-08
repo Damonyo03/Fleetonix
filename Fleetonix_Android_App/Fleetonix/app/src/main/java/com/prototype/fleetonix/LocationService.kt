@@ -155,22 +155,49 @@ class LocationService : Service() {
             sensorManager.registerListener(sensorListener, it, SensorManager.SENSOR_DELAY_NORMAL)
             
             shakeDetector = ShakeDetector {
-                Log.e("LocationService", "ShakeDetector triggered! Setting incident_active to true.")
+                Log.e("LocationService", "ShakeDetector triggered! Reporting accident incident.")
                 if (driverEmail.isNotEmpty()) {
                     val email = driverEmail
                     CoroutineScope(Dispatchers.IO).launch {
                         try {
                             val db = FirebaseFirestore.getInstance()
+                            
+                            // 1. Update Driver Profile for Map Visibility
                             db.collection("drivers")
                                 .whereEqualTo("driver_email", email)
                                 .get()
                                 .addOnSuccessListener { snapshot ->
                                     for (doc in snapshot.documents) {
-                                        doc.reference.update("incident_active", true)
+                                        val driverId = doc.id
+                                        val updateData = hashMapOf(
+                                            "incident_active" to true,
+                                            "incident_type" to "accident",
+                                            "last_incident_at" to FieldValue.serverTimestamp()
+                                        )
+                                        doc.reference.update(updateData)
+                                        
+                                        // 2. Log incident with context for dispatch
+                                        val incidentLog = hashMapOf(
+                                            "driver_id" to driverId,
+                                            "driver_email" to email,
+                                            "incident_type" to "accident",
+                                            "status" to "reported",
+                                            "timestamp" to FieldValue.serverTimestamp()
+                                        )
+                                        
+                                        // Attach location context if available
+                                        lastLocation?.let { loc ->
+                                            incidentLog["location"] = GeoPoint(loc.latitude, loc.longitude)
+                                        }
+                                        
+                                        db.collection("incidents").add(incidentLog)
+                                            .addOnSuccessListener {
+                                                Log.d("LocationService", "Incident logged successfully")
+                                            }
                                     }
                                 }
                         } catch (e: Exception) {
-                            Log.e("LocationService", "Failed to update incident_active", e)
+                            Log.e("LocationService", "Failed to report shake incident", e)
                         }
                     }
                 }

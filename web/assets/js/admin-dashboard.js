@@ -583,13 +583,13 @@ function refreshMarker(id) {
         // Hide standard marker if accident is active (since we show a blinking overlay instead)
         driverMarkers[id].setVisible((isOnline || status !== 'offline') && !isAccident && !isCompleted);
         
-        // Accident Blinking Implementation (CSS Animation via MapOverlay)
+        // Accident Blinking Implementation (Premium CSS Animation via MapOverlay)
         if (isAccident && !isCompleted) {
             if (!accidentOverlays[id]) {
                 accidentOverlays[id] = new MapOverlay(
                     pos, 
-                    '<div class="accident-marker-inner">!</div>', 
-                    'emergency-marker-container'
+                    '<div class="emergency-marker-inner">!</div>', 
+                    'blinking-emergency'
                 );
                 accidentOverlays[id].setMap(driversMap);
             } else {
@@ -693,6 +693,18 @@ function refreshMarker(id) {
         });
 
         marker.isBlinking = isAccident;
+        
+        // Initial setup for accident blinking if needed
+        if (isAccident && !isCompleted) {
+            if (!accidentOverlays[id]) {
+                accidentOverlays[id] = new MapOverlay(
+                    pos, 
+                    '<div class="emergency-marker-inner">!</div>', 
+                    'blinking-emergency'
+                );
+                accidentOverlays[id].setMap(driversMap);
+            }
+        }
         marker.driverData = d;
         marker.driverId = id;
         marker.addListener('click', () => {

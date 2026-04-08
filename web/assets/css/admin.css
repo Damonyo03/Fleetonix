@@ -702,31 +702,38 @@ body {
     font-weight: 800 !important;
 }
 /* ── Live Map Enhancements ────────────────────────────────────────────────── */
-@keyframes marker-accident-blink {
-    0% { background-color: #ff4d4d; box-shadow: 0 0 15px #ff4d4d; }
-    50% { background-color: #ffcc00; box-shadow: 0 0 25px #ffcc00; }
-    100% { background-color: #ff4d4d; box-shadow: 0 0 15px #ff4d4d; }
+/* ── Premium Emergency Alert (Blinking) ────────────────────────────────── */
+@keyframes emergency-blink-pulse {
+    0% { transform: translate(-50%, -50%) scale(1); opacity: 1; box-shadow: 0 0 20px rgba(255, 77, 77, 0.8); }
+    50% { transform: translate(-50%, -50%) scale(1.15); opacity: 0.8; box-shadow: 0 0 40px rgba(255, 204, 0, 0.9); }
+    100% { transform: translate(-50%, -50%) scale(1); opacity: 1; box-shadow: 0 0 20px rgba(255, 77, 77, 0.8); }
 }
 
-.accident-marker-container {
+.blinking-emergency {
     position: absolute;
-    width: 32px;
-    height: 32px;
+    width: 38px;
+    height: 38px;
+    background: radial-gradient(circle, #ffcc00 0%, #ff4d4d 100%);
+    border: 3px solid #ffffff;
     border-radius: 50%;
-    border: 3px solid #fff;
     display: flex;
     align-items: center;
     justify-content: center;
-    animation: marker-accident-blink 0.8s infinite;
+    color: #ffffff !important;
+    font-weight: 900;
+    font-size: 20px;
+    animation: emergency-blink-pulse 0.7s infinite ease-in-out;
     cursor: pointer;
+    z-index: 2000;
     transform: translate(-50%, -50%);
-    z-index: 1001;
+    pointer-events: auto;
 }
 
-.accident-marker-inner {
+.emergency-marker-inner {
     color: #fff;
-    font-size: 16px;
-    font-weight: 900;
+    font-size: 18px;
+    font-weight: 950;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 
 /* Numbered Stops (Circles) */
