@@ -430,10 +430,8 @@ class LocationService : Service() {
                 "last_updated" to FieldValue.serverTimestamp()
             )
 
-            // Also ping presence every few updates to keep status from going stale
-            if (System.currentTimeMillis() % 10 == 0L) { // Periodic ping
-                PresenceManager.updateStatus(true)
-            }
+            // Ping presence with every location update to keep status active on dashboard
+            PresenceManager.updateStatus(true, AppLifecycleObserver.isAppInBackground)
 
             driverRef.set(locationData, SetOptions.merge())
                 .addOnSuccessListener {

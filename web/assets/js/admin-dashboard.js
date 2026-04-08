@@ -820,8 +820,12 @@ function updateOnlineDriversList() {
     const onlineThreshold = 10 * 60 * 1000;
     
     const validDrivers = Object.values(allDriversData).filter(d => {
-        const lastUpdateMs = d.last_updated ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated))) : 0;
-        return !isNaN(lastUpdateMs) && (now - lastUpdateMs) < onlineThreshold;
+        const lastSeen = d.lastSeen ? (d.lastSeen.toMillis ? d.lastSeen.toMillis() : (d.lastSeen.seconds ? d.lastSeen.seconds * 1000 : Number(d.lastSeen))) : 0;
+        const lastUpdated = d.last_updated ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated))) : 0;
+        const lastPulse = d.last_location_push || 0;
+        
+        const effectiveLastSeen = Math.max(lastSeen, lastUpdated, lastPulse);
+        return !isNaN(effectiveLastSeen) && effectiveLastSeen > 0 && (now - effectiveLastSeen) < onlineThreshold;
     });
 
     const sortedDrivers = validDrivers.sort((a, b) => {
@@ -882,8 +886,13 @@ function updateOnlineDisplay() {
     
     let onlineCount = 0;
     Object.values(allDriversData).forEach(d => {
-        const lastUpdateMs = d.last_updated ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated))) : 0;
-        if (!isNaN(lastUpdateMs) && (now - lastUpdateMs) < tenMins) {
+        const lastSeen = d.lastSeen ? (d.lastSeen.toMillis ? d.lastSeen.toMillis() : (d.lastSeen.seconds ? d.lastSeen.seconds * 1000 : Number(d.lastSeen))) : 0;
+        const lastUpdated = d.last_updated ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated))) : 0;
+        const lastPulse = d.last_location_push || 0;
+        
+        const effectiveLastSeen = Math.max(lastSeen, lastUpdated, lastPulse);
+        
+        if (!isNaN(effectiveLastSeen) && effectiveLastSeen > 0 && (now - effectiveLastSeen) < tenMins) {
             onlineCount++;
         }
     });

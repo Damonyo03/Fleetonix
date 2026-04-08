@@ -56,7 +56,12 @@ object PresenceManager {
         val user = auth.currentUser ?: return
         val email = user.email ?: return
         
-        val updateData = mapOf("is_background" to isBackground, "last_active" to FieldValue.serverTimestamp())
+        val updateData = mapOf(
+            "is_background" to isBackground,
+            "status" to "online",
+            "lastSeen" to FieldValue.serverTimestamp(),
+            "last_active" to FieldValue.serverTimestamp()
+        )
 
         db.collection("drivers").whereEqualTo("driver_email", email).get()
             .addOnSuccessListener { snapshot ->
