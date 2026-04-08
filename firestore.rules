@@ -2,10 +2,22 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // driver_locations: Authenticated read, owner-only write
+    // driver_locations: Authenticated read, owner-only write (UID or Email)
     match /driver_locations/{userId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && (request.auth.uid == userId || request.auth.token.email == userId);
+    }
+
+    // accidents: Drivers can write reports; admins can read/update (acknowledge)
+    match /accidents/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
+    // vehicle_issues: Drivers can write issue reports
+    match /vehicle_issues/{docId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
     }
 
     // dtr_logs: Drivers can write their own clock-in/out records
@@ -32,12 +44,6 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
 
-    // vehicle_issues: Drivers can write issue reports
-    match /vehicle_issues/{docId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
-    }
-
     // schedules: Drivers can read and update trip phases
     match /schedules/{docId} {
       allow read: if request.auth != null;
@@ -48,12 +54,6 @@ service cloud.firestore {
     match /accredited_companies/{companyId} {
       allow read: if true;
       allow write: if request.auth != null && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super_admin');
-    }
-
-    // accidents: Drivers can write reports; admins can read/update (acknowledge)
-    match /accidents/{docId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
     }
 
     // notifications: Real-time alerts

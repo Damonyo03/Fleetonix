@@ -53,15 +53,16 @@ fun TripHistoryScreen(
         isLoading = true
         
         // Listen to BOTH UID and Email queries to ensure no records (like the 14.07km one) are missed
-        // Query including multiple statuses: completed, cancelled, rejected
+        val validStatuses = listOf("completed", "Completed", "cancelled", "Cancelled", "rejected", "Rejected")
+        
         val uidQuery = db.collection("trip_tickets")
             .whereEqualTo("driver_uid", uid)
-            .whereIn("status", listOf("completed", "cancelled", "rejected"))
+            .whereIn("status", validStatuses)
             .orderBy("created_at", Query.Direction.DESCENDING)
 
         val emailQuery = db.collection("trip_tickets")
             .whereEqualTo("driver_email", emailPruned)
-            .whereIn("status", listOf("completed", "cancelled", "rejected"))
+            .whereIn("status", validStatuses)
             .orderBy("created_at", Query.Direction.DESCENDING)
 
         Log.d("TripHistory", "Starting queries for UID: $uid and Email: $emailPruned")

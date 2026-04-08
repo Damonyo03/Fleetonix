@@ -744,7 +744,7 @@ fun DriverDashboard(
                 val schedule = nextSchedule
 
                 val accidentData = hashMapOf(
-                    "driver_email" to user?.email,
+                    "driver_email" to user?.email?.lowercase()?.trim(),
                     "schedule_id" to (schedule?.scheduleId ?: 0),
                     "firebase_schedule_id" to schedule?.docId,
                     "latitude" to lat,
@@ -991,7 +991,7 @@ fun DriverDashboard(
                     val uid = auth.currentUser?.uid ?: ""
                     val email = auth.currentUser?.email?.lowercase()?.trim() ?: ""
                     if (uid.isNotEmpty()) {
-                        db.collection("driver_locations").document(uid).set(
+                        db.collection("driver_locations").document(email).set(
                             mapOf(
                                 "driver_email" to email,
                                 "current_latitude" to loc.latitude,
@@ -1150,7 +1150,7 @@ fun DriverDashboard(
                 val schedule = nextSchedule
 
                 val issueData = hashMapOf(
-                    "driver_email" to user?.email,
+                    "driver_email" to user?.email?.lowercase()?.trim(),
                     "schedule_id" to (schedule?.scheduleId ?: 0),
                     "firebase_schedule_id" to schedule?.docId,
                     "issue_type" to issueType,
@@ -2749,7 +2749,7 @@ fun DriverDashboard(
                                 val addr = getAddressFromLocation(currentLatitude, currentLongitude)
                                 val logData = hashMapOf(
                                     "driver_uid" to uid,
-                                    "driver_email" to (auth.currentUser?.email ?: ""),
+                                    "driver_email" to (auth.currentUser?.email?.lowercase()?.trim() ?: ""),
                                     "driver_name" to liveDriverName,
                                     "action" to "time_in",
                                     "timestamp" to FieldValue.serverTimestamp(),

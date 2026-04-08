@@ -39,17 +39,40 @@ fun DTRHistoryScreen(
     var isLoading by remember { mutableStateOf(true) }
 
     LaunchedEffect(uid) {
-        if (uid != null) {
-            db.collection("dtr_logs")
-                .whereEqualTo("driver_uid", uid)
-                .orderBy("timestamp", Query.Direction.DESCENDING)
-                .limit(50)
-                .addSnapshotListener { snapshot, e ->
-                    isLoading = false
-                    if (e == null && snapshot != null) {
-                        logs = snapshot.documents.map { it.data ?: emptyMap() }
+        val email = auth.currentUser?.email?.lowercase()?.trim()
+        if (uid != null || email != null) {
+            isLoading = true
+            
+            // Listen to both UID and Email
+            val uidSub = if (uid != null) {
+                db.collection("dtr_logs")
+                    .whereEqualTo("driver_uid", uid)
+                    .orderBy("timestamp", Query.Direction.DESCENDING)
+                    .limit(50)
+                    .addSnapshotListener { snapshot, _ ->
+                        if (snapshot != null) {
+                            val uidLogs = snapshot.documents.map { it.data ?: emptyMap() }
+                            logs = (logs + uidLogs).distinctBy { it["timestamp"].toString() + it["action"].toString() }
+                                .sortedByDescending { (it["timestamp"] as? com.google.firebase.Timestamp)?.seconds ?: 0L }
+                            isLoading = false
+                        }
                     }
-                }
+            } else null
+
+            val emailSub = if (email != null) {
+                db.collection("dtr_logs")
+                    .whereEqualTo("driver_email", email)
+                    .orderBy("timestamp", Query.Direction.DESCENDING)
+                    .limit(50)
+                    .addSnapshotListener { snapshot, _ ->
+                        if (snapshot != null) {
+                            val emailLogs = snapshot.documents.map { it.data ?: emptyMap() }
+                            logs = (logs + emailLogs).distinctBy { it["timestamp"].toString() + it["action"].toString() }
+                                .sortedByDescending { (it["timestamp"] as? com.google.firebase.Timestamp)?.seconds ?: 0L }
+                            isLoading = false
+                        }
+                    }
+            } else null
         } else {
             isLoading = false
         }

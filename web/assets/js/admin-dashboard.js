@@ -489,6 +489,9 @@ function initMap() {
                 refreshMarker(resolvedId);
                 return;
             }
+            if (!data.driver_email && docId.includes('@')) {
+                data.driver_email = docId;
+            }
             updateDriverState(resolvedId, data, 'location');
         });
     });
@@ -561,7 +564,8 @@ function updateDriverState(id, data, source) {
             wifi_ssid: data.wifi_ssid,
             last_updated: data.last_updated,
             is_background: data.is_background !== undefined ? data.is_background : existing.is_background,
-            current_status: existingStatus === 'offline' ? 'available' : existingStatus
+            current_status: existingStatus === 'offline' ? 'available' : existingStatus,
+            driver_email: data.driver_email?.toLowerCase()?.trim() || existing.driver_email || (id.includes('@') ? id : null)
         });
     }
     
@@ -874,9 +878,9 @@ function updateOnlineDriversList() {
         const vehicleInfo = driver.vehicle_assigned ? `${driver.vehicle_assigned}${driver.car_color ? ' (' + driver.car_color + ')' : ''}${driver.plate_number ? ' · ' + driver.plate_number : ''}` : '';
         const email = driver.driver_email?.toLowerCase()?.trim();
 
-        const displayName = (driver.driver_name && driver.driver_name !== 'Loading...' && driver.driver_name !== 'Loading Driver...') 
+        const displayName = (driver.driver_name && !['Loading...', 'Fleet Driver', 'Loading Driver...'].includes(driver.driver_name)) 
             ? driver.driver_name 
-            : (driverDTRStatus[email]?.name || 'Unnamed Driver');
+            : (driverDTRStatus[email]?.name || driver.driver_email || 'Fleet Driver');
 
         return `
             <div class="driver-item ${status === 'offline' ? 'offline' : ''} ${isLive ? 'pulse' : ''}" onclick="focusDriver('${driver.id}')" title="${vehicleInfo}">
