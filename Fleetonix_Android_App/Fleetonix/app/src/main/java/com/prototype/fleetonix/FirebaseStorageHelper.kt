@@ -46,14 +46,27 @@ object FirebaseStorageHelper {
      */
     suspend fun uploadSignature(bitmap: Bitmap, tripId: String): String {
         val storage = FirebaseStorage.getInstance()
-        val fileName = "signatures/${tripId}_${UUID.randomUUID()}.jpg"
+        val id = if (tripId.isBlank()) "unknown_trip_${System.currentTimeMillis()}" else tripId
+        val fileName = "signatures/${id}_${UUID.randomUUID()}.jpg"
+        
+        android.util.Log.d("FirebaseStorageHelper", "Attempting upload to: $fileName")
+        
         val storageRef = storage.reference.child(fileName)
 
         val baos = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.JPEG, 90, baos)
         val data = baos.toByteArray()
 
-        val uploadTask = storageRef.putBytes(data).await()
-        return storageRef.downloadUrl.await().toString()
+        try {
+            val uploadTask = storageRef.putBytes(data).await()
+            android.util.Log.d("FirebaseStorageHelper", "Upload successful: ${uploadTask.metadata?.path}")
+            
+            val url = storageRef.downloadUrl.await().toString()
+            android.util.Log.d("FirebaseStorageHelper", "Download URL generated: $url")
+            return url
+        } catch (e: Exception) {
+            android.util.Log.e("FirebaseStorageHelper", "Upload failed for $fileName", e)
+            throw e
+        }
     }
 }

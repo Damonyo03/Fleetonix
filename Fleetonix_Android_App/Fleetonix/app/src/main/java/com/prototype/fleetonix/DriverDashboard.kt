@@ -70,6 +70,7 @@ fun TripTicketDialog(
     timeOfArrival: String,
     totalKm: Double,
     routePoints: List<LatLng>,
+    segments: List<DriverSegment>? = null,
     isSubmitting: Boolean,
     onConfirm: () -> Unit
 ) {
@@ -121,12 +122,41 @@ fun TripTicketDialog(
                     TicketRow("Arrival", timeOfArrival)
                 }
 
-                Text(
-                    "TRIP ROUTE",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextSecondary,
-                    fontWeight = FontWeight.Bold
-                )
+                    Text(
+                        "TRIP ROUTE (TOTAL ${"%.2f".format(totalKm)} KM)",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                if (!segments.isNullOrEmpty()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Midnight, RoundedCornerShape(16.dp))
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        segments.forEachIndexed { index, segment ->
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(modifier = Modifier.size(6.dp).background(AccentTeal, androidx.compose.foundation.shape.CircleShape))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("P${index + 1}: ${segment.pickup}", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(modifier = Modifier.size(6.dp).background(AccentOrange, androidx.compose.foundation.shape.CircleShape))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("D${index + 1}: ${segment.dropoff}", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                                }
+                                if (index < segments.size - 1) {
+                                    Divider(color = Color.White.copy(alpha = 0.05f), modifier = Modifier.padding(vertical = 4.dp))
+                                }
+                            }
+                        }
+                    }
+                } else {
 
                 // Map Route Visualization
                 if (routePoints.isNotEmpty()) {
@@ -192,18 +222,6 @@ fun TripTicketDialog(
                     }
                 }
 
-                // Total Distance Card
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Midnight, RoundedCornerShape(16.dp))
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("TOTAL DISTANCE", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-                        Text("${"%.2f".format(totalKm)} KM", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = AccentTeal)
-                    }
                 }
 
                 // Confirm Button
@@ -2628,6 +2646,7 @@ fun DriverDashboard(
                 timeOfArrival = completedAt ?: "--:--",
                 totalKm = totalDistanceMetres / 1000.0,
                 routePoints = actualRoutePoints.toList(),
+                segments = nextSchedule?.segments,
                 isSubmitting = isCompletingTrip,
                 onConfirm = {
                     val docId = targetTripId ?: return@TripTicketDialog
@@ -2674,6 +2693,7 @@ fun DriverDashboard(
                                 "time_of_arrival" to (completedAt ?: ""),
                                 "total_km" to (totalDistanceMetres / 1000.0),
                                 "route_polyline" to GoogleMapsService.encodePolyline(actualRoutePoints),
+                                "segments" to (nextSchedule?.segments?.map { mapOf("pickup" to it.pickup, "dropoff" to it.dropoff) } ?: emptyList<Map<String, String>>()),
                                 "status" to "completed",
                                 "completed_at" to FieldValue.serverTimestamp()
                             )

@@ -166,6 +166,7 @@ fun TripHistoryScreen(
             timeOfArrival = ticket.arrivalTime,
             totalKm = ticket.totalKm,
             routePoints = routePoints,
+            segments = ticket.segments,
             isSubmitting = false,
             onConfirm = { selectedTicket = null }
         )
@@ -253,7 +254,8 @@ data class TripHistoryItem(
     val status: String,
     val polyline: String,
     val date: LocalDateTime,
-    val plate: String
+    val plate: String,
+    val segments: List<DriverSegment> = emptyList()
 )
 
 @RequiresApi(Build.VERSION_CODES.O)
@@ -274,7 +276,10 @@ fun buildTripItem(doc: com.google.firebase.firestore.DocumentSnapshot): TripHist
             status = data["status"] as? String ?: "Completed",
             polyline = data["route_polyline"] as? String ?: "",
             date = ldt,
-            plate = data["vehicle_plate"] as? String ?: "N/A"
+            plate = data["vehicle_plate"] as? String ?: "N/A",
+            segments = (data["segments"] as? List<Map<String, String>>)?.map { 
+                DriverSegment(pickup = it["pickup"], dropoff = it["dropoff"])
+            } ?: emptyList()
         )
     } catch (e: Exception) {
         null
