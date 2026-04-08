@@ -31,7 +31,7 @@ onAuthStateChanged(auth, async (user) => {
 
     const userDoc = await getDoc(doc(db, "users", user.uid));
     currentUserData = userDoc.exists() ? userDoc.data() : { role: 'admin' };
-    document.getElementById('adminDisplayName').textContent = currentUserData.full_name || "Administrator";
+    // initLayout handles header display
 
     initDriverList();
 });

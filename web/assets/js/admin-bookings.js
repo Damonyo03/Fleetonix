@@ -91,6 +91,9 @@ async function showAdminBookingModal() {
 
 async function showCreateBookingModal(clients) {
     const today = new Date().toISOString().split('T')[0];
+    const tomorrow = new Date();
+    tomorrow.setDate(new Date().getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
 
     const content = `
         <div class="form-group">
@@ -338,7 +341,7 @@ async function showCreateBookingModal(clients) {
 
             // 3. Notification (Minimized)
             await addDoc(collection(db, "notifications"), {
-                user_id: clientId,
+                user_id: 'guest',
                 title: 'Driver Assigned',
                 message: `Driver ${driverName} has been assigned to your booking #${bookingId}.`,
                 type: 'assignment',
