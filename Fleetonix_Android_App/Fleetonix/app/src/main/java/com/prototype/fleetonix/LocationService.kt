@@ -41,6 +41,17 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
+/**
+ * LocationService is the backbone of the Fleetonix driver-side logic.
+ * 
+ * CORE FUNCTIONALITY:
+ * 1. PERSISTENCE: Runs as a Foreground Service to ensure location updates continue even when 
+ *    the application is minimized or the screen is off.
+ * 2. SYNC: Pushes real-time coordinates, speed, and heading to the 'driver_locations' collection.
+ * 3. PRESENCE: Periodically re-asserts the driver's 'online' status to the 'drivers' collection
+ *    to prevent the Admin Dashboard from timing out the driver.
+ * 4. TELEMATICS: Calculates G-Force and smooths speed data using a Kalman Filter (via TelematicsProcessor).
+ */
 class LocationService : Service() {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient

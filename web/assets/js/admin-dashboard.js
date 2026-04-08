@@ -439,8 +439,14 @@ function initMap() {
     // ────────────────────────────────────────────────────────────────────────
     // NEW UNIFIED REAL-TIME DRIVER TRACKING (Standardized logic)
     // ────────────────────────────────────────────────────────────────────────
+    /**
+     * REAL-TIME DRIVER MONITORING:
+     * We use a Firestore onSnapshot listener to receive push updates from the 'drivers' collection.
+     * The query filters for status == 'online', which is asserted by the driver app's 
+     * LocationService and PresenceManager.
+     */
     const onlineDriversQuery = query(collection(db, "drivers"), where("status", "==", "online"));
-    onSnapshot(onlineDriversQuery, (snapshot) => {
+    unsubscribeDrivers = onSnapshot(onlineDriversQuery, (snapshot) => {
         snapshot.docChanges().forEach(change => {
             const id = change.doc.id; // UID
             const data = change.doc.data();
