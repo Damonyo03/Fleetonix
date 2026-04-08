@@ -2083,7 +2083,7 @@ fun DriverDashboard(
                                                         val nowStr = LocalDateTime.now().toString()
                                                         val logData = hashMapOf(
                                                             "driver_uid" to uid,
-                                                            "driver_email" to email ?: "",
+                                                            "driver_email" to (email ?: ""),
                                                             "driver_name" to liveDriverName,
                                                             "accredited_company_id" to "jettsan",
                                                             "action" to "time_in",
@@ -2273,7 +2273,7 @@ fun DriverDashboard(
                                                          
                                                          val logData = hashMapOf(
                                                              "driver_uid" to uid,
-                                                             "driver_email" to email ?: "",
+                                                             "driver_email" to (email ?: ""),
                                                              "driver_name" to liveDriverName,
                                                              "accredited_company_id" to "jettsan",
                                                              "action" to "time_out",
