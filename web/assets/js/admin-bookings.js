@@ -183,7 +183,7 @@ async function showCreateBookingModal(clients) {
         </div>
 
         <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px; background: rgba(0, 212, 255, 0.05); padding: 12px; border-radius: 8px; border: 1px dashed var(--accent-blue);">
-            <input type="checkbox" id="modal_is_official" style="width: auto;">
+            <input type="checkbox" id="modal_is_official" style="width: auto;" checked>
             <label for="modal_is_official" style="margin: 0; cursor: pointer; color: var(--accent-blue); font-weight: 700;">Official Trip (NSCRP Requirement)</label>
         </div>
 
@@ -344,6 +344,17 @@ async function showCreateBookingModal(clients) {
                 user_id: 'guest',
                 title: 'Driver Assigned',
                 message: `Driver ${driverName} has been assigned to your booking #${bookingId}.`,
+                type: 'assignment',
+                is_read: false,
+                booking_id: bookingId,
+                timestamp: serverTimestamp()
+            });
+            
+            // 4. Notification to DRIVER specifically (for Android popup)
+            await addDoc(collection(db, "notifications"), {
+                user_id: driverId,
+                title: 'New Trip Assignment',
+                message: `You have been assigned to trip #${bookingId}. Please check My Assignments.`,
                 type: 'assignment',
                 is_read: false,
                 booking_id: bookingId,

@@ -2,6 +2,12 @@ package com.prototype.fleetonix
 
 import android.os.Build
 import android.util.Log
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import androidx.core.app.NotificationCompat
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
@@ -59,6 +65,7 @@ fun AuthFlow() {
     var feedData by remember { mutableStateOf<List<DriverSchedule>>(emptyList()) }
     var feedLoading by remember { mutableStateOf(false) }
     var feedError by remember { mutableStateOf<String?>(null) }
+
     
     var showForgotPassword by rememberSaveable { mutableStateOf(false) }
     var showForgotPasswordOTP by rememberSaveable { mutableStateOf(false) }
@@ -236,6 +243,39 @@ fun AuthFlow() {
         onDispose {
             listener.remove()
         }
+    }
+
+    // Real-time listener for NOTIFICATIONS collection
+    DisposableEffect(currentUser, userRole) {
+        val user = currentUser
+        if (user == null || userRole != "driver") return@DisposableEffect onDispose {}
+
+        val uid = user.uid
+        val listener = db.collection("notifications")
+            .whereEqualTo("user_id", uid)
+            .whereEqualTo("is_read", false)
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .limit(1)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e("AuthFlow", "Notification listener failed", error)
+                    return@addSnapshotListener
+                }
+
+                if (snapshot != null && !snapshot.isEmpty) {
+                    val doc = snapshot.documents.first()
+                    val title = doc.getString("title") ?: "New Notification"
+                    val message = doc.getString("message") ?: ""
+                    
+                    // Show System Notification
+                    showSystemNotification(context, title, message)
+                    
+                    // Mark as read immediately to prevent loop/duplicate triggers
+                    doc.reference.update("is_read", true)
+                }
+            }
+
+        onDispose { listener.remove() }
     }
 
     val currentState = when {
@@ -444,4 +484,40 @@ fun AuthFlow() {
             }
         }
     }
+}
+
+private fun showSystemNotification(context: Context, title: String, message: String) {
+    val channelId = "ASSIGNMENT_NOTIFICATIONS"
+    val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val channel = NotificationChannel(
+            channelId,
+            "Assignments",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Notifications for new trip assignments"
+        }
+        notificationManager.createNotificationChannel(channel)
+    }
+
+    val intent = Intent(context, MainActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+    }
+    
+    val pendingIntent = PendingIntent.getActivity(
+        context, 0, intent, 
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+
+    val notification = NotificationCompat.Builder(context, channelId)
+        .setSmallIcon(R.mipmap.ic_launcher)
+        .setContentTitle(title)
+        .setContentText(message)
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
+        .setAutoCancel(true)
+        .setContentIntent(pendingIntent)
+        .build()
+
+    notificationManager.notify(System.currentTimeMillis().toInt(), notification)
 }
