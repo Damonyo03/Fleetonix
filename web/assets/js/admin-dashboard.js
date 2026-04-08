@@ -481,7 +481,7 @@ function initMap() {
             // Resolve to UID if possible
             let resolvedId = emailToUidMap[emailKey];
             
-            // If not mapped, search in allDriversData for a matching email
+            // If not yet mapped, search in allDriversData for a matching email
             if (!resolvedId) {
                 const existingDriver = Object.values(allDriversData).find(d => 
                     d.driver_email?.toLowerCase()?.trim() === emailKey
@@ -489,8 +489,8 @@ function initMap() {
                 if (existingDriver) {
                     resolvedId = existingDriver.id;
                     emailToUidMap[emailKey] = resolvedId;
-                    console.log(`[Merging] Discovered mapping for ${emailKey} -> ${resolvedId} via reverse lookup`);
                 } else {
+                    // Critical: Fallback to emailKey so location is NOT lost if UID mapping isn't ready
                     resolvedId = emailKey;
                 }
             }
@@ -582,7 +582,8 @@ function updateDriverState(id, data, source) {
             last_updated: data.last_updated,
             is_background: data.is_background !== undefined ? data.is_background : existing.is_background,
             current_status: existingStatus === 'offline' ? 'available' : existingStatus,
-            driver_email: data.driver_email?.toLowerCase()?.trim() || existing.driver_email || (id.includes('@') ? id : null)
+            driver_email: data.driver_email?.toLowerCase()?.trim() || existing.driver_email || (id.includes('@') ? id : null),
+            last_location_push: Date.now() // Local timestamp for immediate heartbeat check
         });
     }
     
@@ -615,14 +616,16 @@ function refreshMarker(id) {
     
     // ── Ghost Driver Guard ──────────────────────────────────────────────────────
     // If heartbeat is older than 15 minutes, hide the marker and bail out.
-    const heartbeatAge = now - lastActive;
-    if (isNaN(lastActive) || lastActive === 0 || heartbeatAge > HEARTBEAT_EXPIRY_MS) {
+    // Use either the Firestore timestamp or our local last_location_push for responsiveness.
+    const lastActiveMs = Math.max(lastActive, d.last_location_push || 0);
+    const heartbeatAge = now - lastActiveMs;
+    
+    if (isNaN(lastActiveMs) || lastActiveMs === 0 || heartbeatAge > HEARTBEAT_EXPIRY_MS) {
         if (driverMarkers[id]) {
             driverMarkers[id].setVisible(false);
         }
-        return; // Do not render a ghost marker
+        return; 
     } else {
-        // Explicitly set to visible if within heartbeat range
         if (driverMarkers[id]) {
             driverMarkers[id].setVisible(true);
         }

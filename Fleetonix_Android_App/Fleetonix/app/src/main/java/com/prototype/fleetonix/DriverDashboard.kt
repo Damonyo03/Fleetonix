@@ -994,7 +994,8 @@ fun DriverDashboard(
         if (hasLocationPermission(context)) {
             val startIntent = Intent(context, LocationService::class.java).apply {
                 action = LocationService.ACTION_START
-                putExtra(LocationService.EXTRA_DRIVER_ID, auth.currentUser?.uid)
+                putExtra(LocationService.EXTRA_DRIVER_UID, auth.currentUser?.uid)
+                putExtra(LocationService.EXTRA_DRIVER_EMAIL, auth.currentUser?.email?.lowercase()?.trim())
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(startIntent)
@@ -2080,7 +2081,8 @@ fun DriverDashboard(
                                             // Notify service to start accumulating NEW route
                                             val startTripIntent = Intent(context, LocationService::class.java).apply {
                                                 action = LocationService.ACTION_START_TRIP
-                                                putExtra(LocationService.EXTRA_DRIVER_ID, auth.currentUser?.email?.lowercase()?.trim() ?: "")
+                                                putExtra(LocationService.EXTRA_DRIVER_UID, auth.currentUser?.uid)
+                                                putExtra(LocationService.EXTRA_DRIVER_EMAIL, auth.currentUser?.email?.lowercase()?.trim() ?: "")
                                             }
                                             context.startService(startTripIntent)
 
@@ -2280,7 +2282,8 @@ fun DriverDashboard(
                                                     // Start high-accuracy tracking
                                                     val startTripIntent = Intent(context, LocationService::class.java).apply {
                                                         action = LocationService.ACTION_START_TRIP
-                                                        putExtra(LocationService.EXTRA_DRIVER_ID, auth.currentUser?.email?.lowercase()?.trim() ?: "")
+                                                        putExtra(LocationService.EXTRA_DRIVER_UID, auth.currentUser?.uid)
+                                                        putExtra(LocationService.EXTRA_DRIVER_EMAIL, auth.currentUser?.email?.lowercase()?.trim() ?: "")
                                                     }
                                                     context.startService(startTripIntent)
                                                     
@@ -2549,7 +2552,8 @@ fun DriverDashboard(
                                                 // Notify service to start accumulating NEW route
                                                 val startTripIntent = Intent(context, LocationService::class.java).apply {
                                                     action = LocationService.ACTION_START_TRIP
-                                                    putExtra(LocationService.EXTRA_DRIVER_ID, auth.currentUser?.email?.lowercase()?.trim() ?: "")
+                                                    putExtra(LocationService.EXTRA_DRIVER_UID, auth.currentUser?.uid)
+                                                    putExtra(LocationService.EXTRA_DRIVER_EMAIL, auth.currentUser?.email?.lowercase()?.trim() ?: "")
                                                 }
                                                 context.startService(startTripIntent)
                                                 db.collection("schedules").document(docId).update(

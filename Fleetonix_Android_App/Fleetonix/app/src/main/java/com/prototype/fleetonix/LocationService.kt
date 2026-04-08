@@ -50,7 +50,8 @@ class LocationService : Service() {
 
     private var totalDistanceMetres = 0f
     private var lastLocation: android.location.Location? = null
-    private var driverDocId: String? = null
+    private var driverUid: String = ""
+    private var driverEmail: String = ""
     private val actualRoutePoints = mutableListOf<com.google.android.gms.maps.model.LatLng>()
     private var isTripActive = false
     
@@ -67,7 +68,9 @@ class LocationService : Service() {
         const val EXTRA_SPEED = "extra_speed"
         const val EXTRA_ACCURACY = "extra_accuracy"
         const val EXTRA_BEARING = "extra_bearing"
-        const val EXTRA_DRIVER_ID = "extra_driver_id"
+        const val EXTRA_DRIVER_ID = "extra_driver_id" // Legacy, keep for safety
+        const val EXTRA_DRIVER_UID = "extra_driver_uid"
+        const val EXTRA_DRIVER_EMAIL = "extra_driver_email"
         const val ACTION_START = "ACTION_START"
         const val ACTION_STOP = "ACTION_STOP"
         
@@ -111,9 +114,9 @@ class LocationService : Service() {
                     lastLocation = location
 
                     // 3. Push to Firestore for Admin Dashboard (Real-time tracking)
-                    driverDocId?.let { id ->
-                        updateLocationInFirestore(id, location)
-                        pushToVehicleLogs(id, location)
+                    if (driverEmail.isNotEmpty()) {
+                        updateLocationInFirestore(driverEmail, location)
+                        pushToVehicleLogs(driverEmail, location)
                     }
 
                     // 4. Broadcast for internal UI (DriverDashboard)
@@ -209,16 +212,30 @@ class LocationService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val extraDriverId = intent?.getStringExtra(EXTRA_DRIVER_ID)
-        if (extraDriverId != null) {
-            driverDocId = extraDriverId.lowercase().trim()
-            Log.d("LocationService", "Started tracking for driver email: $driverDocId")
+        val extraUid = intent?.getStringExtra(EXTRA_DRIVER_UID)
+        val extraEmail = intent?.getStringExtra(EXTRA_DRIVER_EMAIL)
+        val extraLegacyId = intent?.getStringExtra(EXTRA_DRIVER_ID)
+
+        // Standardize: UID for profile/stats, Email for real-time map tracking
+        if (extraUid != null) driverUid = extraUid.trim()
+        if (extraEmail != null) driverEmail = extraEmail.lowercase().trim()
+        
+        // Fallback for legacy calls
+        if (driverUid.isEmpty() && extraLegacyId != null && !extraLegacyId.contains("@")) {
+            driverUid = extraLegacyId.trim()
+        }
+        if (driverEmail.isEmpty() && extraLegacyId != null && extraLegacyId.contains("@")) {
+            driverEmail = extraLegacyId.lowercase().trim()
+        }
+
+        if (driverEmail.isNotEmpty()) {
+            Log.d("LocationService", "Tracking active for: $driverEmail [UID: ${driverUid.ifEmpty { "Pending" }}]")
         }
 
         when (intent?.action) {
             ACTION_START -> {
                 PresenceManager.updateStatus(true)
-                Log.d("LocationService", "Service started: Driver $driverDocId is now ONLINE")
+                Log.d("LocationService", "Service started: Driver $driverEmail is now ONLINE")
             }
             ACTION_STOP -> {
                 isTripActive = false
@@ -305,7 +322,7 @@ class LocationService : Service() {
     }
 
     private fun updateDriverStatus(status: String) {
-        val email = driverDocId ?: return
+        val email = driverEmail.ifEmpty { return }
         val firestore = FirebaseFirestore.getInstance()
         
         // Query by email since drivers collection uses UID as document ID
@@ -341,12 +358,12 @@ class LocationService : Service() {
      * this writes to the local cache immediately and automatically syncs to the backend 
      * once an internet connection is restored.
      * 
-     * @param driverDocId The document ID (or email depending on your structure) for the driver.
+     * @param driverEmail The email for the driver (used for driver_locations doc ID).
      * @param location The Location object received from FusedLocationProviderClient.
      */
-    private fun updateLocationInFirestore(driverDocId: String, location: android.location.Location) {
+    private fun updateLocationInFirestore(driverEmail: String, location: android.location.Location) {
         val firestore = FirebaseFirestore.getInstance()
-        val driverRef = firestore.collection("driver_locations").document(driverDocId)
+        val driverRef = firestore.collection("driver_locations").document(driverEmail)
 
         CoroutineScope(Dispatchers.IO).launch {
             var humanReadableAddress = "Lat: ${String.format(Locale.US, "%.4f", location.latitude)}, Lng: ${String.format(Locale.US, "%.4f", location.longitude)}"
@@ -398,8 +415,17 @@ class LocationService : Service() {
                     Log.e("LocationService", "Error writing to driver_locations", e)
                 }
                 
-            firestore.collection("drivers").whereEqualTo("driver_email", driverDocId).get().addOnSuccessListener { snapshot ->
-                for (doc in snapshot.documents) {
+            // Determine how to find the driver document (prefer UID if available)
+            val driverColl = firestore.collection("drivers")
+            val driverTask = if (driverUid.isNotEmpty()) {
+                driverColl.document(driverUid).get()
+            } else {
+                driverColl.whereEqualTo("driver_email", driverEmail).get().continueWith { it.result.documents.firstOrNull() }
+            }
+
+            driverTask.addOnSuccessListener { result ->
+                val doc = if (result is DocumentSnapshot) result else result as? DocumentSnapshot
+                if (doc != null && doc.exists()) {
                     val updates = hashMapOf<String, Any>(
                         "current_location_name" to humanReadableAddress,
                         "last_updated" to FieldValue.serverTimestamp()
