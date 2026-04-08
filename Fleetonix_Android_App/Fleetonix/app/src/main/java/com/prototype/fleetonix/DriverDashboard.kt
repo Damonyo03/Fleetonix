@@ -2663,7 +2663,8 @@ fun DriverDashboard(
                                 "total_km_travelled" to (totalDistanceMetres / 1000.0),
                                 "vehicle_type" to (session.driver?.vehicleAssigned ?: ""),
                                 "plate_number" to (session.driver?.plateNumber ?: ""),
-                                "route_polyline" to GoogleMapsService.encodePolyline(actualRoutePoints)
+                                "route_polyline" to GoogleMapsService.encodePolyline(actualRoutePoints),
+                                "segments" to (nextSchedule?.segments?.map { mapOf("pickup" to it.pickup, "dropoff" to it.dropoff) } ?: emptyList<Map<String, String>>())
                             )
                             
                             db.collection("schedules").document(docId).update(tripData as Map<String, Any>).await()

@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.android.gms.maps.model.LatLng
@@ -176,45 +177,18 @@ fun TripHistoryScreen(
 @Composable
 fun HistoryCard(item: TripHistoryItem, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { onClick() },
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onClick() },
         colors = CardDefaults.cardColors(containerColor = CardBlue),
         shape = RoundedCornerShape(16.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, Midnight.copy(alpha = 0.5f))
     ) {
         Column(Modifier.padding(16.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = item.date.format(DateTimeFormatter.ofPattern("MMM dd, yyyy")),
+                    text = item.date.format(DateTimeFormatter.ofPattern("MMM dd, yyyy · HH:mm")),
                     color = TextSecondary,
                     fontSize = 12.sp
                 )
-                Text(
-                    text = "${"%.2f".format(item.totalKm)} KM",
-                    color = AccentTeal,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
-                )
-            }
-            Spacer(Modifier.height(12.dp))
-            Text(item.passengerName, color = TextPrimary, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
-            Spacer(Modifier.height(8.dp))
-            
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.LocationOn, null, tint = AccentBlue, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(item.pickup, color = TextSecondary, fontSize = 13.sp, maxLines = 1)
-            }
-            Spacer(Modifier.height(4.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Timeline, null, tint = AccentOrange, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(item.dropoff, color = TextSecondary, fontSize = 13.sp, maxLines = 1)
-                }
                 
                 // Status Badge
                 val (statusColor, containerColor) = when (item.status.lowercase()) {
@@ -236,6 +210,52 @@ fun HistoryCard(item: TripHistoryItem, onClick: () -> Unit) {
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                     )
+                }
+            }
+            
+            Spacer(Modifier.height(12.dp))
+            Text(item.passengerName, color = TextPrimary, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
+            Text("${"%.2f".format(item.totalKm)} KM travelled", color = AccentTeal, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+            
+            Spacer(Modifier.height(16.dp))
+            
+            if (item.segments.isNotEmpty()) {
+                // Multi-segment timeline view
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item.segments.forEachIndexed { index, segment ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Box(modifier = Modifier.size(8.dp).background(AccentBlue, androidx.compose.foundation.shape.CircleShape))
+                                if (index < item.segments.size - 1 || !segment.dropoff.isNullOrBlank()) {
+                                    Box(modifier = Modifier.width(2.dp).height(12.dp).background(Color.White.copy(alpha = 0.1f)))
+                                }
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Text("Pickup: ${segment.pickup}", color = TextSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        if (!segment.dropoff.isNullOrBlank()) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Box(modifier = Modifier.size(8.dp).background(AccentOrange, androidx.compose.foundation.shape.CircleShape))
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Text("Drop-off: ${segment.dropoff}", color = TextSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Legacy fallback
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.LocationOn, null, tint = AccentBlue, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(item.pickup, color = TextSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Timeline, null, tint = AccentOrange, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(item.dropoff, color = TextSecondary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -264,22 +284,49 @@ fun buildTripItem(doc: com.google.firebase.firestore.DocumentSnapshot): TripHist
         val data = doc.data ?: return null
         val createdAt = doc.getTimestamp("created_at")?.toDate() ?: java.util.Date()
         val ldt = LocalDateTime.ofInstant(createdAt.toInstant(), java.time.ZoneId.systemDefault())
+
+        // Robust parsing for segments
+        @Suppress("UNCHECKED_CAST")
+        val segmentsList = data["segments"] as? List<Map<String, Any?>>
+        val segments = segmentsList?.mapNotNull { seg ->
+            val pickup = seg["pickup"] as? String ?: return@mapNotNull null
+            val dropoff = seg["dropoff"] as? String ?: return@mapNotNull null
+            DriverSegment(pickup = pickup, dropoff = dropoff)
+        } ?: emptyList()
+
+        // Robust parsing for pickup location (handle String or Array)
+        val rawPickup = data["pickup_location"]
+        val pickupAddr = when (rawPickup) {
+            is String -> rawPickup
+            is List<*> -> {
+                val map = rawPickup.firstOrNull() as? Map<*, *>
+                map?.get("address") as? String ?: map?.get("text") as? String ?: "Multi-point"
+            }
+            else -> "Unknown"
+        }
+
+        // Robust parsing for dropoff location
+        val rawDropoff = data["dropoff_location"]
+        val dropoffAddr = when (rawDropoff) {
+            is String -> rawDropoff
+            is Map<*, *> -> rawDropoff["address"] as? String ?: rawDropoff["text"] as? String ?: "Unknown"
+            else -> "Unknown"
+        }
+
         TripHistoryItem(
             id = doc.id,
             passengerName = data["passenger_name"] as? String ?: data["client_name"] as? String ?: "Unknown",
             driverName = data["driver_name"] as? String ?: "Driver",
-            totalKm = (data["total_km"] as? Number)?.toDouble() ?: 0.0,
+            totalKm = (data["total_km"] as? Number)?.toDouble() ?: (data["total_km_travelled"] as? Number)?.toDouble() ?: 0.0,
             departureTime = data["time_of_departure"] as? String ?: "--:--",
             arrivalTime = data["time_of_arrival"] as? String ?: "--:--",
-            pickup = data["pickup_location"] as? String ?: "Unknown",
-            dropoff = data["dropoff_location"] as? String ?: "Unknown",
+            pickup = pickupAddr,
+            dropoff = dropoffAddr,
             status = data["status"] as? String ?: "Completed",
             polyline = data["route_polyline"] as? String ?: "",
             date = ldt,
-            plate = data["vehicle_plate"] as? String ?: "N/A",
-            segments = (data["segments"] as? List<Map<String, String>>)?.map { 
-                DriverSegment(pickup = it["pickup"], dropoff = it["dropoff"])
-            } ?: emptyList()
+            plate = data["vehicle_plate"] as? String ?: data["plate_number"] as? String ?: "N/A",
+            segments = segments
         )
     } catch (e: Exception) {
         null

@@ -480,6 +480,25 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                             AssignmentSegment(pickup = pickup, dropoff = dropoff)
                         } ?: emptyList()
 
+                        // Parse pickup locations (handling both String and Array)
+                        val rawPickup = data["pickup_location"]
+                        val pickupAddress = when (rawPickup) {
+                            is String -> rawPickup
+                            is List<*> -> {
+                                val first = rawPickup.firstOrNull() as? Map<*, *>
+                                first?.get("address") as? String ?: first?.get("text") as? String ?: "Multi-point"
+                            }
+                            else -> data["pickup_location"] as? String
+                        }
+
+                        // Parse dropoff location (handling both String and Map)
+                        val rawDropoff = data["dropoff_location"]
+                        val dropoffAddress = when (rawDropoff) {
+                            is String -> rawDropoff
+                            is Map<*, *> -> rawDropoff["address"] as? String ?: rawDropoff["text"] as? String
+                            else -> data["dropoff_location"] as? String
+                        }
+
                         Assignment(
                             docId = doc.id,
                             scheduleId = (data["schedule_id"] as? Number)?.toString() ?: doc.id.take(8).uppercase(),
@@ -489,8 +508,8 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                             clientName = data["client_name"] as? String,
                             passengerName = data["passenger_name"] as? String,
                             passengerPhone = data["passenger_phone"] as? String,
-                            pickupAddress = data["pickup_location"] as? String,
-                            dropoffAddress = data["dropoff_location"] as? String,
+                            pickupAddress = pickupAddress,
+                            dropoffAddress = dropoffAddress,
                             segments = segments,
                             returnToPickup = data["return_to_pickup"] as? Boolean ?: false,
                             returnPickupTime = data["return_pickup_time"] as? String,
