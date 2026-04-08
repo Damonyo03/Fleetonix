@@ -1,0 +1,40 @@
+# CodeRabbit Configuration for Fleetonix
+# Documentation: https://docs.coderabbit.ai/
+
+language: "en-US"
+tone_instructions: "Be professional, technical, and focused on security and performance for a fleet management application."
+
+reviews:
+  # Enable/Disable specific types of reviews
+  profile: "comprehensive"
+  request_reviews_from_ai: true
+  auto_review:
+    enabled: true
+    # Only review Pull Requests to main or develop
+    branches:
+      - "main"
+      - "develop"
+
+  # Path filters to ignore noise
+  path_filters:
+    - "!**/*.salive"              # Ignore Kotlin session files
+    - "!**/build/**"              # Ignore Android build artifacts
+    - "!**/node_modules/**"       # Ignore Node.js dependencies
+    - "!**/scratch/**"            # Ignore temporary scratch files
+    - "!**/FLEETONIX_SECRETS_BACKUP.txt" # Ignore secrets/backups
+    - "!**/*.log"                 # Ignore log files
+    - "!**/*.json"                # Keep reviews focused on logic, but optionally allow data models
+    - "!appfleetonix-firebase-adminsdk-fbsvc-b6aecf2c1e.json" # Ignore service account keys
+
+  # Specific instructions for the AI
+  instructions: >
+    This is a fleet management system called Fleetonix. 
+    It has an Android app (Kotlin) and a Web dashboard (JavaScript + Firebase).
+    Please focus on:
+    1. Firebase Firestore security and real-time sync efficiency.
+    2. Android memory management and background service stability (LocationService).
+    3. UI/UX consistency, focusing on the 'Midnight' and 'CardBlue' theme colors.
+    4. Proper error handling for network requests (Firebase/API).
+
+chat:
+  enabled: true
