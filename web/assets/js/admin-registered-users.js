@@ -212,9 +212,13 @@ async function showCreateUserModal() {
         }
 
         try {
+            const idToken = await auth.currentUser.getIdToken();
             const response = await fetch('https://us-central1-appfleetonix.cloudfunctions.net/adminCreateUser', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`
+                },
                 body: JSON.stringify({
                     email: email.toLowerCase().trim(),
                     password: password,
@@ -262,10 +266,13 @@ window.deleteUser = async (id) => {
     }
 
     try {
-        // 1. Backend Purge (Auth + Logic)
+        const idToken = await auth.currentUser.getIdToken();
         const response = await fetch('https://us-central1-appfleetonix.cloudfunctions.net/adminDeleteUser', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${idToken}`
+            },
             body: JSON.stringify({
                 uid: id,
                 email: user.email
