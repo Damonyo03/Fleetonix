@@ -12,7 +12,7 @@
 const {setGlobalOptions} = require("firebase-functions");
 const {onRequest} = require("firebase-functions/v2/https");
 const {onDocumentUpdated, onDocumentCreated, onDocumentDeleted} = require("firebase-functions/v2/firestore");
-const {onSchedule} = require("firebase-functions/v2/scheduler");
+// const {onSchedule} = require("firebase-functions/v2/scheduler");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 const nodemailer = require("nodemailer");
@@ -678,7 +678,7 @@ exports.completeRegistration = onRequest({ cors: true }, async (req, res) => {
 /**
  * Scheduled Cleanup: Purge expired archives after 30 days
  * Runs daily at midnight
- */
+ * [DISABLED DUE TO IAM PERMISSIONS BLOCKER]
 exports.cleanupExpiredArchives = require("firebase-functions/v2/scheduler").onSchedule("0 0 * * *", async (event) => {
   const db = admin.firestore();
   const now = admin.firestore.Timestamp.now();
@@ -704,4 +704,5 @@ exports.cleanupExpiredArchives = require("firebase-functions/v2/scheduler").onSc
     logger.error("Error cleaning up expired archives", error);
   }
 });
+*/
 
