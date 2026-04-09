@@ -313,7 +313,7 @@ class LocationService : Service() {
                 if (wakeLock == null || !wakeLock!!.isHeld) {
                     val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
                     wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Fleetonix:LocationTrackingLock")
-                    wakeLock?.acquire()
+                    wakeLock?.acquire(10 * 60 * 1000L)
                 }
                 
                 startLocationUpdates()

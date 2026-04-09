@@ -17,7 +17,6 @@ let unsubscribeStats = [];
 let unsubscribeDrivers = null;
 let infoWindow = null;
 let driverDTRStatus = {}; // email -> { action: 'time_in'|'time_out', timestamp: JS Date }
-let driversMapListenerRegistered = false; // Guard: register idle listener only once
 
 // Live Map Assets
 let accidentOverlays = {};        // driverId -> AccidentOverlay
@@ -506,6 +505,11 @@ function initMap() {
     
     driversMap = new google.maps.Map(mapElement, mapOptions);
     infoWindow = new google.maps.InfoWindow();
+
+    // Register idle listener exactly once — re-renders all drivers after pan/zoom (C5)
+    driversMap.addListener('idle', () => {
+        Object.keys(allDriversData).forEach(id => scheduleRender(id));
+    });
 
     // ────────────────────────────────────────────────────────────────────────
     // NEW UNIFIED REAL-TIME DRIVER TRACKING (Standardized logic)
@@ -1029,14 +1033,6 @@ function updateOnlineDisplay() {
 
     if (mapStatusEl) {
         mapStatusEl.innerText = `Live: ${onlineCount} drivers online`;
-    }
-
-    // Re-render all drivers when admin pans/zooms (C5) — register only once
-    if (driversMap && !driversMapListenerRegistered) {
-        driversMapListenerRegistered = true;
-        driversMap.addListener('idle', () => {
-            Object.keys(allDriversData).forEach(id => scheduleRender(id));
-        });
     }
 }
 
