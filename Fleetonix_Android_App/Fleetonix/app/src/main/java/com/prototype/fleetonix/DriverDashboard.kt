@@ -218,10 +218,31 @@ fun TripTicketDialog(
 }
 
 @Composable
-fun TicketRow(label: String, value: String) {
+fun ReceiptRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
         Text(value, color = TextPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+fun TimelineItem(order: Int, pickup: String, dropoff: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(32.dp)) {
+            Box(
+                modifier = Modifier.size(24.dp).background(AccentTeal, RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(order.toString(), color = Midnight, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            }
+        }
+        Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+            Text("P: $pickup", color = Color.White, style = MaterialTheme.typography.bodySmall)
+            Text("D: $dropoff", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+        }
     }
 }
 
@@ -2905,8 +2926,8 @@ fun DriverDashboard(
                 timeOfArrival = formatCurrentTime(),
                 totalKm = (totalDistanceMetres / 1000.0),
                 calculatedOdometer = endOdometerValue,
-                pickupLocation = nextSchedule?.pickup_location?.firstOrNull() ?: "Start",
-                dropoffLocation = nextSchedule?.dropoff_location?.toString() ?: "End",
+                pickupLocation = nextSchedule?.pickup_location?.firstOrNull()?.text ?: "Start",
+                dropoffLocation = nextSchedule?.dropoff_location?.text ?: "End",
                 segments = nextSchedule?.segments,
                 isSubmitting = isCompletingTrip,
                 onConfirm = { sigUrl ->
