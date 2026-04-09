@@ -1,4 +1,5 @@
 /* eslint-disable */
+// [STABILITY_HOTFIX_PRODUCTION_04-09_V2]
 /**
  * Import function triggers from their respective submodules:
  *
@@ -678,7 +679,7 @@ exports.completeRegistration = onRequest({ cors: true }, async (req, res) => {
  * Scheduled Cleanup: Purge expired archives after 30 days
  * Runs daily at midnight
  */
-exports.cleanupExpiredArchives = onSchedule("0 0 * * *", async (event) => {
+exports.cleanupExpiredArchives = require("firebase-functions/v2/scheduler").onSchedule("0 0 * * *", async (event) => {
   const db = admin.firestore();
   const now = admin.firestore.Timestamp.now();
 
