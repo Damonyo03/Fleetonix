@@ -166,6 +166,8 @@ fun TripHistoryScreen(
             timeOfDeparture = ticket.departureTime,
             timeOfArrival = ticket.arrivalTime,
             totalKm = ticket.totalKm,
+            pickupLocation = ticket.pickup,
+            dropoffLocation = ticket.dropoff,
             routePoints = routePoints,
             segments = ticket.segments,
             isSubmitting = false,

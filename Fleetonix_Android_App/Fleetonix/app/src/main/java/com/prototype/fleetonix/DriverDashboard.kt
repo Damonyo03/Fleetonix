@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.google.android.gms.location.*
@@ -69,16 +70,23 @@ fun TripTicketDialog(
     timeOfDeparture: String,
     timeOfArrival: String,
     totalKm: Double,
-    routePoints: List<LatLng>,
+    calculatedOdometer: Double? = 0.0,
+    pickupLocation: String? = "",
+    dropoffLocation: String? = "",
     segments: List<DriverSegment>? = null,
+    routePoints: List<LatLng>? = null,
     isSubmitting: Boolean,
-    onConfirm: () -> Unit
+    onConfirm: (String) -> Unit
 ) {
+    val driverPaths = remember { mutableStateListOf<PathState>() }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
     androidx.compose.ui.window.Dialog(onDismissRequest = { }) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+                .padding(vertical = 16.dp),
             shape = RoundedCornerShape(24.dp),
             color = CardBlue,
             tonalElevation = 8.dp
@@ -86,153 +94,123 @@ fun TripTicketDialog(
             Column(
                 modifier = Modifier
                     .padding(24.dp)
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Header with Checkmark
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .background(AccentTeal.copy(alpha = 0.2f), androidx.compose.foundation.shape.CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.CheckCircle,
-                        contentDescription = null,
-                        tint = AccentTeal,
-                        modifier = Modifier.size(40.dp)
-                    )
-                }
-                
-                Text(
-                    "TRAVEL TRIP TICKET",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-                
-                Divider(color = DividerBlue, thickness = 1.dp)
+                // Header (Receipt Style)
+                Text("TRAVEL TRIP TICKET", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = AccentTeal)
+                Divider(color = Color.White.copy(alpha = 0.1f), thickness = 1.dp)
 
-                // Ticket Details
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TicketRow("Driver", driverName)
-                    TicketRow("Vehicle", "$vehicleType ($vehiclePlate)")
-                    TicketRow("Departure", timeOfDeparture)
-                    TicketRow("Arrival", timeOfArrival)
+                // Body Section
+                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ReceiptRow("DRIVER'S NAME", driverName)
+                    ReceiptRow("VEHICLE", "$vehiclePlate ($vehicleType)")
+                    ReceiptRow("DEPARTURE", pickupLocation ?: "Start")
+                    ReceiptRow("ARRIVAL", dropoffLocation ?: "End")
+                    ReceiptRow("TOTAL KM", "%.2f KM".format(totalKm))
+                    ReceiptRow("FINAL ODOMETER", "%.1f".format(calculatedOdometer ?: 0.0))
                 }
 
-                Text(
-                    "TRIP ROUTE (TOTAL ${"%.2f".format(totalKm)} KM)",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextSecondary,
-                    fontWeight = FontWeight.Bold
-                )
+                // Optional Map Visualization
+                if (!routePoints.isNullOrEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                    ) {
+                        val cameraPositionState = rememberCameraPositionState {
+                            val center = routePoints[routePoints.lastIndex / 2]
+                            position = CameraPosition.fromLatLngZoom(center, 13f)
+                        }
+                        
+                        LaunchedEffect(routePoints) {
+                            if (routePoints.size >= 2) {
+                                try {
+                                    val boundsBuilder = LatLngBounds.builder()
+                                    routePoints.forEach { boundsBuilder.include(it) }
+                                    cameraPositionState.animate(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 50))
+                                } catch (e: Exception) {
+                                    android.util.Log.e("TripTicketDialog", "Bounds build failed", e)
+                                }
+                            }
+                        }
 
+                        GoogleMap(
+                            modifier = Modifier.fillMaxSize(),
+                            cameraPositionState = cameraPositionState,
+                            uiSettings = MapUiSettings(zoomControlsEnabled = false),
+                            properties = MapProperties(mapStyleOptions = MapStyleOptions(MapStyles.AUBERGINE))
+                        ) {
+                            Polyline(points = routePoints, color = AccentTeal, width = 10f, jointType = JointType.ROUND)
+                            Marker(state = MarkerState(position = routePoints.first()), title = "Start")
+                            Marker(state = MarkerState(position = routePoints.last()), title = "End")
+                        }
+                    }
+                }
+
+                // Route Timeline
                 if (!segments.isNullOrEmpty()) {
+                    Text("TRIP ROUTE TIMELINE", style = MaterialTheme.typography.labelMedium, color = TextSecondary, fontWeight = FontWeight.Bold)
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Midnight, RoundedCornerShape(16.dp))
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                            .background(Midnight.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        segments.forEachIndexed { index, segment ->
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(modifier = Modifier.size(6.dp).background(AccentTeal, androidx.compose.foundation.shape.CircleShape))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text("P${index + 1}: ${segment.pickup}", color = Color.White, style = MaterialTheme.typography.bodySmall)
-                                }
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(modifier = Modifier.size(6.dp).background(AccentOrange, androidx.compose.foundation.shape.CircleShape))
-                                    Spacer(Modifier.width(8.dp))
-                                    Text("D${index + 1}: ${segment.dropoff}", color = Color.White, style = MaterialTheme.typography.bodySmall)
-                                }
-                                if (index < segments.size - 1) {
-                                    Divider(color = Color.White.copy(alpha = 0.05f), modifier = Modifier.padding(vertical = 4.dp))
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    // Map Route Visualization
-                    if (routePoints.isNotEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(200.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                        ) {
-                            val cameraPositionState = rememberCameraPositionState {
-                                val center = if (routePoints.isNotEmpty()) routePoints[routePoints.lastIndex / 2] else LatLng(0.0, 0.0)
-                                position = CameraPosition.fromLatLngZoom(center, 13f)
-                            }
-                            
-                            LaunchedEffect(routePoints) {
-                                if (routePoints.size >= 2) {
-                                    try {
-                                        val boundsBuilder = LatLngBounds.builder()
-                                        routePoints.forEach { boundsBuilder.include(it) }
-                                        cameraPositionState.animate(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 50))
-                                    } catch (e: Exception) {
-                                        android.util.Log.e("TripTicketDialog", "Failed to build bounds", e)
-                                    }
-                                }
-                            }
-
-                            GoogleMap(
-                                modifier = Modifier.fillMaxSize(),
-                                cameraPositionState = cameraPositionState,
-                                uiSettings = MapUiSettings(zoomControlsEnabled = false, rotationGesturesEnabled = false),
-                                properties = MapProperties(mapStyleOptions = MapStyleOptions(MapStyles.AUBERGINE))
-                            ) {
-                                Polyline(
-                                    points = routePoints,
-                                    color = AccentTeal,
-                                    width = 10f,
-                                    jointType = JointType.ROUND
-                                )
-                                
-                                // Green Start Pin
-                                Marker(
-                                    state = MarkerState(position = routePoints.first()),
-                                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN),
-                                    title = "Start"
-                                )
-                                // Red End Pin
-                                Marker(
-                                    state = MarkerState(position = routePoints.last()),
-                                    icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED),
-                                    title = "End"
-                                )
-                            }
-                        }
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(200.dp)
-                                .background(Midnight, RoundedCornerShape(16.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("Route visualization unavailable", color = TextSecondary)
+                        segments.forEachIndexed { index, seg ->
+                            TimelineItem(index + 1, seg.pickup ?: "Unknown", seg.dropoff ?: "Unknown")
                         }
                     }
                 }
 
-                // Confirm Button
-                Button(
-                    onClick = onConfirm,
-                    enabled = !isSubmitting,
+                Divider(color = Color.White.copy(alpha = 0.1f), thickness = 1.dp)
+
+                // Final Driver Sign-off
+                Text("DRIVER VERIFICATION SIGN-OFF", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Color.White)
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
-                    shape = RoundedCornerShape(16.dp)
+                        .height(150.dp)
+                        .background(Color.White, RoundedCornerShape(12.dp))
+                        .border(1.dp, Color.LightGray, RoundedCornerShape(12.dp))
                 ) {
-                    if (isSubmitting) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                    else Text("CONFIRM & CLOSE", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Midnight)
+                    SignaturePad(paths = driverPaths, modifier = Modifier.fillMaxSize())
+                    if (driverPaths.isEmpty()) {
+                        Text("Driver Signature", color = Color.LightGray, modifier = Modifier.align(Alignment.Center))
+                    }
+                }
+
+                if (error != null) {
+                    Text(error!!, color = Color.Red, style = MaterialTheme.typography.bodySmall)
+                }
+
+                Button(
+                    onClick = {
+                        if (driverPaths.isEmpty()) {
+                            error = "Driver signature is required"
+                            return@Button
+                        }
+                        scope.launch {
+                            try {
+                                error = null
+                                val bitmap = FirebaseStorageHelper.createBitmapFromPaths(driverPaths, 800, 400)
+                                val url = FirebaseStorageHelper.uploadSignature(bitmap, "driver_signoff_" + System.currentTimeMillis())
+                                onConfirm(url)
+                            } catch (e: Exception) {
+                                error = "Upload Failed: ${e.message}"
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
+                    enabled = !isSubmitting && driverPaths.isNotEmpty()
+                ) {
+                    if (isSubmitting) CircularProgressIndicator(color = Midnight, modifier = Modifier.size(24.dp))
+                    else Text("CONFIRM AND CLOSE", fontWeight = FontWeight.Bold, color = Midnight)
                 }
             }
         }
@@ -476,6 +454,9 @@ fun DriverDashboard(
     var completedAt by remember { mutableStateOf<String?>(null) }
     var showTripTicket by remember { mutableStateOf(false) }
     var targetTripId by remember { mutableStateOf<String?>(null) }
+    var clientSignatureUrl by remember { mutableStateOf<String?>(null) }
+    var clientRefusalReason by remember { mutableStateOf<String?>(null) }
+    var driverSignatureUrl by remember { mutableStateOf<String?>(null) }
     var activeTicketId by remember { mutableStateOf<String?>(null) }
     var showDriverSignatureCapture by remember { mutableStateOf(false) }
     var capturedDriverSignature by remember { mutableStateOf<String?>(null) }
@@ -2892,62 +2873,69 @@ fun DriverDashboard(
             )
         }
 
-        // NSCRP: Signature / Refusal Dialog
+        // NSCRP: Signature / Refusal Dialog (Client Verification)
         if (showSignatureDialog) {
             val tId = nextSchedule?.docId ?: ""
             SignatureDialog(
                 tripId = tId,
-                onConfirm = { signatureUrl ->
+                onConfirm = { url ->
+                    clientSignatureUrl = url
+                    clientRefusalReason = null
                     showSignatureDialog = false
-                    val dId = nextSchedule?.docId ?: return@SignatureDialog
-                    scope.launch {
-                        try {
-                            isCompletingTrip = true
-                            db.collection("schedules").document(dId).update(
-                                "passenger_signature_url", signatureUrl,
-                                "odometer_end", endOdometerValue,
-                                "trip_phase", "completed",
-                                "status", "completed",
-                                "completed_at", FieldValue.serverTimestamp()
-                            ).await()
-                            
-                            // Auto-trigger completion ticket
-                            targetTripId = dId
-                            showTripTicket = true
-                            tripActionSuccess = "Trip verified and completed!"
-                        } catch (e: Exception) {
-                            tripActionError = "Completion failed: ${e.message}"
-                        } finally {
-                            isCompletingTrip = false
-                        }
-                    }
+                    showTripTicket = true
                 },
                 onRefuse = { reason ->
+                    clientRefusalReason = reason
+                    clientSignatureUrl = null
                     showSignatureDialog = false
-                    val dId = nextSchedule?.docId ?: return@SignatureDialog
+                    showTripTicket = true
+                },
+                onDismiss = { showSignatureDialog = false }
+            )
+        }
+
+        // NSCRP: Final Trip Ticket (Summary + Driver Verification)
+        if (showTripTicket) {
+            val dId = nextSchedule?.docId ?: ""
+            TripTicketDialog(
+                driverName = session.user?.name ?: "Driver",
+                vehiclePlate = session.driver?.plateNumber ?: "N/A",
+                vehicleType = session.driver?.vehicleAssigned ?: "Vehicle",
+                timeOfDeparture = nextSchedule?.scheduled_time ?: "--:--",
+                timeOfArrival = formatCurrentTime(),
+                totalKm = (totalDistanceMetres / 1000.0),
+                calculatedOdometer = endOdometerValue,
+                pickupLocation = nextSchedule?.pickup_location?.firstOrNull() ?: "Start",
+                dropoffLocation = nextSchedule?.dropoff_location?.toString() ?: "End",
+                segments = nextSchedule?.segments,
+                isSubmitting = isCompletingTrip,
+                onConfirm = { sigUrl ->
+                    driverSignatureUrl = sigUrl
                     scope.launch {
                         try {
                             isCompletingTrip = true
                             db.collection("schedules").document(dId).update(
-                                "refusal_reason", reason,
+                                "passenger_signature_url", clientSignatureUrl,
+                                "refusal_reason", clientRefusalReason,
+                                "driver_signature_url", driverSignatureUrl,
                                 "odometer_end", endOdometerValue,
                                 "trip_phase", "completed",
                                 "status", "completed",
                                 "completed_at", FieldValue.serverTimestamp()
                             ).await()
                             
-                            // Auto-trigger completion ticket
-                            targetTripId = dId
-                            showTripTicket = true
-                            tripActionSuccess = "Refusal documented. Trip completed."
+                            showTripTicket = false
+                            tripActionSuccess = "Trip successfully finalized and recorded!"
+                            // Reset local stats
+                            totalDistanceMetres = 0f
+                            actualRoutePoints.clear()
                         } catch (e: Exception) {
-                            tripActionError = "Completion failed: ${e.message}"
+                            tripActionError = "Verification Failed: ${e.message}"
                         } finally {
                             isCompletingTrip = false
                         }
                     }
-                },
-                onDismiss = { showSignatureDialog = false }
+                }
             )
         }
 
@@ -3183,8 +3171,12 @@ fun SignatureDialog(
                             onClick = { showRefusalField = true },
                             enabled = !isSubmitting
                         ) {
-                            Text("Passenger Refused", color = Color.White.copy(alpha = 0.7f))
+                            Text("Client Refuses to Sign", color = Color.White.copy(alpha = 0.7f))
                         }
+                    }
+
+                    if (error != null) {
+                        Text(error!!, color = Color.Red, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
                     }
 
                     Button(
@@ -3201,7 +3193,7 @@ fun SignatureDialog(
                                     val url = FirebaseStorageHelper.uploadSignature(bitmap, tripId)
                                     onConfirm(url)
                                 } catch (e: Exception) {
-                                    error = "Upload failed: ${e.message}"
+                                    error = "UPLOAD FAILED: OBJECT DOES NOT EXIST AT LOCATION."
                                 } finally {
                                     isSubmitting = false
                                 }
@@ -3216,19 +3208,20 @@ fun SignatureDialog(
                     }
                 } else {
                     Text("REFUSAL TO SIGN", color = AccentOrange, fontWeight = FontWeight.Bold)
-                    Text("Please provide the reason for refusal:", color = TextSecondary)
+                    Text("REFUSAL TO SIGN: THE REASON SHOULD BE INDICATED ON THE REPORT", color = TextSecondary, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
                     
                     OutlinedTextField(
                         value = refusalReasonVal,
                         onValueChange = { refusalReasonVal = it },
-                        label = { Text("Refusal Reason") },
+                        label = { Text("Reason for refusal") },
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White,
                             focusedBorderColor = AccentOrange,
-                            cursorColor = AccentOrange
+                            cursorColor = AccentOrange,
+                            focusedLabelColor = AccentOrange
                         )
                     )
                     
@@ -3236,29 +3229,32 @@ fun SignatureDialog(
                         Text(error!!, color = Color.Red, style = MaterialTheme.typography.bodySmall)
                     }
 
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = { showRefusalField = false }) {
+                            Text("Back to Signature", color = TextSecondary)
+                        }
+                    }
+
                     Button(
                         onClick = {
-                            if (refusalReasonVal.trim().isEmpty()) {
-                                error = "Reason is mandatory"
+                            if (refusalReasonVal.length < 5) {
+                                error = "Please provide a valid reason"
                                 return@Button
                             }
                             onRefuse(refusalReasonVal)
                         },
                         modifier = Modifier.fillMaxWidth().height(56.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentOrange)
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
+                        enabled = !isSubmitting
                     ) {
-                        Text("SUBMIT REFUSAL", fontWeight = FontWeight.Bold)
+                        Text("SUBMIT REFUSAL", fontWeight = FontWeight.Bold, color = Color.White)
                     }
-                    
-                    TextButton(onClick = { showRefusalField = false; error = null }) {
-                        Text("Back to Signature", color = Color.White.copy(alpha = 0.6f))
-                    }
-                }
-                
-                if (error != null && !showRefusalField) {
-                    Text(error!!, color = Color.Red, style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
     }
+}
+
+fun formatCurrentTime(): String {
+    return LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
 }

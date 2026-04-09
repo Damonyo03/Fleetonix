@@ -2,6 +2,13 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ── Reusable Admin Gate ───────────────────────────────────────────
+    function isAdmin() {
+      let u = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return u.role in ['super_admin', 'company_admin', 'admin'] || 
+             u.user_type in ['super_admin', 'company_admin', 'admin'];
+    }
+
     // ── driver_locations: owner-only write, auth-only read ──────────────
     match /driver_locations/{docId} {
       allow read: if request.auth != null;
@@ -16,17 +23,21 @@ service cloud.firestore {
         && request.resource.data.current_longitude <= 180;
     }
 
-    // ── drivers: self-ownership write ───────────────────────────────────
+    // ── drivers: admins full CRUD; self-ownership read/write ────────────
     match /drivers/{userId} {
+      allow read, write: if request.auth != null && (request.auth.uid == userId || isAdmin());
+    }
+
+    // ── bookings: admins full CRUD ─────────────────────────────────────
+    match /bookings/{docId} {
       allow read: if request.auth != null;
-      // Driver can only update their own document
-      allow write: if request.auth != null
-        && request.auth.uid == userId;
+      allow write: if request.auth != null && isAdmin();
     }
 
     // ── schedules: drivers update trip_phase only; admins full write ────
     match /schedules/{docId} {
       allow read: if request.auth != null;
+      allow write: if request.auth != null && isAdmin();
       allow update: if request.auth != null
         && request.auth.token.email.lower() == resource.data.driver_email.lower()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -34,22 +45,17 @@ service cloud.firestore {
              'dropped_off_at', 'completed_at', 'driver_viewed_at', 'total_km_travelled', 
              'current_segment_index', 'total_segments_completed', 'segments', 
              'odometer_start', 'odometer_end', 'passenger_signature_url', 
-             'driver_signature', 'refusal_reason', 'vehicle_type', 'plate_number', 
+             'driver_signature_url', 'refusal_reason', 'vehicle_type', 'plate_number', 
              'route_polyline', 'time_of_departure', 'time_of_arrival', 'last_updated'
            ]);
-      allow create, delete: if request.auth != null
-        && get(/databases/$(database)/documents/users/$(request.auth.uid))
-             .data.role in ['super_admin', 'company_admin', 'admin'];
     }
 
-    // ── incidents: drivers can create; admins can update/delete ─────────
+    // ── incidents: drivers can create; admins full access ───────────────
     match /incidents/{docId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null
         && request.resource.data.driver_email.lower() == request.auth.token.email.lower();
-      allow update, delete: if request.auth != null
-        && get(/databases/$(database)/documents/users/$(request.auth.uid))
-             .data.role in ['super_admin', 'company_admin', 'admin'];
+      allow update, delete: if request.auth != null && isAdmin();
     }
 
     // ── accidents: drivers can create; admins full access ───────────────
@@ -57,9 +63,7 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow create: if request.auth != null
         && request.resource.data.driver_email.lower() == request.auth.token.email.lower();
-      allow update, delete: if request.auth != null
-        && get(/databases/$(database)/documents/users/$(request.auth.uid))
-             .data.role in ['super_admin', 'company_admin', 'admin'];
+      allow update, delete: if request.auth != null && isAdmin();
     }
 
     // ── vehicle_issues: drivers can create; admins full access ──────────
@@ -67,43 +71,22 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow create: if request.auth != null
         && request.resource.data.driver_email.lower() == request.auth.token.email.lower();
-      allow update, delete: if request.auth != null
-        && get(/databases/$(database)/documents/users/$(request.auth.uid))
-             .data.role in ['super_admin', 'company_admin', 'admin'];
+      allow update, delete: if request.auth != null && isAdmin();
     }
 
-    // ── trip_tickets: drivers create/update; admins full access ─────────
-    match /trip_tickets/{docId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null
-        && request.resource.data.driver_email.lower() == request.auth.token.email.lower();
-      allow update: if request.auth != null
-        && (request.auth.token.email.lower() == resource.data.driver_email.lower() ||
-            request.auth.uid == resource.data.get('driver_uid', "") ||
-            get(/databases/$(database)/documents/users/$(request.auth.uid))
-              .data.role in ['super_admin', 'company_admin', 'admin']);
-      allow delete: if request.auth != null
-        && get(/databases/$(database)/documents/users/$(request.auth.uid))
-             .data.role in ['super_admin', 'company_admin', 'admin'];
-    }
-
-    // ── dtr_logs: drivers write own records only ─────────────────────────
+    // ── dtr_logs: drivers write own records; admins full access ──────────
     match /dtr_logs/{docId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null
         && request.resource.data.driver_email.lower()
              == request.auth.token.email.lower();
-      allow update, delete: if request.auth != null
-        && get(/databases/$(database)/documents/users/$(request.auth.uid))
-             .data.role in ['super_admin', 'company_admin', 'admin'];
+      allow update, delete: if request.auth != null && isAdmin();
     }
 
     // ── Everything else: admin-only write ───────────────────────────────
     match /{document=**} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null
-        && get(/databases/$(database)/documents/users/$(request.auth.uid))
-             .data.role in ['super_admin', 'company_admin', 'admin'];
+      allow write: if request.auth != null && isAdmin();
     }
   }
 }

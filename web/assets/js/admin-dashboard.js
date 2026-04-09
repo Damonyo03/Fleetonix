@@ -158,21 +158,7 @@ function initDispatchFeature() {
                 const bookingData = bookingDoc.data();
                 const targetDate = bookingData.pickup_date || "";
 
-                if (isCutOffPassed(targetDate)) {
-                    const role = currentUserData?.role || currentUserData?.user_type;
-                    if (role !== 'super_admin' && role !== 'admin') {
-                        alert(`⚠️ CUT-OFF PASSED: It is past 3:00 PM. You can no longer modify or dispatch schedules for tomorrow (${targetDate}).`);
-                        confirmBtn.disabled = false;
-                        confirmBtn.innerText = "Confirm Dispatch";
-                        return;
-                    } else {
-                        if (!confirm(`NOTICE: The 3:00 PM cut-off for tomorrow (${targetDate}) has passed. Override?`)) {
-                            confirmBtn.disabled = false;
-                            confirmBtn.innerText = "Confirm Dispatch";
-                            return;
-                        }
-                    }
-                }
+                // Admin Absolute Power: Removed isCutOffPassed check to allow overrides at any time.
 
                 const driverDoc = await getDoc(doc(db, "drivers", driverId));
                 const driverData = driverDoc.data();
