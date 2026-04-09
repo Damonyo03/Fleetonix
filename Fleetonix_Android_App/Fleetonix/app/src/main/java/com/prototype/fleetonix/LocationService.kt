@@ -114,7 +114,11 @@ class LocationService : Service() {
         const val EXTRA_TARGET_PHASE = "extra_target_phase"
         const val EXTRA_TOTAL_DISTANCE = "extra_total_distance"
         const val EXTRA_ROUTE_POLYLINE = "extra_route_polyline"
+        const val EXTRA_SCHEDULE_ID = "extra_schedule_id"
     }
+ 
+    private var activeScheduleId: String = ""
+
 
     override fun onCreate() {
         super.onCreate()
@@ -137,15 +141,31 @@ class LocationService : Service() {
                             
                             // Accumulate points for route visualization if trip is active
                             if (isTripActive) {
+                                val distanceKm = distance / 1000.0
                                 val newPoint = com.google.android.gms.maps.model.LatLng(location.latitude, location.longitude)
                                 if (actualRoutePoints.isEmpty() || 
                                     GoogleMapsService.calculateDistance(actualRoutePoints.last(), newPoint) >= 10f) {
                                     actualRoutePoints.add(newPoint)
                                 }
+
+                                // REAL-TIME ODOMETER SYNC: Update active schedule
+                                if (activeScheduleId.isNotEmpty() && distanceKm > 0.001) {
+                                    serviceScope.launch {
+                                        try {
+                                            val db = FirebaseFirestore.getInstance()
+                                            db.collection("schedules").document(activeScheduleId).update(
+                                                "total_km_travelled", FieldValue.increment(distanceKm)
+                                            )
+                                        } catch (e: Exception) {
+                                            Log.e("LocationService", "Failed to sync real-time odometer", e)
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                     // lastLocation = location // Removed here, moved to end of outer block
+
 
                     // 3. Push to Firestore for Admin Dashboard (Real-time tracking)
                     if (driverEmail.isNotEmpty()) {
@@ -349,13 +369,15 @@ class LocationService : Service() {
                 clearGeofences()
             }
             ACTION_START_TRIP -> {
+                activeScheduleId = intent.getStringExtra(EXTRA_SCHEDULE_ID) ?: ""
                 totalDistanceMetres = 0f
                 actualRoutePoints.clear()
                 lastLocation = null
                 isTripActive = true
                 updateDriverStatus("on_trip")
-                Log.d("LocationService", "Trip started, distance and route reset")
+                Log.d("LocationService", "Trip started for schedule $activeScheduleId, distance and route reset")
             }
+
         }
 
 

@@ -57,16 +57,23 @@ object FirebaseStorageHelper {
         bitmap.compress(Bitmap.CompressFormat.JPEG, 90, baos)
         val data = baos.toByteArray()
 
-        try {
+        return try {
+            // Task-based await with metadata check
             val uploadTask = storageRef.putBytes(data).await()
+            if (uploadTask.metadata == null) {
+                throw Exception("Upload succeeded but metadata is missing")
+            }
+            
             android.util.Log.d("FirebaseStorageHelper", "Upload successful: ${uploadTask.metadata?.path}")
             
+            // Get the download URL
             val url = storageRef.downloadUrl.await().toString()
             android.util.Log.d("FirebaseStorageHelper", "Download URL generated: $url")
-            return url
+            url
         } catch (e: Exception) {
             android.util.Log.e("FirebaseStorageHelper", "Upload failed for $fileName", e)
             throw e
         }
     }
+
 }

@@ -1864,7 +1864,8 @@ fun DriverDashboard(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            nextSchedule?.segments?.forEachIndexed { index, segment ->
+                            val curIdx = nextSchedule?.current_segment_index ?: 0
+                            nextSchedule?.segments?.take(curIdx + 1)?.forEachIndexed { index, segment ->
                                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Box(modifier = Modifier.size(8.dp).background(AccentBlue, androidx.compose.foundation.shape.CircleShape))
@@ -2085,6 +2086,7 @@ fun DriverDashboard(
                                                 action = LocationService.ACTION_START_TRIP
                                                 putExtra(LocationService.EXTRA_DRIVER_UID, auth.currentUser?.uid)
                                                 putExtra(LocationService.EXTRA_DRIVER_EMAIL, auth.currentUser?.email?.lowercase()?.trim() ?: "")
+                                                putExtra(LocationService.EXTRA_SCHEDULE_ID, nextSchedule?.docId ?: "")
                                             }
                                             context.startService(startTripIntent)
 
@@ -2286,6 +2288,7 @@ fun DriverDashboard(
                                                         action = LocationService.ACTION_START_TRIP
                                                         putExtra(LocationService.EXTRA_DRIVER_UID, auth.currentUser?.uid)
                                                         putExtra(LocationService.EXTRA_DRIVER_EMAIL, auth.currentUser?.email?.lowercase()?.trim() ?: "")
+                                                        putExtra(LocationService.EXTRA_SCHEDULE_ID, nextSchedule?.docId ?: "")
                                                     }
                                                     context.startService(startTripIntent)
                                                     
@@ -2821,8 +2824,21 @@ fun DriverDashboard(
                             
                             // 2. Update Schedule with Odometer
                             val updateData = if (isStarting) {
-                                mapOf("odometer_start" to mileage, "trip_phase" to "picked_up", "picked_up_at" to FieldValue.serverTimestamp())
-                            } else {
+                                val timestampStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+                                val updatedSegments = nextSchedule?.segments?.toMutableList() ?: mutableListOf()
+                                val curIdx = nextSchedule?.current_segment_index ?: 0
+                                if (curIdx < updatedSegments.size) {
+                                    val currentSeg = updatedSegments[curIdx]
+                                    updatedSegments[curIdx] = currentSeg.copy(arrived_at = timestampStr)
+                                }
+                                mapOf(
+                                    "odometer_start" to mileage,
+                                    "trip_phase" to "picked_up",
+                                    "picked_up_at" to timestampStr,
+                                    "segments" to updatedSegments
+                                )
+                            }
+ else {
                                 endOdometerValue = mileage
                                 showSignatureDialog = true
                                 emptyMap<String, Any>()

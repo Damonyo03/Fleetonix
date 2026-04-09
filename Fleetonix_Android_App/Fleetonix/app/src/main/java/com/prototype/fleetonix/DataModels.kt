@@ -90,8 +90,11 @@ data class DriverSchedule(
 
 data class DriverSegment(
     val pickup: String? = null,
-    val dropoff: String? = null
+    val dropoff: String? = null,
+    val arrived_at: String? = null,
+    val dropped_off_at: String? = null
 )
+
 
 data class PickupPoint(
     val name: String? = null,

@@ -523,7 +523,9 @@ function initMap() {
 function startRealtimeDriverTracking() {
     console.log("[Dashboard] Starting real-time driver tracking...");
     
-    const onlineDriversQuery = query(collection(db, "drivers"), where("status", "==", "online"));
+    const activeStatuses = ['online', 'available', 'on_trip', 'on_schedule', 'moving_to_pickup', 'arrived_at_pickup', 'picked_up', 'moving_to_dropoff', 'ready_to_complete'];
+    const onlineDriversQuery = query(collection(db, "drivers"), where("current_status", "in", activeStatuses));
+
     unsubscribeDrivers = onSnapshot(onlineDriversQuery, (snapshot) => {
         snapshot.docChanges().forEach(change => {
             const id = change.doc.id;

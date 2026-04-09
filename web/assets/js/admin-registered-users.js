@@ -169,11 +169,20 @@ window.viewUser = async (id) => {
 
 // --- Create New User Modal ---
 async function showCreateUserModal() {
-    const roleOptions = `
-        <option value="client">Client</option>
-        <option value="driver">Driver</option>
-        <option value="admin">Administrator</option>
-    `;
+    let roleOptions = '';
+    if (currentUserRole === 'super_admin') {
+        roleOptions = `
+            <option value="driver">Driver</option>
+            <option value="admin">Administrator</option>
+            <option value="super_admin">Super Admin</option>
+        `;
+    } else {
+        roleOptions = `
+            <option value="driver">Driver</option>
+            <option value="admin">Administrator</option>
+        `;
+    }
+
 
     const content = `
         <div class="form-group">
