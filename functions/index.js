@@ -258,7 +258,7 @@ exports.verifyOTP = onRequest({ cors: true }, async (req, res) => {
  * Admin Create User
  */
 exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
-  const caller = await requireRole(req, res, ["super_admin", "company_admin"]);
+  const caller = await requireRole(req, res, ["super_admin", "admin"]);
   if (!caller) return;
 
   const {email, password, fullName, role, companyName} = req.body;
@@ -268,9 +268,11 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
     return;
   }
 
-  // Role Restriction: admin cannot create super_admin
-  if (caller.role === "admin" && role === "super_admin") {
-    res.status(403).json({success: false, message: "Forbidden: Admins cannot create Super Admin accounts."});
+  // Role Restriction: 
+  // 1. Only Super Admin can create other admins or super admins
+  // 2. Regular Admins can ONLY create drivers
+  if (caller.role !== "super_admin" && role !== "driver") {
+    res.status(403).json({success: false, message: `Forbidden: As an ${caller.role}, you can only create Driver accounts.`});
     return;
   }
 
@@ -643,7 +645,7 @@ exports.completeRegistration = onRequest({ cors: true }, async (req, res) => {
       throw authError; // Rethrow other errors to be caught by the outer catch
     }
 
-    const role = (userData.role && userData.role.toLowerCase() === "driver") ? "driver" : "client";
+    const role = (userData.role && userData.role.toLowerCase() === "driver") ? "driver" : "driver"; // Default to driver, client removed
 
     await admin.firestore().collection("users").doc(userRecord.uid).set({
       full_name: userData.full_name,

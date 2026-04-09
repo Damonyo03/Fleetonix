@@ -32,8 +32,8 @@ onAuthStateChanged(auth, async (user) => {
         }
     }
 
-    const adminRoles = ['admin', 'super_admin', 'company_admin'];
-    const role = userData?.user_type || userData?.role;
+    const adminRoles = ['admin', 'super_admin'];
+    const role = userData?.role || userData?.user_type;
     currentUserRole = role;
 
     if (!userData || !adminRoles.includes(role)) {
@@ -87,8 +87,8 @@ function renderUsers(users) {
 
     tbody.innerHTML = users.map(u => {
         const role = u.role || u.user_type || 'unknown';
-        const badgeColor = role === 'admin' || role === 'super_admin' ? 'var(--accent-blue)' :
-                           role === 'client' ? 'var(--accent-green)' :
+        const badgeColor = role === 'super_admin' ? 'var(--accent-blue)' :
+                           role === 'admin' ? 'var(--accent-purple, #8b5cf6)' :
                            role === 'driver' ? 'var(--accent-orange)' : 'var(--text-muted)';
         const registered = u.created_at?.toDate
             ? u.created_at.toDate().toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' })
@@ -177,9 +177,9 @@ async function showCreateUserModal() {
             <option value="super_admin">Super Admin</option>
         `;
     } else {
+        // Regular Admins can ONLY create Drivers
         roleOptions = `
             <option value="driver">Driver</option>
-            <option value="admin">Administrator</option>
         `;
     }
 
