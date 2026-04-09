@@ -30,4 +30,4 @@ jobs:
       - name: Deploy to Firebase Hosting
         run: npx firebase-tools deploy --only hosting --project appfleetonix --non-interactive
       - name: Deploy to Firebase Functions
-        run: npx firebase-tools deploy --only functions --project appfleetonix --non-interactive --debug
+        run: npx firebase-tools deploy --only functions --project appfleetonix --non-interactive --force --debug
