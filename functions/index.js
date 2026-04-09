@@ -812,7 +812,7 @@ exports.completeRegistration = onRequest({ cors: true }, async (req, res) => {
 /**
  * Send Welcome Email upon Super Admin Approval
  */
-exports.onUserApproval = onDocumentUpdated("users/{uid}", async (event) => {
+exports.onUserActivated = onDocumentUpdated("users/{uid}", async (event) => {
   const before = event.data.before.data();
   const after = event.data.after.data();
 
