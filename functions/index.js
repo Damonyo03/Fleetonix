@@ -23,6 +23,15 @@ const GMAIL_APP_PASSWORD = defineSecret("GMAIL_APP_PASSWORD");
 
 admin.initializeApp();
 
+// Shared Mail Transport for reusability
+const getMailTransport = () => nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: "fleetonix.noreply@gmail.com",
+    pass: GMAIL_APP_PASSWORD.value(), 
+  },
+});
+
 // D1: Role-Based Access Control Middleware
 async function requireRole(req, res, allowedRoles = ["super_admin"]) {
   if (req.method === "OPTIONS") {
@@ -139,13 +148,7 @@ exports.sendPasswordResetOTP = onRequest({ cors: true }, async (req, res) => {
       html: getOTPHtmlTemplate(otp, email),
     };
     
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: "fleetonix.noreply@gmail.com",
-        pass: GMAIL_APP_PASSWORD.value(), // D2: Secret access
-      },
-    });
+    const transporter = getMailTransport();
     await transporter.sendMail(mailOptions);
 
     logger.info(`Generated password reset OTP for ${email}`);
@@ -228,7 +231,15 @@ exports.verifyOTP = onRequest({ cors: true }, async (req, res) => {
 
   try {
     const doc = await admin.firestore().collection("otps").doc(userId).get();
-    if (doc.exists && doc.data().otp === otpCode) {
+    if (!doc.exists) {
+      res.json({ success: false, message: "Token expired or not found" });
+      return;
+    }
+    
+    // Hash incoming OTP for comparison
+    const incomingHash = crypto.createHash("sha256").update(otpCode).digest("hex");
+    
+    if (doc.data().hash === incomingHash) {
       logger.info(`OTP successfully verified for user: ${userId}`);
       res.json({success: true, message: "OTP verified"});
     } else {
@@ -252,6 +263,12 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
 
   if (!email || !password || !fullName || !role) {
     res.status(400).json({success: false, message: "Missing required fields: email, password, fullName, and role are required."});
+    return;
+  }
+
+  // Role Restriction: admin cannot create super_admin
+  if (caller.role === "admin" && role === "super_admin") {
+    res.status(403).json({success: false, message: "Forbidden: Admins cannot create Super Admin accounts."});
     return;
   }
 
@@ -286,10 +303,11 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
 
     // 3. Special handling for drivers/clients collections
     if (role === "driver") {
-      await admin.firestore().collection("drivers").doc(email.toLowerCase().trim()).set({
+      await admin.firestore().collection("drivers").doc(userRecord.uid).set({
         driver_name: fullName,
         driver_email: email.toLowerCase().trim(),
         current_status: "offline",
+        status: "active", // Admin-created drivers are active immediately
         created_at: admin.firestore.FieldValue.serverTimestamp(),
         updated_at: admin.firestore.FieldValue.serverTimestamp(),
       });
@@ -318,45 +336,54 @@ exports.adminDeleteUser = onRequest({ cors: true }, async (req, res) => {
   }
 
   try {
+    const db = admin.firestore();
+    const userSnap = await db.collection("users").doc(uid).get();
+    const userData = userSnap.exists ? userSnap.data() : null;
+
+    // Archive data
+    const archiveData = {
+      uid: uid,
+      email: email || (userData ? userData.email : ""),
+      user_data: userData,
+      archived_at: admin.firestore.FieldValue.serverTimestamp(),
+      archived_by: caller.email,
+      // Calculation for 30-day expiration (in milliseconds)
+      expires_at: admin.firestore.Timestamp.fromMillis(Date.now() + (30 * 24 * 60 * 60 * 1000))
+    };
+
+    await db.collection("system_archives").doc(uid).set(archiveData);
+
     // 1. Delete from Firebase Auth
     try {
       await admin.auth().deleteUser(uid);
       logger.info(`Admin deleted Auth user: ${uid}`);
     } catch (authError) {
       logger.warn(`Auth user ${uid} not found or already deleted:`, authError);
-      // Proceed to firestore deletion anyway to be safe
     }
 
-    // 2. Delete from Users Collection
-    await admin.firestore().collection("users").doc(uid).delete();
-    // 3. Delete from Drivers & Locations Collection (Try both UID and Email for cleanup)
-    const driversRef = admin.firestore().collection("drivers");
-    const locationsRef = admin.firestore().collection("driver_locations");
+    // 2. Clear Active Collections
+    await db.collection("users").doc(uid).delete();
+    await db.collection("drivers").doc(uid).delete();
+    await db.collection("driver_locations").doc(uid).delete();
 
-    // Delete by UID (Primary)
-    await driversRef.doc(uid).delete();
-    await locationsRef.doc(uid).delete();
-
-    // Delete by Email (Cleanup for legacy/duplicate records)
     if (email) {
       const emailLower = email.toLowerCase().trim();
-      await driversRef.doc(emailLower).delete();
-      await locationsRef.doc(emailLower).delete();
+      await db.collection("drivers").doc(emailLower).delete();
+      await db.collection("driver_locations").doc(emailLower).delete();
     }
 
-    // Attempt to notify system via activity log
-    await admin.firestore().collection("notifications").add({
-      title: "Account Purged",
-      message: `System successfully purged ${email || 'user'} (${uid}). Real-time fleet metrics updated.`,
+    // Notify system
+    await db.collection("notifications").add({
+      title: "User Archived",
+      message: `Account for ${email || uid} has been moved to the Secure Vault. It will be purged in 30 days if not restored.`,
       type: "system",
-      priority: "high",
       timestamp: admin.firestore.FieldValue.serverTimestamp()
     });
 
-    logger.info(`Admin successfully purged user: ${uid}`);
-    res.json({success: true, message: "User account purged successfully."});
+    logger.info(`Admin successfully archived user: ${uid}`);
+    res.json({success: true, message: "User account archived to vault for 30 days."});
   } catch (error) {
-    logger.error("Error deleting user", error);
+    logger.error("Error archiving user", error);
     res.status(500).json({success: false, message: error.message});
   }
 });
@@ -526,8 +553,11 @@ exports.sendRegistrationOTP = onRequest({ cors: true }, async (req, res) => {
       }
     }
 
+    const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
+
     await admin.firestore().collection("registration_otps").doc(target).set({
-      otp: otp,
+      hash: otpHash,
+      email: email ? email.toLowerCase().trim() : null,
       created_at: admin.firestore.FieldValue.serverTimestamp(),
       expires_at: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 10 * 60 * 1000)),
     });
@@ -539,7 +569,7 @@ exports.sendRegistrationOTP = onRequest({ cors: true }, async (req, res) => {
         subject: "Verification Code: " + otp,
         html: getOTPHtmlTemplate(otp, email, true),
       };
-      await mailTransport.sendMail(mailOptions);
+      await getMailTransport().sendMail(mailOptions);
     } else {
       logger.info(`[SMS OTP] To: ${phone}, Code: ${otp}`);
     }
@@ -587,7 +617,9 @@ exports.completeRegistration = onRequest({ cors: true }, async (req, res) => {
     }
 
     const storedData = otpDoc.data();
-    if (storedData.otp !== otp) {
+    const incomingHash = crypto.createHash("sha256").update(otp).digest("hex");
+    
+    if (storedData.hash !== incomingHash) {
       res.status(400).json({ success: false, message: "Invalid verification code." });
       return;
     }
@@ -617,26 +649,57 @@ exports.completeRegistration = onRequest({ cors: true }, async (req, res) => {
       phone: phone || userData.phone || "",
       company_name: "Jettsan",
       user_type: role,
-      status: "active",
+      status: "pending", // Default to pending for Super Admin approval
       created_at: admin.firestore.FieldValue.serverTimestamp(),
     });
     logger.info(`Firestore user doc created for: ${userRecord.uid}`);
 
-    if (role === "driver") {
-      await admin.firestore().collection("drivers").doc(email.toLowerCase().trim()).set({
-        driver_name: userData.full_name,
-        driver_email: email.toLowerCase().trim(),
-        current_status: "offline",
-        created_at: admin.firestore.FieldValue.serverTimestamp(),
-        updated_at: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    }
+      if (role === "driver") {
+        await admin.firestore().collection("drivers").doc(userRecord.uid).set({
+          driver_name: userData.full_name,
+          driver_email: email.toLowerCase().trim(),
+          current_status: "offline",
+          status: "pending",
+          created_at: admin.firestore.FieldValue.serverTimestamp(),
+          updated_at: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
 
     await admin.firestore().collection("registration_otps").doc(target).delete();
     res.json({ success: true, message: "Account created successfully!", uid: userRecord.uid });
   } catch (error) {
     logger.error("Error in completeRegistration", error);
     res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * Scheduled Cleanup: Purge expired archives after 30 days
+ * Runs daily at midnight
+ */
+exports.cleanupExpiredArchives = onSchedule("0 0 * * *", async (event) => {
+  const db = admin.firestore();
+  const now = admin.firestore.Timestamp.now();
+
+  try {
+    const expiredSnap = await db.collection("system_archives")
+      .where("expires_at", "<=", now)
+      .get();
+
+    if (expiredSnap.empty) {
+      logger.info("No expired archives to cleanup today.");
+      return;
+    }
+
+    const batch = db.batch();
+    expiredSnap.docs.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+
+    await batch.commit();
+    logger.info(`Purged ${expiredSnap.size} expired archive(s).`);
+  } catch (error) {
+    logger.error("Error cleaning up expired archives", error);
   }
 });
 

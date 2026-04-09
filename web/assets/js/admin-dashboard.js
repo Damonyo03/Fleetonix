@@ -1,6 +1,6 @@
 import { auth, db } from "./firebase-init.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { collection, query, where, onSnapshot, getDocs, doc, getDoc, updateDoc, addDoc, serverTimestamp, writeBatch } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { collection, query, where, onSnapshot, getDocs, doc, getDoc, updateDoc, addDoc, serverTimestamp, writeBatch, limit, getCountFromServer } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { initLayout } from "./modules/ui.js";
 import { sanitizeFirestoreData, generateNumericId } from "./modules/data.js";
 
@@ -14,8 +14,10 @@ let emailToUidMap = {}; // Maps driver_email -> UID for fast lookup
 let pendingBookingsMap = new Map();
 let currentDispatchBookingId = null;
 let unsubscribeStats = [];
+let unsubscribeDrivers = null;
 let infoWindow = null;
 let driverDTRStatus = {}; // email -> { action: 'time_in'|'time_out', timestamp: JS Date }
+let driversMapListenerRegistered = false; // Guard: register idle listener only once
 
 // Live Map Assets
 let accidentOverlays = {};        // driverId -> AccidentOverlay
@@ -221,6 +223,12 @@ function refreshDashboardData() {
     // 1. Cleanup existing listeners to avoid memory leaks
     unsubscribeStats.forEach(unsub => unsub && unsub());
     unsubscribeStats = [];
+    
+    if (unsubscribeDrivers) {
+        unsubscribeDrivers();
+        unsubscribeDrivers = null;
+    }
+
     initStats();
     initDTRStatusSync();
 }
@@ -284,10 +292,41 @@ function initStats() {
         limit(100)
     );
 
+    // ── Optimized KPI Aggregations (bypass 100-limit constraints) ──
+    const updateBigStats = async () => {
+        try {
+            // 1. Total Drivers
+            const drvCount = await getCountFromServer(query(collection(db, "users"), where("role", "==", "driver")));
+            const totalDriversEl = document.getElementById('totalDrivers');
+            if (totalDriversEl) totalDriversEl.innerText = drvCount.data().count;
+
+            // 2. Monthly Bookings
+            const monthCount = await getCountFromServer(query(
+                collection(db, "schedules"),
+                where("status", "==", "completed"),
+                where("updated_at", ">=", startOfMonth)
+            ));
+            const monthlyBookingsEl = document.getElementById('monthlyBookings');
+            if (monthlyBookingsEl) monthlyBookingsEl.innerText = monthCount.data().count;
+
+            // 3. Pending & Active (Refresh once, then live listeners take over)
+            const pendingCount = await getCountFromServer(bookingsQuery);
+            const pendingBadge = document.getElementById('pendingBookings');
+            if (pendingBadge) pendingBadge.innerText = pendingCount.data().count;
+
+            const activeCount = await getCountFromServer(activeTripsQuery);
+            const activeSchedulesEl = document.getElementById('activeSchedules');
+            if (activeSchedulesEl) activeSchedulesEl.innerText = activeCount.data().count;
+
+        } catch (err) {
+            console.warn("Failed to update aggregate KPIs:", err);
+        }
+    };
+    updateBigStats();
+    setInterval(updateBigStats, 5 * 60 * 1000); // Periodic re-sync for aggregates
+
     const unsubUsers = onSnapshot(usersQuery, (snapshot) => {
-        const drivers = snapshot.docs.filter(d => (d.data().user_type === 'driver' || d.data().role === 'driver')).length;
-        const totalDriversEl = document.getElementById('totalDrivers');
-        if (totalDriversEl) totalDriversEl.innerText = drivers;
+        // Keep live for small changes if needed, but aggregates are handled above
     });
 
     // Total Partners stat removed or hardcoded to 1 (Jettsan)
@@ -311,8 +350,6 @@ function initStats() {
         if (pendingBadge) pendingBadge.innerText = snapshot.size;
     });
 
-    // Active Trips: status in ['started', 'in_progress', 'pickup', 'dropoff']
-    const activeTripsQuery = query(schedulesQuery, where("status", "in", ["started", "in_progress", "pickup", "dropoff"]));
     const unsubSchedules = onSnapshot(activeTripsQuery, (snapshot) => {
         const activeSchedulesEl = document.getElementById('activeSchedules');
         if (activeSchedulesEl) activeSchedulesEl.innerText = snapshot.size;
@@ -352,27 +389,19 @@ function initStats() {
                     tripId: change.doc.id,
                     status: data.status
                 };
-                // Fix Issue 5: pipe odometer_start from schedule to driver data for Quick Info Panel
                 if (allDriversData[driverId]) {
                     allDriversData[driverId].odometer_start = data.odometer_start;
                 }
             }
-            // Trigger marker refresh to update polylines/stops
             if (driverMarkers[driverId]) refreshMarker(driverId);
         });
     });
-
-    // Extended Insights & Recent Completed Bookings
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
     const unsubCompleted = onSnapshot(completedSchedulesQuery, (snapshot) => {
         renderRecentCompletedBookings(snapshot);
         
         let totalDuration = 0;
         let todayCount = 0;
-        let monthCount = 0;
 
         snapshot.forEach(doc => {
             const data = doc.data();
@@ -380,9 +409,7 @@ function initStats() {
             if (!completedAt) return;
             
             if (completedAt >= today) todayCount++;
-            if (completedAt >= startOfMonth) monthCount++;
 
-            // Calculate duration if start/end times exist
             if (data.start_time && data.end_time) {
                 const start = data.start_time.toDate ? data.start_time.toDate() : new Date(data.start_time);
                 const end = data.end_time.toDate ? data.end_time.toDate() : new Date(data.end_time);
@@ -395,9 +422,6 @@ function initStats() {
         const avgDuration = todayCount > 0 ? Math.round(totalDuration / todayCount) : 0;
         const avgDurationEl = document.getElementById('avgTripDuration');
         if (avgDurationEl) avgDurationEl.innerHTML = `${avgDuration} <small style="font-size:0.8rem; font-weight:400;">mins</small>`;
-        
-        const monthlyBookingsEl = document.getElementById('monthlyBookings');
-        if (monthlyBookingsEl) monthlyBookingsEl.innerText = monthCount;
     });
 
     unsubscribeStats.push(unsubUsers, unsubAccidents, unsubBookings, unsubSchedules, unsubCompleted);
@@ -1007,10 +1031,13 @@ function updateOnlineDisplay() {
         mapStatusEl.innerText = `Live: ${onlineCount} drivers online`;
     }
 
-    // Re-render all drivers when admin pans/zooms (C5)
-    driversMap.addListener('idle', () => {
-        Object.keys(allDriversData).forEach(id => scheduleRender(id));
-    });
+    // Re-render all drivers when admin pans/zooms (C5) — register only once
+    if (driversMap && !driversMapListenerRegistered) {
+        driversMapListenerRegistered = true;
+        driversMap.addListener('idle', () => {
+            Object.keys(allDriversData).forEach(id => scheduleRender(id));
+        });
+    }
 }
 
 

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -61,6 +62,7 @@ fun AuthFlow() {
     // First Login Security State
     var isFirstLoginMode by rememberSaveable { mutableStateOf(false) }
     var needsPasswordReset by rememberSaveable { mutableStateOf(false) }
+    var isPendingApproval by rememberSaveable { mutableStateOf(false) }
     
     var feedData by remember { mutableStateOf<List<DriverSchedule>>(emptyList()) }
     var feedLoading by remember { mutableStateOf(false) }
@@ -134,12 +136,17 @@ fun AuthFlow() {
                             val isFirstTime = (doc.getBoolean("isFirstLogin") ?: false)
                             
                             if (userRole == "driver") {
-                                if (isFirstTime) {
+                                val status = doc.getString("status") ?: "active"
+                                if (status == "pending") {
+                                    isPendingApproval = true
+                                    isDriverVerified = false
+                                } else if (isFirstTime) {
                                     isFirstLoginMode = true
                                     isDriverVerified = false
                                     Log.d("AuthFlow", "First login detected for driver. Enforcing security flow.")
                                 } else {
                                     isFirstLoginMode = false
+                                    isPendingApproval = false
                                     isDriverVerified = true 
                                 }
                             }
@@ -154,6 +161,7 @@ fun AuthFlow() {
                 }
             } else {
                 isDriverVerified = false
+                isPendingApproval = false
                 userRole = null
                 userData = null
             }
@@ -337,6 +345,7 @@ fun AuthFlow() {
         }
         userRole == null -> "loading_role"
         userRole != "driver" -> "unauthorized"
+        userRole == "driver" && isPendingApproval -> "pending_approval"
         userRole == "driver" && !isDriverVerified -> "verify_otp"
         isFirstLoginMode && needsPasswordReset -> "force_reset"
         showHistory -> "history"
@@ -383,6 +392,42 @@ fun AuthFlow() {
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6B6B))
                         ) {
                             Text("Sign Out")
+                        }
+                    }
+                }
+            }
+            "pending_approval" -> {
+                Box(modifier = Modifier.fillMaxSize().background(com.prototype.fleetonix.ui.theme.Midnight), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Pending",
+                            tint = com.prototype.fleetonix.ui.theme.AccentTeal,
+                            modifier = Modifier.size(64.dp)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Enrollment Pending",
+                            color = com.prototype.fleetonix.ui.theme.TextPrimary,
+                            style = MaterialTheme.typography.headlineSmall
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Your application is currently under review by the Super Admin. You will receive an email once your account has been authorized.",
+                            color = com.prototype.fleetonix.ui.theme.TextSecondary,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Button(
+                            onClick = { 
+                                auth.signOut()
+                                currentUser = null
+                                userRole = null
+                                isPendingApproval = false
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = com.prototype.fleetonix.ui.theme.AccentTeal)
+                        ) {
+                            Text("Log Out")
                         }
                     }
                 }

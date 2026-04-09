@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.sp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.DocumentChange
+import com.google.firebase.firestore.FieldValue
 import com.prototype.fleetonix.ui.theme.*
 
 // ─────────────────────────────────────────────────────────────
@@ -503,10 +505,14 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                 }
 
                 if (snapshot != null) {
-                    // Phase E: Mark assignments as viewed by driver
-                    snapshot.documents.forEach { doc ->
-                        if (doc.get("driver_viewed_at") == null) {
-                            doc.reference.update("driver_viewed_at", com.google.firebase.firestore.FieldValue.serverTimestamp())
+                    // Phase E: Mark *newly added* assignments as viewed by driver
+                    // Using documentChanges ensures we only check docs once when they enter the result set
+                    snapshot.documentChanges.forEach { change ->
+                        if (change.type == DocumentChange.Type.ADDED) {
+                            val doc = change.document
+                            if (doc.get("driver_viewed_at") == null) {
+                                doc.reference.update("driver_viewed_at", FieldValue.serverTimestamp())
+                            }
                         }
                     }
 

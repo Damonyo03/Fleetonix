@@ -7,9 +7,12 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.location.Location
+import android.location.Geocoder
+import java.util.Locale
+import android.os.Handler
 import android.os.Build
 import android.os.IBinder
-import android.os.Looper
 import android.util.Log
 import android.app.PendingIntent
 import android.os.HandlerThread
@@ -37,8 +40,6 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
-import android.location.Geocoder
-import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -71,6 +72,7 @@ class LocationService : Service() {
     
     // Phase E: Connectivity
     private var commandListener: com.google.firebase.firestore.ListenerRegistration? = null
+    private var currentListeningUid: String? = null
 
     // A5: Vehicle log throttling
     private var lastLoggedLocation: android.location.Location? = null
@@ -120,9 +122,6 @@ class LocationService : Service() {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         geofencingClient = LocationServices.getGeofencingClient(this)
         
-        // Phase E: Initialize Command Listener
-        initCommandListener()
-        
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
                 locationResult.lastLocation?.let { location ->
@@ -146,7 +145,7 @@ class LocationService : Service() {
                             }
                         }
                     }
-                    lastLocation = location
+                    // lastLocation = location // Removed here, moved to end of outer block
 
                     // 3. Push to Firestore for Admin Dashboard (Real-time tracking)
                     if (driverEmail.isNotEmpty()) {
@@ -176,6 +175,7 @@ class LocationService : Service() {
                     if (BuildConfig.DEBUG) {
                         Log.d("LocationService", "Processed Telematics: Speed=$smoothedSpeed G=$currentGForce Network=$currentWifiSsid")
                     }
+                    lastLocation = location // Set after all calculations using the delta
                 }
             }
         }
@@ -304,10 +304,19 @@ class LocationService : Service() {
 
         if (driverEmail.isNotEmpty()) {
             Log.d("LocationService", "Tracking active for: $driverEmail [UID: ${driverUid.ifEmpty { "Restored" }}]")
+            // Initialize command listener as soon as identifiers are resolved/restored
+            initCommandListener()
         }
 
         when (intent?.action) {
             ACTION_START -> {
+                if (wakeLock == null || !wakeLock!!.isHeld) {
+                    val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+                    wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Fleetonix:LocationTrackingLock")
+                    wakeLock?.acquire()
+                }
+                
+                startLocationUpdates()
                 PresenceManager.updateStatus(this@LocationService, true)
                 Log.d("LocationService", "Service started: Driver $driverEmail is now ONLINE")
             }
@@ -349,6 +358,7 @@ class LocationService : Service() {
             }
         }
 
+
         createNotificationChannel()
         val notification: Notification = NotificationCompat.Builder(this, "LOCATION_CHANNEL_ID")
             .setContentTitle("Fleetonix")
@@ -363,17 +373,7 @@ class LocationService : Service() {
             startForeground(1, notification)
         }
 
-        startLocationUpdates()
-
-        // Acquire WakeLock to prevent CPU sleep during background tracking
-        val powerManager = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
-        wakeLock = powerManager.newWakeLock(
-            android.os.PowerManager.PARTIAL_WAKE_LOCK,
-            "Fleetonix:LocationTrackingLock"
-        ).apply { acquire() }
-
         return START_STICKY
-
     }
 
     private fun startLocationUpdates() {
@@ -425,11 +425,19 @@ class LocationService : Service() {
     
     private fun initCommandListener() {
         val uid = driverUid.ifEmpty { 
-            // Fallback to searching by email if UID not set yet
             getSharedPreferences("fleetonix_prefs", Context.MODE_PRIVATE)
                 .getString("driver_uid", "") ?: ""
         }
         if (uid.isEmpty()) return
+        
+        // Prevent redundant registrations if already listening to the same UID
+        if (commandListener != null && uid == currentListeningUid) {
+            return
+        }
+        
+        // Cleanup old listener if UID changed or we need a fresh start
+        commandListener?.remove()
+        currentListeningUid = uid
         
         val db = FirebaseFirestore.getInstance()
         commandListener = db.collection("drivers").document(uid)
@@ -522,30 +530,36 @@ class LocationService : Service() {
      * @param driverEmail The email for the driver (used for driver_locations doc ID).
      * @param location The Location object received from FusedLocationProviderClient.
      */
+    private fun getAddressFromLocation(location: android.location.Location): String {
+        return try {
+            val geocoder = Geocoder(applicationContext, Locale.getDefault())
+            val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
+            var humanReadableAddress = "Lat: ${String.format(Locale.US, "%.4f", location.latitude)}, Lng: ${String.format(Locale.US, "%.4f", location.longitude)}"
+            if (!addresses.isNullOrEmpty()) {
+                val addr = addresses[0]
+                val city = addr.locality ?: addr.subAdminArea ?: ""
+                val thoroughfare = addr.thoroughfare ?: ""
+                if (city.isNotEmpty() && thoroughfare.isNotEmpty()) {
+                    humanReadableAddress = "$thoroughfare, $city"
+                } else if (city.isNotEmpty()) {
+                    humanReadableAddress = city
+                } else if (thoroughfare.isNotEmpty()) {
+                    humanReadableAddress = thoroughfare
+                }
+            }
+            humanReadableAddress
+        } catch (e: Exception) {
+            Log.e("LocationService", "Geocoder failed", e)
+            "GPS: ${location.latitude}, ${location.longitude}"
+        }
+    }
+
     private fun updateLocationInFirestore(driverEmail: String, location: android.location.Location) {
         val firestore = FirebaseFirestore.getInstance()
         val driverRef = firestore.collection("driver_locations").document(driverEmail)
 
         serviceScope.launch {
-            var humanReadableAddress = "Lat: ${String.format(Locale.US, "%.4f", location.latitude)}, Lng: ${String.format(Locale.US, "%.4f", location.longitude)}"
-            try {
-                val geocoder = Geocoder(applicationContext, Locale.getDefault())
-                val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
-                if (!addresses.isNullOrEmpty()) {
-                    val addr = addresses[0]
-                    val city = addr.locality ?: addr.subAdminArea ?: ""
-                    val thoroughfare = addr.thoroughfare ?: ""
-                    if (city.isNotEmpty() && thoroughfare.isNotEmpty()) {
-                        humanReadableAddress = "$thoroughfare, $city"
-                    } else if (city.isNotEmpty()) {
-                        humanReadableAddress = city
-                    } else if (thoroughfare.isNotEmpty()) {
-                        humanReadableAddress = thoroughfare
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("LocationService", "Geocoder failed", e)
-            }
+            val humanReadableAddress = getAddressFromLocation(location)
 
             val locationData = hashMapOf(
                 "current_latitude" to location.latitude,
@@ -579,10 +593,20 @@ class LocationService : Service() {
                     Log.e("LocationService", "Error writing to driver_locations", e)
                 }
                 
-            // Determine how to find the driver document (prefer UID if available)
+            // Determine how to find the driver document (prefer UID, fallback to Email for migration)
             val driverColl = firestore.collection("drivers")
             val driverTask = if (driverUid.isNotEmpty()) {
-                driverColl.document(driverUid).get()
+                driverColl.document(driverUid).get().continueWithTask { task ->
+                    val result = task.result
+                    if (result != null && result.exists()) {
+                        com.google.android.gms.tasks.Tasks.forResult(result)
+                    } else {
+                        // UID doc not found, check for legacy email doc
+                        driverColl.whereEqualTo("driver_email", driverEmail).get().continueWith { 
+                            it.result.documents.firstOrNull() 
+                        }
+                    }
+                }
             } else {
                 driverColl.whereEqualTo("driver_email", driverEmail).get().continueWith { it.result.documents.firstOrNull() }
             }
@@ -590,6 +614,15 @@ class LocationService : Service() {
             driverTask.addOnSuccessListener { result ->
                 val doc = if (result is DocumentSnapshot) result else result as? DocumentSnapshot
                 if (doc != null && doc.exists()) {
+                    // Auto-migrate if this is a legacy email-keyed document
+                    if (doc.id == driverEmail && driverUid.isNotEmpty()) {
+                        val legacyData = doc.data ?: hashMapOf()
+                        driverColl.document(driverUid).set(legacyData).addOnSuccessListener {
+                            doc.reference.delete()
+                            Log.i("LocationService", "Migrated legacy driver doc [$driverEmail] -> UID [$driverUid]")
+                        }
+                    }
+
                     val updates = hashMapOf<String, Any>(
                         "current_location_name" to humanReadableAddress,
                         "location" to GeoPoint(location.latitude, location.longitude),

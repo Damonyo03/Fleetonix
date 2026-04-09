@@ -33,16 +33,17 @@ service cloud.firestore {
              .affectedKeys().hasOnly(['trip_phase', 'last_updated']);
       allow create, delete: if request.auth != null
         && get(/databases/$(database)/documents/users/$(request.auth.uid))
-             .data.role in ['super_admin', 'company_admin'];
+             .data.role in ['super_admin', 'company_admin', 'admin'];
     }
 
     // ── incidents: drivers can create; admins can update/delete ─────────
     match /incidents/{docId} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.driver_email.lower() == request.auth.token.email.lower();
       allow update, delete: if request.auth != null
         && get(/databases/$(database)/documents/users/$(request.auth.uid))
-             .data.role in ['super_admin', 'company_admin'];
+             .data.role in ['super_admin', 'company_admin', 'admin'];
     }
 
     // ── dtr_logs: drivers write own records only ─────────────────────────
@@ -53,7 +54,7 @@ service cloud.firestore {
              == request.auth.token.email.lower();
       allow update, delete: if request.auth != null
         && get(/databases/$(database)/documents/users/$(request.auth.uid))
-             .data.role in ['super_admin', 'company_admin'];
+             .data.role in ['super_admin', 'company_admin', 'admin'];
     }
 
     // ── Everything else: admin-only write ───────────────────────────────
@@ -61,7 +62,7 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow write: if request.auth != null
         && get(/databases/$(database)/documents/users/$(request.auth.uid))
-             .data.role in ['super_admin', 'company_admin'];
+             .data.role in ['super_admin', 'company_admin', 'admin'];
     }
   }
 }

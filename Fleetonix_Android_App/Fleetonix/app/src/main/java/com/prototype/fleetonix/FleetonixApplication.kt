@@ -20,7 +20,7 @@ class FleetonixApplication : Application() {
         val settings = FirebaseFirestoreSettings.Builder()
             .setLocalCacheSettings(
                 PersistentCacheSettings.newBuilder()
-                    .setSizeBytes(FirebaseFirestoreSettings.CACHE_SIZE_UNLIMITED)
+                    .setSizeBytes(100 * 1024 * 1024) // 100MB Limit
                     .build()
             )
             .build()

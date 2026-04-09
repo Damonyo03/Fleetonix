@@ -292,7 +292,7 @@ fun DriverDashboard(
     var showSignatureDialog by remember { mutableStateOf(false) }
     var signatureBase64 by remember { mutableStateOf<String?>(null) }
     var refusalReason by remember { mutableStateOf("") }
-    
+
     fun getAddressFromLocation(lat: Double, lng: Double): String {
         return try {
             val geocoder = android.location.Geocoder(context, java.util.Locale.getDefault())
@@ -477,6 +477,8 @@ fun DriverDashboard(
     var showTripTicket by remember { mutableStateOf(false) }
     var targetTripId by remember { mutableStateOf<String?>(null) }
     var activeTicketId by remember { mutableStateOf<String?>(null) }
+    var showDriverSignatureCapture by remember { mutableStateOf(false) }
+    var capturedDriverSignature by remember { mutableStateOf<String?>(null) }
 
     // New Task Popup states
     var lastKnownScheduleId by remember { mutableStateOf<Int?>(null) }
@@ -2675,21 +2677,25 @@ fun DriverDashboard(
                 segments = nextSchedule?.segments,
                 isSubmitting = isCompletingTrip,
                 onConfirm = {
-                    val docId = targetTripId ?: return@TripTicketDialog
-                    scope.launch {
-                        try {
-                            isCompletingTrip = true
-                            tripActionError = null
-                            
-                            val tripData = hashMapOf(
-                                "status" to "completed",
-                                "trip_phase" to "completed",
-                                "completed_at" to FieldValue.serverTimestamp(),
-                                "accepted_at" to (acceptedAt ?: ""),
-                                "picked_up_at" to (pickedUpAt ?: ""),
-                                "time_of_departure" to (pickedUpAt ?: ""),
-                                "time_of_arrival" to (completedAt ?: ""),
-                                "total_km_travelled" to (totalDistanceMetres / 1000.0),
+                    if (capturedDriverSignature == null) {
+                        showDriverSignatureCapture = true
+                    } else {
+                        val docId = targetTripId ?: return@TripTicketDialog
+                        scope.launch {
+                            try {
+                                isCompletingTrip = true
+                                tripActionError = null
+                                
+                                val tripData = hashMapOf(
+                                    "status" to "completed",
+                                    "trip_phase" to "completed",
+                                    "driver_signature" to (capturedDriverSignature ?: ""),
+                                    "completed_at" to FieldValue.serverTimestamp(),
+                                    "accepted_at" to (acceptedAt ?: ""),
+                                    "picked_up_at" to (pickedUpAt ?: ""),
+                                    "time_of_departure" to (pickedUpAt ?: ""),
+                                    "time_of_arrival" to (completedAt ?: ""),
+                                    "total_km_travelled" to (totalDistanceMetres / 1000.0),
                                 "vehicle_type" to (session.driver?.vehicleAssigned ?: ""),
                                 "plate_number" to (session.driver?.plateNumber ?: ""),
                                 "route_polyline" to GoogleMapsService.encodePolyline(actualRoutePoints),
@@ -2750,15 +2756,17 @@ fun DriverDashboard(
                             }
                             
                             tripActionSuccess = "Trip completed successfully!"
+                            showTripTicket = false
+                            capturedDriverSignature = null
                         } catch (e: Exception) {
                             tripActionError = "Failed: ${e.message}"
                             Log.e("DriverDashboard", "Trip completion failed", e)
                         } finally {
                             isCompletingTrip = false
-                            showTripTicket = false
                         }
                     }
                 }
+            }
             )
         }
 
@@ -2916,6 +2924,16 @@ fun DriverDashboard(
         if (showDtrHistory) {
             BackHandler { showDtrHistory = false }
             DTRHistoryScreen(onBack = { showDtrHistory = false })
+        }
+
+        if (showDriverSignatureCapture) {
+            SignatureCaptureDialog(
+                onDismiss = { showDriverSignatureCapture = false },
+                onConfirm = { incomingSignatureBase64 ->
+                    capturedDriverSignature = incomingSignatureBase64
+                    showDriverSignatureCapture = false
+                }
+            )
         }
         }
     } // End of ModalNavigationDrawer main content lambda
