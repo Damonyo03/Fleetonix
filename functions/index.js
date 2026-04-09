@@ -693,13 +693,24 @@ exports.cleanupExpiredArchives = require("firebase-functions/v2/scheduler").onSc
       return;
     }
 
-    const batch = db.batch();
-    expiredSnap.docs.forEach(doc => {
-      batch.delete(doc.ref);
-    });
+    const docs = expiredSnap.docs;
+    const BATCH_SIZE = 500;
+    let purgedCount = 0;
 
-    await batch.commit();
-    logger.info(`Purged ${expiredSnap.size} expired archive(s).`);
+    // Split into chunks of 500 to stay within Firestore WriteBatch limits (C6)
+    for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+      const chunk = docs.slice(i, i + BATCH_SIZE);
+      const batch = db.batch();
+      
+      chunk.forEach(doc => {
+        batch.delete(doc.ref);
+        purgedCount++;
+      });
+
+      await batch.commit();
+    }
+
+    logger.info(`Successfully purged ${purgedCount} expired archive(s) in ${Math.ceil(purgedCount / BATCH_SIZE)} batch(es).`);
   } catch (error) {
     logger.error("Error cleaning up expired archives", error);
   }
