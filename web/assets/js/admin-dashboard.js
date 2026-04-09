@@ -1,7 +1,7 @@
 import { auth, db } from "./firebase-init.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { collection, query, where, onSnapshot, getDocs, doc, getDoc, updateDoc, addDoc, serverTimestamp, writeBatch, limit, getCountFromServer } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-import { initLayout } from "./modules/ui.js";
+import { initLayout, clearUserCache, showModal, hideModal } from "./modules/ui.js";
 import { sanitizeFirestoreData, generateNumericId } from "./modules/data.js";
 
 // Map Configuration
@@ -19,6 +19,7 @@ let currentDispatchBookingId = null;
 let unsubscribeStats = [];
 let unsubscribeDrivers = null;
 let infoWindow = null;
+let currentUserData = null; // Ported from admin-bookings.js
 let driverDTRStatus = {}; // email -> { action: 'time_in'|'time_out', timestamp: JS Date }
 
 // Live Map Assets
@@ -29,6 +30,10 @@ let driverPolylineSegments = {};   // driverId -> [google.maps.Polyline] (colore
 let activeQuickInfoDriverId = null; // currently pinned Quick Info driver
 let uiUpdateTimeout = null;
 let listUpdateTimeout = null;
+
+// Notification Counts (Ported from admin.js)
+let accidentCount = 0;
+let issueCount = 0;
 
 // ── Batch Render Queue (C1) ───────────────────────────────────────────────────
 const pendingRenderSet = new Set();
@@ -131,7 +136,150 @@ onAuthStateChanged(auth, async (user) => {
     
     initDashboardUI();
     initPostingFeature();
+    initGlobalAdminListeners();
+    initNewBookingFeature();
+    initDispatchFeature();
 });
+
+function initDispatchFeature() {
+    const confirmBtn = document.getElementById('confirmDispatchBtn');
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', async () => {
+            if (!currentDispatchBookingId) return;
+            const select = document.getElementById('driverSelect');
+            const driverId = select.value;
+            if (!driverId) return alert("Select a driver.");
+
+            confirmBtn.disabled = true;
+            confirmBtn.innerText = "Dispatching...";
+
+            try {
+                const bookingDoc = await getDoc(doc(db, "bookings", currentDispatchBookingId));
+                const bookingData = bookingDoc.data();
+                const targetDate = bookingData.pickup_date || "";
+
+                if (isCutOffPassed(targetDate)) {
+                    const role = currentUserData?.role || currentUserData?.user_type;
+                    if (role !== 'super_admin' && role !== 'admin') {
+                        alert(`⚠️ CUT-OFF PASSED: It is past 3:00 PM. You can no longer modify or dispatch schedules for tomorrow (${targetDate}).`);
+                        confirmBtn.disabled = false;
+                        confirmBtn.innerText = "Confirm Dispatch";
+                        return;
+                    } else {
+                        if (!confirm(`NOTICE: The 3:00 PM cut-off for tomorrow (${targetDate}) has passed. Override?`)) {
+                            confirmBtn.disabled = false;
+                            confirmBtn.innerText = "Confirm Dispatch";
+                            return;
+                        }
+                    }
+                }
+
+                const driverDoc = await getDoc(doc(db, "drivers", driverId));
+                const driverData = driverDoc.data();
+                const driverEmail = driverData.driver_email || "";
+
+                await updateDoc(doc(db, "bookings", currentDispatchBookingId), {
+                    status: "scheduled",
+                    driver_id: driverId,
+                    updated_at: serverTimestamp()
+                });
+
+                const scheduleData = sanitizeFirestoreData({
+                    booking_id: currentDispatchBookingId,
+                    numeric_booking_id: bookingData.numeric_booking_id || generateNumericId(),
+                    schedule_id: generateNumericId(),
+                    client_id: bookingData.client_id,
+                    client_name: bookingData.client_name || "",
+                    driver_id: driverId,
+                    driver_email: driverEmail.toLowerCase().trim(),
+                    driver_name: driverData.driver_name,
+                    trip_phase: "pending",
+                    status: "pending",
+                    pickup_location: bookingData.pickup_location?.text || bookingData.pickup_location || "",
+                    dropoff_location: bookingData.dropoff_location?.text || bookingData.dropoff_location || "",
+                    schedule_date: bookingData.pickup_date || "",
+                    schedule_time: bookingData.pickup_time || "",
+                    isOfficial: false,
+                    created_at: serverTimestamp(),
+                    updated_at: serverTimestamp()
+                });
+
+                await addDoc(collection(db, "schedules"), scheduleData);
+                window.closeDispatchModal();
+            } catch (error) {
+                console.error(error);
+                alert("Failed to assign driver.");
+            } finally {
+                confirmBtn.disabled = false;
+                confirmBtn.innerText = "Confirm Dispatch";
+            }
+        });
+    }
+}
+
+function initNewBookingFeature() {
+    const newAdminBookingBtn = document.getElementById('newAdminBookingBtn');
+    if (newAdminBookingBtn) {
+        newAdminBookingBtn.addEventListener('click', () => {
+            showAdminBookingModal();
+        });
+    }
+}
+
+/** Ported from admin.js: Listen for global system notifications */
+function initGlobalAdminListeners() {
+    // 1. Sidebar Toggles (Redundancy check)
+    const menuToggle = document.getElementById('menuToggle');
+    const sidebar = document.getElementById('sidebar');
+    if (menuToggle && sidebar && !menuToggle.dataset.listenerAttached) {
+        menuToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            sidebar.classList.toggle('show');
+        });
+        menuToggle.dataset.listenerAttached = "true";
+    }
+
+    // 2. Notification Badges
+    const updateVisualBadges = () => {
+        const total = accidentCount + issueCount;
+        document.querySelectorAll('.notif-count').forEach(counter => {
+            counter.innerText = total > 0 ? total : '0';
+            counter.style.display = total > 0 ? 'inline-flex' : 'none';
+            counter.classList.add('badge', 'badge-error');
+        });
+        const headerBadge = document.querySelector('.notification-badge');
+        if (headerBadge) {
+            headerBadge.innerText = total > 0 ? total : '0';
+            headerBadge.style.display = total > 0 ? 'flex' : 'none';
+        }
+    };
+
+    onSnapshot(query(collection(db, "accidents"), where("status", "!=", "acknowledged")), (snap) => {
+        accidentCount = snap.size;
+        updateVisualBadges();
+    });
+
+    onSnapshot(query(collection(db, "vehicle_issues"), where("status", "!=", "acknowledged")), (snap) => {
+        issueCount = snap.size;
+        updateVisualBadges();
+    });
+
+    // 3. Logout handling
+    document.addEventListener('click', (e) => {
+        const logoutBtn = e.target.closest('#logoutBtn') || e.target.closest('.nav-item.logout');
+        if (logoutBtn) {
+            e.preventDefault();
+            if (confirm("Sign out of the administrative terminal?")) {
+                clearUserCache();
+                signOut(auth).then(() => {
+                    window.location.href = '../login.html';
+                }).catch(() => {
+                    window.location.href = '../login.html';
+                });
+            }
+        }
+    });
+}
 
 function initPostingFeature() {
     const postBtn = document.getElementById('postScheduleBtn');
@@ -520,23 +668,49 @@ function initMap() {
 
     const mapElement = document.getElementById('drivers-map');
     if (!mapElement) return;
-    
-    driversMap = new google.maps.Map(mapElement, mapOptions);
-    infoWindow = new google.maps.InfoWindow();
-
-    // Register idle listener exactly once — re-renders all drivers after pan/zoom (C5)
-    driversMap.addListener('idle', () => {
-        Object.keys(allDriversData).forEach(id => scheduleRender(id));
-    });
-
-    console.log("[Dashboard] Map initialized successfully.");
+    console.log("[Dashboard] Initializing Google Map...");
     const mapStatusEl = document.getElementById('mapStatus');
-    if (mapStatusEl) {
-        mapStatusEl.innerText = "LIVE";
-        mapStatusEl.className = "badge badge-success";
+    
+    try {
+        const mapElement = document.getElementById('drivers-map');
+        if (!mapElement) {
+            throw new Error("Map container #drivers-map not found in DOM.");
+        }
+
+        const mapOptions = {
+            center: { lat: 14.5995, lng: 120.9842 }, // Manila
+            zoom: 12,
+            mapId: 'f0c8e31d4b65673', // Premium vector map id
+            disableDefaultUI: false,
+            zoomControl: true,
+            gestureHandling: 'greedy'
+        };
+
+        driversMap = new google.maps.Map(mapElement, mapOptions);
+        infoWindow = new google.maps.InfoWindow();
+
+        // Register idle listener exactly once — re-renders all drivers after pan/zoom (C5)
+        driversMap.addListener('idle', () => {
+            Object.keys(allDriversData).forEach(id => scheduleRender(id));
+        });
+
+        console.log("[Dashboard] Map initialized successfully.");
+        if (mapStatusEl) {
+            mapStatusEl.innerText = "LIVE";
+            mapStatusEl.className = "badge badge-success";
+        }
+        
+        // Initial render of any data already fetched
+        Object.keys(allDriversData).forEach(id => scheduleRender(id));
+        
+    } catch (error) {
+        console.error("[Dashboard] Map Initialization Failed:", error);
+        if (mapStatusEl) {
+            mapStatusEl.innerText = "ERROR";
+            mapStatusEl.className = "badge badge-error";
+            mapStatusEl.title = error.message;
+        }
     }
-    // Initial render of any data already fetched
-    Object.keys(allDriversData).forEach(id => scheduleRender(id));
 }
 
 /**
@@ -1517,79 +1691,263 @@ window.closeDispatchModal = function() {
     if (modal) modal.classList.remove('active');
 };
 
-document.addEventListener('DOMContentLoaded', () => {
-    const confirmBtn = document.getElementById('confirmDispatchBtn');
-    if (confirmBtn) {
-        confirmBtn.addEventListener('click', async () => {
-            if (!currentDispatchBookingId) return;
-            const select = document.getElementById('driverSelect');
-            const driverId = select.value;
-            if (!driverId) return alert("Select a driver.");
-
-            confirmBtn.disabled = true;
-            confirmBtn.innerText = "Dispatching...";
-
-            try {
-                const bookingDoc = await getDoc(doc(db, "bookings", currentDispatchBookingId));
-                const bookingData = bookingDoc.data();
-                const targetDate = bookingData.pickup_date || "";
-
-                // CUT-OFF RULE (3:00 PM for tomorrow)
-                if (isCutOffPassed(targetDate)) {
-                    const role = currentUserData?.role || currentUserData?.user_type;
-                    if (role !== 'super_admin' && role !== 'admin') {
-                        alert(`⚠️ CUT-OFF PASSED: It is past 3:00 PM. You can no longer modify or dispatch schedules for tomorrow (${targetDate}). Please contact a Super Admin if this is urgent.`);
-                        confirmBtn.disabled = false;
-                        confirmBtn.innerText = "Confirm Dispatch";
-                        return;
-                    } else {
-                        if (!confirm(`NOTICE: The 3:00 PM cut-off for tomorrow (${targetDate}) has passed. Do you want to OVERRIDE and proceed with this URGENT dispatch?`)) {
-                            confirmBtn.disabled = false;
-                            confirmBtn.innerText = "Confirm Dispatch";
-                            return;
-                        }
-                    }
-                }
-
-                const driverDoc = await getDoc(doc(db, "drivers", driverId));
-                const driverData = driverDoc.data();
-                const driverEmail = driverData.driver_email || "";
-
-                await updateDoc(doc(db, "bookings", currentDispatchBookingId), {
-                    status: "scheduled",
-                    driver_id: driverId,
-                    updated_at: serverTimestamp()
-                });
-
-                const scheduleData = sanitizeFirestoreData({
-                    booking_id: currentDispatchBookingId,
-                    numeric_booking_id: bookingData.numeric_booking_id || generateNumericId(),
-                    schedule_id: generateNumericId(),
-                    client_id: bookingData.client_id,
-                    client_name: bookingData.client_name || "",
-                    driver_id: driverId,
-                    driver_email: driverEmail.toLowerCase().trim(),
-                    driver_name: driverData.driver_name,
-                    trip_phase: "pending",
-                    status: "pending",
-                    pickup_location: bookingData.pickup_location?.text || bookingData.pickup_location || "",
-                    dropoff_location: bookingData.dropoff_location?.text || bookingData.dropoff_location || "",
-                    schedule_date: bookingData.pickup_date || "",
-                    schedule_time: bookingData.pickup_time || "",
-                    isOfficial: false, // Default is unofficial until posted
-                    created_at: serverTimestamp(),
-                    updated_at: serverTimestamp()
-                });
-
-                await addDoc(collection(db, "schedules"), scheduleData);
-                window.closeDispatchModal();
-            } catch (error) {
-                console.error(error);
-                alert("Failed to assign driver.");
-            } finally {
-                confirmBtn.disabled = false;
-                confirmBtn.innerText = "Confirm Dispatch";
+// --- PORTED BOOKING MODAL LOGIC (Start) ---
+async function showAdminBookingModal() {
+    let clients = [];
+    try {
+        const rolesSnap = await getDocs(query(collection(db, "users"), where("role", "==", "client")));
+        const typesSnap = await getDocs(query(collection(db, "users"), where("user_type", "==", "client")));
+        const seen = new Set();
+        [...rolesSnap.docs, ...typesSnap.docs].forEach(d => {
+            if (!seen.has(d.id)) {
+                seen.add(d.id);
+                clients.push({ id: d.id, ...d.data() });
             }
         });
+        showCreateBookingModal(clients);
+    } catch (error) {
+        console.error("Error fetching clients:", error);
+        showCreateBookingModal([]);
     }
-});
+}
+
+async function showCreateBookingModal(clients) {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const tomorrow = new Date();
+    tomorrow.setDate(new Date().getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+    const content = `
+        <div class="form-group">
+            <label for="modal_passenger_name">Passenger Name</label>
+            <input type="text" id="modal_passenger_name" class="form-input" placeholder="Enter full name..." required>
+        </div>
+        <div class="modal-form-row">
+            <div class="form-group">
+                <label for="modal_passenger_email">Passenger Email (Optional)</label>
+                <input type="email" id="modal_passenger_email" class="form-input" placeholder="email@example.com">
+            </div>
+            <div class="form-group">
+                <label for="modal_passenger_phone">Phone Number (Optional)</label>
+                <input type="tel" id="modal_passenger_phone" class="form-input" placeholder="+63 9XX XXX XXXX">
+            </div>
+        </div>
+        <div class="modal-form-row">
+            <div class="form-group">
+                <label for="modal_contractor">Contractor</label>
+                <input type="text" id="modal_contractor" class="form-input" value="Jettsan" readonly>
+            </div>
+            <div class="form-group">
+                <label for="modal_operating_area">Target Operating Area</label>
+                <select id="modal_operating_area" class="form-input" required>
+                    <option value="">-- Select Area --</option>
+                    <option value="Metro Manila">Metro Manila – unrestricted</option>
+                    <option value="South">South – up to Calamba / Banlic</option>
+                    <option value="North">North – up to Clark / Mabalacat</option>
+                </select>
+            </div>
+        </div>
+        <div id="segments_container">
+            <div class="segment-group" style="margin-bottom: 24px; padding: 16px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px;">
+                <div style="font-size: 0.75rem; font-weight: 800; color: var(--accent-blue); margin-bottom: 12px; text-transform: uppercase;">Booking 1 (Primary)</div>
+                <div class="form-group pickup-point" style="position: relative;">
+                    <label>Pickup Location</label>
+                    <input type="text" class="form-input pickup-input" placeholder="Search for pickup..." required autocomplete="off">
+                    <input type="hidden" class="lat-input" value="0">
+                    <input type="hidden" class="lng-input" value="0">
+                </div>
+                <div class="form-group dropoff-point" style="position: relative;">
+                    <label>Dropoff Location</label>
+                    <input type="text" class="form-input dropoff-input" placeholder="Search for dropoff..." required autocomplete="off">
+                    <input type="hidden" class="drop-lat-input" value="0">
+                    <input type="hidden" class="drop-lng-input" value="0">
+                </div>
+            </div>
+        </div>
+        <button type="button" id="add_segment" class="btn-secondary" style="margin-bottom: 20px; padding: 8px 16px; font-size: 0.85em;"><i class="fas fa-plus-circle"></i> Add Secondary Stop</button>
+        <div class="modal-form-row">
+            <div class="form-group">
+                <label for="pickup_date">Pickup Date (Today/Tomorrow Only)</label>
+                <input type="date" id="pickup_date" class="form-input" value="${todayStr}" min="${todayStr}" max="${tomorrowStr}" required>
+            </div>
+            <div class="form-group">
+                <label for="pickup_time">Pickup Time</label>
+                <input type="time" id="pickup_time" class="form-input" required>
+            </div>
+        </div>
+        <div class="modal-form-row">
+            <div class="form-group">
+                <label for="passengers">Passengers (Pax)</label>
+                <input type="number" id="passengers" class="form-input" value="1" min="1" required>
+            </div>
+            <div class="form-group" style="display: flex; align-items: center; padding-top: 25px;">
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9em;">
+                    <input type="checkbox" id="return_to_pickup" style="width: auto;"> Return to Pickup
+                </label>
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="special_instructions">Special Instructions</label>
+            <textarea id="special_instructions" class="form-input" rows="2" placeholder="e.g. Near main gate..."></textarea>
+        </div>
+        <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px; background: rgba(0, 212, 255, 0.05); padding: 12px; border-radius: 8px; border: 1px dashed var(--accent-blue);">
+            <input type="checkbox" id="modal_is_official" style="width: auto;" checked>
+            <label for="modal_is_official" style="margin: 0; cursor: pointer; color: var(--accent-blue); font-weight: 700;">Official Trip</label>
+        </div>
+        <div class="form-group">
+            <label for="modal_driver">Assign Driver (Optional)</label>
+            <select id="modal_driver" class="form-input"><option value="">-- No Driver Assigned --</option></select>
+        </div>
+        <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-top: 10px; background: rgba(16, 185, 129, 0.05); padding: 12px; border-radius: 8px; border: 1px dashed var(--accent-green);">
+            <input type="checkbox" id="modal_auto_dispatch" style="width: auto;">
+            <label for="modal_auto_dispatch" style="margin: 0; cursor: pointer; color: var(--accent-green); font-weight: 700;">Auto-Approve & Dispatch</label>
+        </div>
+    `;
+
+    showModal('admin-booking-modal', 'New Client Booking', content, async () => {
+        const clientName = document.getElementById('modal_passenger_name').value.trim();
+        const clientEmail = document.getElementById('modal_passenger_email').value.trim();
+        const clientPhone = document.getElementById('modal_passenger_phone').value.trim();
+        if (!clientName) throw new Error("Please enter a passenger name.");
+
+        const pickupDateInput = document.getElementById('pickup_date').value;
+        const now = new Date();
+        const tomorrow = new Date();
+        tomorrow.setDate(now.getDate() + 1);
+        const tomorrowStr = tomorrow.toISOString().split('T')[0];
+        const isAdmin = currentUserData?.role === 'admin' || currentUserData?.role === 'super_admin';
+
+        if (pickupDateInput === tomorrowStr && now.getHours() >= 15) {
+            if (isAdmin) {
+                if (!confirm("NOTICE: 3:00 PM cutoff passed for tomorrow. Proceed?")) return;
+            } else {
+                throw new Error("Cut-off Reached: Next-day schedules must be requested before 3:00 PM.");
+            }
+        }
+
+        const segments = Array.from(document.querySelectorAll('.segment-group')).map((el, i) => ({
+            pickup: el.querySelector('.pickup-input').value,
+            pickup_latitude: parseFloat(el.querySelector('.lat-input').value) || 0,
+            pickup_longitude: parseFloat(el.querySelector('.lng-input').value) || 0,
+            dropoff: el.querySelector('.dropoff-input').value,
+            dropoff_latitude: parseFloat(el.querySelector('.drop-lat-input').value) || 0,
+            dropoff_longitude: parseFloat(el.querySelector('.drop-lng-input').value) || 0,
+            order: i + 1
+        }));
+        if (segments.some(s => !s.pickup || !s.dropoff)) throw new Error("Fill all pickup/dropoff locations.");
+
+        const bookingId = generateNumericId().toString();
+        const date = document.getElementById('pickup_date').value;
+        const time = document.getElementById('pickup_time').value;
+        const driverId = document.getElementById('modal_driver').value;
+        const autoDispatch = document.getElementById('modal_auto_dispatch').checked;
+        const isOfficial = document.getElementById('modal_is_official').checked;
+
+        const data = sanitizeFirestoreData({
+            booking_id: bookingId,
+            numeric_booking_id: parseInt(bookingId),
+            client_id: 'guest',
+            client_name: clientName,
+            client_email: clientEmail,
+            client_phone: clientPhone,
+            contractor: 'Jettsan',
+            operating_area: document.getElementById('modal_operating_area').value,
+            isOfficial: isOfficial,
+            segments: segments,
+            pickup_location: segments[0].pickup,
+            pickup_latitude: segments[0].pickup_latitude,
+            pickup_longitude: segments[0].pickup_longitude,
+            dropoff_location: segments[segments.length - 1].dropoff,
+            dropoff_latitude: segments[segments.length - 1].dropoff_latitude,
+            dropoff_longitude: segments[segments.length - 1].dropoff_longitude,
+            pickup_date: date,
+            pickup_time: time,
+            passengers: parseInt(document.getElementById('passengers').value) || 1,
+            return_to_pickup: document.getElementById('return_to_pickup').checked,
+            special_instructions: document.getElementById('special_instructions').value || '',
+            driver_id: driverId || null,
+            status: autoDispatch ? 'scheduled' : 'pending',
+            createdBy: 'admin',
+            created_at: serverTimestamp(),
+            updated_at: serverTimestamp()
+        });
+
+        await setDoc(doc(db, "bookings", bookingId), data);
+
+        if (autoDispatch && driverId) {
+            const driverSelect = document.getElementById('modal_driver');
+            const driverName = driverSelect.options[driverSelect.selectedIndex].text.replace('🟢 ', '').replace('⚪ ', '');
+            const driverDoc = await getDoc(doc(db, "drivers", driverId));
+            const dData = driverDoc.exists() ? driverDoc.data() : {};
+            
+            const scheduleData = sanitizeFirestoreData({
+                booking_id: bookingId,
+                numeric_booking_id: parseInt(bookingId), 
+                schedule_id: generateNumericId(),
+                driver_id: driverId,
+                driver_email: (dData.driver_email || "").toLowerCase().trim(),
+                driver_name: driverName,
+                trip_phase: "pending",
+                status: "pending",
+                segments: segments,
+                current_segment_index: 0,
+                pickup_location: segments[0].pickup,
+                dropoff_location: segments[segments.length - 1].dropoff,
+                schedule_date: date,
+                schedule_time: time,
+                isOfficial: isOfficial,
+                created_at: serverTimestamp(),
+                updated_at: serverTimestamp()
+            });
+
+            await addDoc(collection(db, "schedules"), scheduleData);
+            await updateDoc(doc(db, "drivers", driverId), {
+                current_status: "on_schedule"
+            });
+        }
+        alert("Booking created successfully!");
+    });
+
+    setTimeout(async () => {
+        const addSegmentBtn = document.getElementById('add_segment');
+        const container = document.getElementById('segments_container');
+        let segmentCount = 1;
+        if (addSegmentBtn && container) {
+            addSegmentBtn.onclick = () => {
+                segmentCount++;
+                const div = document.createElement('div');
+                div.className = 'segment-group';
+                div.style.cssText = 'margin-bottom: 24px; padding: 16px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; position: relative;';
+                div.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                        <div style="font-size:0.75rem; font-weight:800; color:var(--accent-blue); text-transform:uppercase;">Booking ${segmentCount}</div>
+                        <button type="button" class="btn-icon remove-segment" style="color:var(--accent-error);"><i class="fas fa-trash"></i></button>
+                    </div>
+                    <div class="form-group"><input type="text" class="form-input pickup-input" placeholder="Pickup..." required autocomplete="off"><input type="hidden" class="lat-input" value="0"><input type="hidden" class="lng-input" value="0"></div>
+                    <div class="form-group"><input type="text" class="form-input dropoff-input" placeholder="Dropoff..." required autocomplete="off"><input type="hidden" class="drop-lat-input" value="0"><input type="hidden" class="drop-lng-input" value="0"></div>
+                `;
+                container.appendChild(div);
+                if (window.initAutocompleteForInput) {
+                    div.querySelectorAll('input[type="text"]').forEach(input => window.initAutocompleteForInput(input));
+                }
+                div.querySelector('.remove-segment').onclick = () => div.remove();
+            };
+        }
+
+        const driverSelect = document.getElementById('modal_driver');
+        if (driverSelect) {
+            const driversSnap = await getDocs(query(collection(db, "drivers"), where("current_status", "==", "available")));
+            let html = '<option value="">-- No Driver Assigned --</option>';
+            driversSnap.docs.forEach(d => {
+                const data = d.data();
+                html += `<option value="${d.id}">${data.driver_name}</option>`;
+            });
+            driverSelect.innerHTML = html;
+        }
+        
+        if (window.initAutocompleteForInput) {
+            document.querySelectorAll('.pickup-input, .dropoff-input').forEach(input => window.initAutocompleteForInput(input));
+        }
+    }, 100);
+}
+// --- PORTED BOOKING MODAL LOGIC (End) ---
