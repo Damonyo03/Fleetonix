@@ -79,7 +79,7 @@ service cloud.firestore {
         && request.resource.data.driver_email.lower() == request.auth.token.email.lower();
       allow update: if request.auth != null
         && (request.auth.token.email.lower() == resource.data.driver_email.lower() ||
-            request.auth.uid == (resource.data.driver_uid ?: "") ||
+            request.auth.uid == resource.data.get('driver_uid', "") ||
             get(/databases/$(database)/documents/users/$(request.auth.uid))
               .data.role in ['super_admin', 'company_admin', 'admin']);
       allow delete: if request.auth != null
