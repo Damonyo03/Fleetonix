@@ -108,15 +108,15 @@ onAuthStateChanged(auth, async (user) => {
     // Start Live Listeners
     refreshDashboardData();
     
-    // Fix Issue 1 & 2: Use the maps-api-ready event dispatched by __onMapsReady callback
-    // instead of polling google.maps, which prevented the class from being defined safely.
+    // [UNCOUPLED DATA FLOW] Start tracking drivers immediately even if map is not ready
+    startRealtimeDriverTracking();
+    
+    // Try to initialize map
     const tryInitMap = () => {
         if (window.__mapsReady && typeof google !== 'undefined' && google.maps) {
             initMap();
         } else {
-            // Fallback: listen for the custom event fired by the callback in dashboard.html
             document.addEventListener('maps-api-ready', () => initMap(), { once: true });
-            // Also try directly in case the event already fired before this code ran
             setTimeout(() => {
                 if (!driversMap && window.__mapsReady) initMap();
             }, 1000);
@@ -511,33 +511,32 @@ function initMap() {
         Object.keys(allDriversData).forEach(id => scheduleRender(id));
     });
 
-    // ────────────────────────────────────────────────────────────────────────
-    // NEW UNIFIED REAL-TIME DRIVER TRACKING (Standardized logic)
-    // ────────────────────────────────────────────────────────────────────────
-    /**
-     * REAL-TIME DRIVER MONITORING:
-     * We use a Firestore onSnapshot listener to receive push updates from the 'drivers' collection.
-     * The query filters for status == 'online', which is asserted by the driver app's 
-     * LocationService and PresenceManager.
-     */
+    console.log("[Dashboard] Map initialized successfully.");
+    // Initial render of any data already fetched
+    Object.keys(allDriversData).forEach(id => scheduleRender(id));
+}
+
+/**
+ * [UNCOUPLED] Starts real-time Firestore listeners for driver locations and metadata.
+ * Can safely run before Google Maps is ready.
+ */
+function startRealtimeDriverTracking() {
+    console.log("[Dashboard] Starting real-time driver tracking...");
+    
     const onlineDriversQuery = query(collection(db, "drivers"), where("status", "==", "online"));
     unsubscribeDrivers = onSnapshot(onlineDriversQuery, (snapshot) => {
         snapshot.docChanges().forEach(change => {
-            const id = change.doc.id; // UID
+            const id = change.doc.id;
             const data = change.doc.data();
             
             if (change.type === "added" || change.type === "modified") {
-                // Ensure data has the correct fields for the dashboard
                 if (data.location) {
                     data.current_latitude = data.location.latitude;
                     data.current_longitude = data.location.longitude;
                 }
-                // Map user-requested 'lastSeen' to the dashboard's internal 'last_updated'
                 if (data.lastSeen) data.last_updated = data.lastSeen;
-                
                 updateDriverState(id, data, 'realtime');
             } else if (change.type === "removed") {
-                // Remove marker and cleanup offline driver
                 if (driverMarkers[id]) {
                     driverMarkers[id].setMap(null);
                     delete driverMarkers[id];
@@ -545,12 +544,11 @@ function initMap() {
                 delete allDriversData[id];
                 updateOnlineDriversList();
                 updateOnlineDisplay();
-                console.log(`[Real-time] Driver ${id} went offline. Marker removed.`);
             }
         });
     });
 
-    // Fallback: Listen to Users collection for basic driver info (names/profiles)
+    // Metadata Listener
     const unsubUsers = onSnapshot(query(collection(db, "users"), where("role", "==", "driver")), (snapshot) => {
         snapshot.docChanges().forEach(change => {
             if (change.type === "removed") return;
@@ -569,15 +567,12 @@ function initMap() {
     });
     unsubscribeStats.push(unsubUsers);
 
-    // Periodically refresh list for time-based online counting
+    // Refresh display periodically for heartbeat calculations
     setInterval(() => {
         updateOnlineDriversList();
         updateOnlineDisplay();
     }, 30000);
-
-    // Global Cleanup Loop: Purge ghost drivers every 5 minutes
-    setInterval(() => {
-        const now = Date.now();
+}
         Object.keys(allDriversData).forEach(id => {
             const d = allDriversData[id];
             const lastActive = d.last_updated
@@ -652,6 +647,9 @@ const HEARTBEAT_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes — ghost driver thres
 function refreshMarker(id) {
     const d = allDriversData[id];
     if (!d || !d.current_latitude || !d.current_longitude) return;
+
+    // Safety: Skip marker rendering if Google Maps is not yet loaded
+    if (!driversMap || !google.maps.Marker) return;
 
     // Viewport culling (C5) — skip expensive render for off-screen drivers
     const inViewport = isInViewport(d.current_latitude, d.current_longitude);
