@@ -1,6 +1,6 @@
 import { auth, db } from "./firebase-init.js";
 import { onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { collection, query, where, onSnapshot, getDocs, doc, getDoc, updateDoc, addDoc, serverTimestamp, writeBatch, limit, getCountFromServer } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { collection, query, where, onSnapshot, getDocs, doc, getDoc, updateDoc, addDoc, setDoc, serverTimestamp, writeBatch, limit, getCountFromServer } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { initLayout, clearUserCache, showModal, hideModal } from "./modules/ui.js";
 import { sanitizeFirestoreData, generateNumericId } from "./modules/data.js";
 
@@ -285,30 +285,10 @@ function initPostingFeature() {
     const postBtn = document.getElementById('postScheduleBtn');
     if (!postBtn) return;
 
-    // Time Check Loop
-    const updateBtnStatus = () => {
-        const now = new Date();
-        const hrs = now.getHours();
-        const mins = now.getMinutes();
-        const totalMins = hrs * 60 + mins;
-        
-        // 5:30 PM = 17:30 = 1050 mins
-        // 6:00 PM = 18:00 = 1080 mins
-        const isWindowOpen = totalMins >= 1050 && totalMins <= 1080;
-        
-        if (isWindowOpen) {
-            postBtn.disabled = false;
-            postBtn.classList.add('premium-pulsing');
-            postBtn.title = "Ready to publish tomorrow's mission schedule.";
-        } else {
-            postBtn.disabled = true;
-            postBtn.classList.remove('premium-pulsing');
-            postBtn.title = "Schedule posting is only available between 5:30 PM and 6:00 PM.";
-        }
-    };
-
-    updateBtnStatus();
-    setInterval(updateBtnStatus, 60000);
+    // Force enable the button for Admin at all times
+    postBtn.disabled = false;
+    postBtn.classList.add('premium-pulsing');
+    postBtn.title = "Publish schedules immediately.";
 
     postBtn.onclick = async () => {
         if (!confirm("Are you sure you want to OFFICIALIZE tomorrow's schedules for Jettsan? This will make them visible to all assigned drivers.")) return;
@@ -330,6 +310,7 @@ function initPostingFeature() {
             if (snap.empty) {
                 alert("No tomorrow's schedules found to post.");
                 postBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Post Schedule';
+                postBtn.disabled = false; // Re-enable if empty
                 return;
             }
 
@@ -680,7 +661,7 @@ function initMap() {
         const mapOptions = {
             center: { lat: 14.5995, lng: 120.9842 }, // Manila
             zoom: 12,
-            mapId: 'f0c8e31d4b65673', // Premium vector map id
+            // mapId: 'f0c8e31d4b65673', // Premium vector map id
             disableDefaultUI: false,
             zoomControl: true,
             gestureHandling: 'greedy'

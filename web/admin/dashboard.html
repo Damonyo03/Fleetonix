@@ -17,7 +17,7 @@
             document.dispatchEvent(new Event('maps-api-ready'));
         };
     </script>
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBWal4kXhImWNvJL2jV4LG0FvftdN2J9DQ&libraries=places,geometry&loading=async&callback=__onMapsReady" async defer></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBWal4kXhImWNvJL2jV4LG0FvftdN2J9DQ&libraries=places,geometry&callback=__onMapsReady" async defer></script>
     <style>
         #drivers-map { width: 100%; height: 600px; border-radius: var(--radius-lg); background: var(--bg-accent); border: 1px solid var(--border-color); }
         .driver-label { background: white; padding: 4px 8px; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-weight: 700; border: 1px solid #ddd; font-size: 11px; color: #111; position: relative; top: -45px; }
@@ -175,7 +175,7 @@
                         <h1>Fleet Overview</h1>
                         <p id="welcomeMessage">Real-time status of your global operations.</p>
                     </div>
-                        <button class="btn btn-secondary" id="postScheduleBtn" disabled title="Schedule posting is only available between 5:30 PM and 6:00 PM.">
+                        <button class="btn btn-secondary" id="postScheduleBtn" title="Publish schedules immediately.">
                             <i class="fas fa-paper-plane"></i> Post Schedule
                         </button>
                         <button class="btn btn-primary" id="newAdminBookingBtn">
