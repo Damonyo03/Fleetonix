@@ -3,10 +3,10 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ── driver_locations: owner-only write, auth-only read ──────────────
-    match /driver_locations/{driverEmail} {
+    match /driver_locations/{docId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null
-        && request.auth.token.email.lower() == driverEmail.lower()
+        && (request.auth.uid == docId || request.auth.token.email.lower() == docId.lower())
         // Coordinate plausibility guard
         && request.resource.data.current_latitude is number
         && request.resource.data.current_latitude >= -90
@@ -29,8 +29,14 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow update: if request.auth != null
         && request.auth.token.email.lower() == resource.data.driver_email.lower()
-        && request.resource.data.diff(resource.data)
-             .affectedKeys().hasOnly(['trip_phase', 'last_updated']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+             'status', 'trip_phase', 'accepted_at', 'started_at', 'picked_up_at', 
+             'dropped_off_at', 'completed_at', 'driver_viewed_at', 'total_km_travelled', 
+             'current_segment_index', 'total_segments_completed', 'segments', 
+             'odometer_start', 'odometer_end', 'passenger_signature_url', 
+             'driver_signature', 'refusal_reason', 'vehicle_type', 'plate_number', 
+             'route_polyline', 'time_of_departure', 'time_of_arrival', 'last_updated'
+           ]);
       allow create, delete: if request.auth != null
         && get(/databases/$(database)/documents/users/$(request.auth.uid))
              .data.role in ['super_admin', 'company_admin', 'admin'];
@@ -73,6 +79,7 @@ service cloud.firestore {
         && request.resource.data.driver_email.lower() == request.auth.token.email.lower();
       allow update: if request.auth != null
         && (request.auth.token.email.lower() == resource.data.driver_email.lower() ||
+            request.auth.uid == (resource.data.driver_uid ?: "") ||
             get(/databases/$(database)/documents/users/$(request.auth.uid))
               .data.role in ['super_admin', 'company_admin', 'admin']);
       allow delete: if request.auth != null
