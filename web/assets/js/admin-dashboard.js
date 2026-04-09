@@ -108,24 +108,26 @@ onAuthStateChanged(auth, async (user) => {
 
     // Dashboard initialized for NSCRP Jettsan
 
-    // Start Live Listeners
-    refreshDashboardData();
-    
-    // [UNCOUPLED DATA FLOW] Start tracking drivers immediately even if map is not ready
-    startRealtimeDriverTracking();
-    
-    // Try to initialize map
+    // Try to initialize map EARLY (so it doesn't wait for stats fetch)
     const tryInitMap = () => {
         if (window.__mapsReady && typeof google !== 'undefined' && google.maps) {
             initMap();
         } else {
+            console.log("[Dashboard] Map API not ready yet, waiting...");
             document.addEventListener('maps-api-ready', () => initMap(), { once: true });
+            // Secondary fallback for race conditions
             setTimeout(() => {
                 if (!driversMap && window.__mapsReady) initMap();
             }, 1000);
         }
     };
     tryInitMap();
+
+    // Start Live Listeners
+    refreshDashboardData();
+    
+    // [UNCOUPLED DATA FLOW] Start tracking drivers immediately
+    startRealtimeDriverTracking();
     
     initDashboardUI();
     initPostingFeature();
@@ -279,6 +281,19 @@ function updateMapFilters() {
 }
 
 function initStats() {
+    // A2: Define missing reference variables
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const activeTripsQuery = query(
+        collection(db, "schedules"),
+        where("status", "in", ["pending", "accepted", "moving_to_pickup", "picked_up", "moving_to_dropoff", "on_schedule"])
+    );
+
     let usersQuery = collection(db, "users");
     let bookingsQuery = query(collection(db, "bookings"), where("status", "==", "pending"));
     let schedulesQuery = collection(db, "schedules");
@@ -515,6 +530,11 @@ function initMap() {
     });
 
     console.log("[Dashboard] Map initialized successfully.");
+    const mapStatusEl = document.getElementById('mapStatus');
+    if (mapStatusEl) {
+        mapStatusEl.innerText = "LIVE";
+        mapStatusEl.className = "badge badge-success";
+    }
     // Initial render of any data already fetched
     Object.keys(allDriversData).forEach(id => scheduleRender(id));
 }
