@@ -2,93 +2,66 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // accidents: Drivers can write reports; admins can read/update (acknowledge)
-    match /accidents/{docId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
-    }
-
-    // vehicle_issues: Drivers can write issue reports
-    match /vehicle_issues/{docId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
-    }
-
-    // ────────────────────────────────────────────────────────────────────────
-    // DRIVER LOCATIONS (Real-time telemetry)
-    // ────────────────────────────────────────────────────────────────────────
-    /**
-     * Security Rules for Telemetry:
-     * - READ: Accessible by authenticated users (admins) to monitor the fleet.
-     * - WRITE: Only the owner (driver) of the document can push location updates.
-     * - UPDATE: Fields like 'is_background' and 'last_updated' are required for dashboard sync.
-     */
+    // ── driver_locations: owner-only write, auth-only read ──────────────
     match /driver_locations/{driverEmail} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null 
+      allow write: if request.auth != null
         && request.auth.token.email.lower() == driverEmail.lower()
-        && request.resource.data.keys().hasAll(['current_latitude', 'current_longitude', 'last_updated'])
+        // Coordinate plausibility guard
         && request.resource.data.current_latitude is number
+        && request.resource.data.current_latitude >= -90
+        && request.resource.data.current_latitude <= 90
         && request.resource.data.current_longitude is number
-        && (request.resource.data.get('is_background', false) is bool)
-        && request.resource.data.last_updated == request.time;
+        && request.resource.data.current_longitude >= -180
+        && request.resource.data.current_longitude <= 180;
     }
 
-    // dtr_logs: Drivers can write their own clock-in/out records
-    match /dtr_logs/{docId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
-    }
-
-    // attendance: Drivers can read/write their own records (legacy alias)
-    match /attendance/{docId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
-    }
-
-    // drivers: Drivers can read and update their own profile/status
+    // ── drivers: self-ownership write ───────────────────────────────────
     match /drivers/{userId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      // Driver can only update their own document
+      allow write: if request.auth != null
+        && request.auth.uid == userId;
     }
 
-    // trip_tickets: Drivers can read their own tickets; admins can read all
-    match /trip_tickets/{ticketId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
-    }
-
-    // schedules: Drivers can read and update trip phases
+    // ── schedules: drivers update trip_phase only; admins full write ────
     match /schedules/{docId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow update: if request.auth != null
+        && request.auth.token.email.lower() == resource.data.driver_email.lower()
+        && request.resource.data.diff(resource.data)
+             .affectedKeys().hasOnly(['trip_phase', 'last_updated']);
+      allow create, delete: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid))
+             .data.role in ['super_admin', 'company_admin'];
     }
 
-    // Public Read for Accredited Companies (Required for registration dropdown)
-    match /accredited_companies/{companyId} {
-      allow read: if true;
-      allow write: if request.auth != null && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super_admin');
-    }
-
-    // notifications: Real-time alerts
-    match /notifications/{docId} {
+    // ── incidents: drivers can create; admins can update/delete ─────────
+    match /incidents/{docId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid))
+             .data.role in ['super_admin', 'company_admin'];
     }
 
-    // users: Authenticated read, self-write or admin write
-    match /users/{userId} {
+    // ── dtr_logs: drivers write own records only ─────────────────────────
+    match /dtr_logs/{docId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.driver_email.lower()
+             == request.auth.token.email.lower();
+      allow update, delete: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid))
+             .data.role in ['super_admin', 'company_admin'];
     }
 
-    // Default catch-all: Read for authenticated users, write for admins only
+    // ── Everything else: admin-only write ───────────────────────────────
     match /{document=**} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super_admin' || 
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'company_admin'
-      );
+      allow write: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid))
+             .data.role in ['super_admin', 'company_admin'];
     }
   }
 }

@@ -503,6 +503,13 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                 }
 
                 if (snapshot != null) {
+                    // Phase E: Mark assignments as viewed by driver
+                    snapshot.documents.forEach { doc ->
+                        if (doc.get("driver_viewed_at") == null) {
+                            doc.reference.update("driver_viewed_at", com.google.firebase.firestore.FieldValue.serverTimestamp())
+                        }
+                    }
+
                     val parsed = snapshot.documents.mapNotNull { doc ->
                         val data = doc.data ?: return@mapNotNull null
                         val phase = data["trip_phase"] as? String ?: "pending"

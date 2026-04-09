@@ -522,7 +522,7 @@ fun DriverDashboard(
 
     // INITIAL LOCATION LOGIC: Get last known location immediately
     LaunchedEffect(Unit) {
-        PresenceManager.updateStatus(true)
+        PresenceManager.updateStatus(context, true)
         if (hasLocationPermission(context)) {
             try {
                 val locationClient = LocationServices.getFusedLocationProviderClient(context)

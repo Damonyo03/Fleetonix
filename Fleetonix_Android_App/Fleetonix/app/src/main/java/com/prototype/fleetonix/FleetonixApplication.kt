@@ -20,7 +20,7 @@ class FleetonixApplication : Application() {
         val settings = FirebaseFirestoreSettings.Builder()
             .setLocalCacheSettings(
                 PersistentCacheSettings.newBuilder()
-                    .setSizeBytes(104857600L) // 100 MB cache size
+                    .setSizeBytes(FirebaseFirestoreSettings.CACHE_SIZE_UNLIMITED)
                     .build()
             )
             .build()
@@ -28,6 +28,6 @@ class FleetonixApplication : Application() {
         firestore.firestoreSettings = settings
 
         // Start observing application lifecycle
-        ProcessLifecycleOwner.get().lifecycle.addObserver(AppLifecycleObserver())
+        ProcessLifecycleOwner.get().lifecycle.addObserver(AppLifecycleObserver(this))
     }
 }

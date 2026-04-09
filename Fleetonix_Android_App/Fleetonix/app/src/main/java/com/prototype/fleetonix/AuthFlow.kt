@@ -88,7 +88,7 @@ fun AuthFlow() {
             if (currentUser != null) {
                 when (event) {
                     Lifecycle.Event.ON_START -> {
-                        PresenceManager.updateStatus(true)
+                        PresenceManager.updateStatus(context, true)
                     }
                     else -> {}
                 }
@@ -105,7 +105,7 @@ fun AuthFlow() {
         auth.addAuthStateListener { firebaseAuth ->
             currentUser = firebaseAuth.currentUser
             if (firebaseAuth.currentUser != null) {
-                PresenceManager.updateStatus(true)
+                PresenceManager.updateStatus(context, true)
                 // Fetch user role
                 // Fetch user role - Fallback to email search if UID doc doesn't exist
                 scope.launch {
@@ -517,7 +517,7 @@ fun AuthFlow() {
                             showAssignments = true
                         },
                         onLogout = {
-                            PresenceManager.updateStatus(false)
+                            PresenceManager.updateStatus(context, false)
                             auth.signOut()
                             currentUser = null
                             isDriverVerified = false
