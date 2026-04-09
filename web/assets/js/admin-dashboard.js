@@ -5,6 +5,9 @@ import { initLayout } from "./modules/ui.js";
 import { sanitizeFirestoreData, generateNumericId } from "./modules/data.js";
 
 // Map Configuration
+const HEARTBEAT_EXPIRY_MS = 15 * 60 * 1000; // 15 mins till "Stale"
+const GHOST_EXPIRY_MS = 60 * 60 * 1000;     // 1 hour till marker removed
+
 let driversMap = null;
 let driverMarkers = {};
 let driverPolylines = {};
@@ -523,8 +526,8 @@ function initMap() {
 function startRealtimeDriverTracking() {
     console.log("[Dashboard] Starting real-time driver tracking...");
     
-    const activeStatuses = ['online', 'available', 'on_trip', 'on_schedule', 'moving_to_pickup', 'arrived_at_pickup', 'picked_up', 'moving_to_dropoff', 'ready_to_complete'];
-    const onlineDriversQuery = query(collection(db, "drivers"), where("current_status", "in", activeStatuses));
+    // Inclusive Query: Show ALL registered drivers who have reported a location
+    const onlineDriversQuery = query(collection(db, "drivers")); 
 
     unsubscribeDrivers = onSnapshot(onlineDriversQuery, (snapshot) => {
         snapshot.docChanges().forEach(change => {
@@ -570,11 +573,15 @@ function startRealtimeDriverTracking() {
     unsubscribeStats.push(unsubUsers);
 
     // Refresh display periodically for heartbeat calculations
+    // Refresh display periodically
     setInterval(() => {
         updateOnlineDriversList();
         updateOnlineDisplay();
-    }, 30000);
-}
+    }, 15000);
+
+    // Hybrid Cleanup Loop: Remove ghost markers but keep metadata
+    setInterval(() => {
+        const now = Date.now();
         Object.keys(allDriversData).forEach(id => {
             const d = allDriversData[id];
             const lastActive = d.last_updated
@@ -582,12 +589,12 @@ function startRealtimeDriverTracking() {
                 : 0;
             const lastActiveMs = Math.max(lastActive, d.last_location_push || 0);
             
-            if (now - lastActiveMs > HEARTBEAT_EXPIRY_MS) {
+            // If genuinely silent for 1 hour, purge marker
+            if (now - lastActiveMs > GHOST_EXPIRY_MS) {
                 if (driverMarkers[id]) {
                     driverMarkers[id].setMap(null);
                     delete driverMarkers[id];
                 }
-                // We keep metadata in allDriversData but marker is purged
             }
         });
     }, 5 * 60 * 1000);
@@ -644,8 +651,6 @@ function updateDriverState(id, data, source) {
 
 
 
-const HEARTBEAT_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes — ghost driver threshold
-
 function refreshMarker(id) {
     const d = allDriversData[id];
     if (!d || !d.current_latitude || !d.current_longitude) return;
@@ -676,38 +681,24 @@ function refreshMarker(id) {
         ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated)))
         : 0;
     
-    // ── Ghost Driver Guard ──────────────────────────────────────────────────────
-    // If heartbeat is older than 15 minutes, hide the marker and bail out.
-    // Use either the Firestore timestamp or our local last_location_push for responsiveness.
+    // Heartbeat Logic: Check if driver is "Stale"
     const lastActiveMs = Math.max(lastActive, d.last_location_push || 0);
     const heartbeatAge = now - lastActiveMs;
+    const isStale = heartbeatAge > HEARTBEAT_EXPIRY_MS;
     
-    if (isNaN(lastActiveMs) || lastActiveMs === 0 || heartbeatAge > HEARTBEAT_EXPIRY_MS) {
-        if (driverMarkers[id]) {
-            driverMarkers[id].setVisible(false);
-        }
-        return; 
-    } else {
-        if (driverMarkers[id]) {
-            driverMarkers[id].setVisible(true);
-        }
-    }
-    // ────────────────────────────────────────────────────────────────────────────
-
     // Availability Logic: Heartbeat + DTR Status
     const email = d.driver_email?.toLowerCase()?.trim();
     const dtr = driverDTRStatus[email];
     const isOnDuty = dtr ? dtr.action === 'time_in' : false;
     
-    const isRecentlyActive = heartbeatAge < HEARTBEAT_EXPIRY_MS;
-    const isOnline = isRecentlyActive || isOnDuty;
+    // Visualization Rules
+    const isOnline = !isStale && (isOnDuty || status !== 'offline');
     const isAccident = d.current_status === 'accident' || d.is_accident === true || d.incident_active === true;
     const isCompleted = d.current_trip_phase === 'completed' || d.current_status === 'completed';
 
     // Automated Cleanup for Completed Trips
     if (isCompleted) {
         if (driverPolylines[id]) { driverPolylines[id].setMap(null); delete driverPolylines[id]; }
-        // Clear color-coded segments
         if (driverPolylineSegments[id]) {
             driverPolylineSegments[id].forEach(s => s.setMap(null));
             delete driverPolylineSegments[id];
@@ -718,25 +709,24 @@ function refreshMarker(id) {
             driverStopMarkers[id].forEach(m => m.setMap(null));
             delete driverStopMarkers[id];
         }
-        // Close Quick Info panel if this driver is shown
         if (activeQuickInfoDriverId === id) closeQuickInfoPanel();
     }
 
     if (driverMarkers[id]) {
-        animateMarkerTo(driverMarkers[id], pos);
-        driverMarkers[id].setIcon(markerIcon);
-        driverMarkers[id].setOpacity(status === 'offline' ? 0.6 : 1.0);
-        // Hide standard marker if accident is active (since we show a blinking overlay instead)
-        driverMarkers[id].setVisible((isOnline || status !== 'offline') && !isAccident && !isCompleted);
+        const marker = driverMarkers[id];
+        animateMarkerTo(marker, pos);
+        marker.setIcon(markerIcon);
         
-        // Accident Blinking Implementation (Premium CSS Animation via MapOverlay)
+        // Visual distinction: Registered but Offline = Dimmed
+        marker.setOpacity(isOnline ? 1.0 : 0.5);
+        
+        // Hide standard marker if accident is active (blinking overlay replaces it)
+        marker.setVisible(!isAccident && !isCompleted);
+        
+        // Accident Blinking Implementation
         if (isAccident && !isCompleted) {
             if (!accidentOverlays[id]) {
-                accidentOverlays[id] = new MapOverlay(
-                    pos, 
-                    '<div class="emergency-marker-inner">!</div>', 
-                    'blinking-emergency'
-                );
+                accidentOverlays[id] = new MapOverlay(pos, '<div class="emergency-marker-inner">!</div>', 'blinking-emergency');
                 accidentOverlays[id].setMap(driversMap);
             } else {
                 accidentOverlays[id].setPosition(pos);
@@ -746,11 +736,10 @@ function refreshMarker(id) {
             delete accidentOverlays[id];
         }
 
-        // ── Segment Color-Coded Route Polylines ─────────────────────────────────
-        // Each path segment is its own 2-point polyline colored by speed at that point.
+        // --- Route Tracking ---
         if (!isCompleted && (status === 'in_progress' || status === 'pickup' || status === 'dropoff' ||
-                             status === 'moving_to_pickup' || status === 'moving_to_dropoff' ||
-                             status === 'picked_up' || status === 'accepted' || status === 'on_schedule')) {
+                            status === 'moving_to_pickup' || status === 'moving_to_dropoff' ||
+                            status === 'picked_up' || status === 'accepted' || status === 'on_schedule')) {
             if (!driverPaths[id]) driverPaths[id] = [];
             
             const lastPoint = driverPaths[id][driverPaths[id].length - 1];
@@ -759,18 +748,14 @@ function refreshMarker(id) {
                 if (driverPaths[id].length > 120) driverPaths[id].shift();
             }
 
-            // A7: Incremental Polyline Append (C3)
             const path = driverPaths[id];
             if (path && path.length >= 2) {
                 const prev = path[path.length - 2];
                 const curr = path[path.length - 1];
-                
-                // Only add if it's the latest point (incremental)
                 if (prev.lat !== curr.lat || prev.lng !== curr.lng) {
                     const color = (curr.speedKmh > 40) ? '#10b981' : (curr.speedKmh > 10 ? '#f59e0b' : '#ef4444');
                     const newSeg = new google.maps.Polyline({
                         path: [{ lat: prev.lat, lng: prev.lng }, { lat: curr.lat, lng: curr.lng }],
-                        geodesic: true,
                         strokeColor: color,
                         strokeOpacity: 0.85,
                         strokeWeight: 4,
@@ -778,8 +763,6 @@ function refreshMarker(id) {
                     });
                     if (!driverPolylineSegments[id]) driverPolylineSegments[id] = [];
                     driverPolylineSegments[id].push(newSeg);
-
-                    // Evict oldest segment when path is pruned (matches 120-point cap)
                     if (driverPolylineSegments[id].length > 119) {
                         const oldest = driverPolylineSegments[id].shift();
                         if (oldest) oldest.setMap(null);
