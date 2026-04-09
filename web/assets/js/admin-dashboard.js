@@ -69,7 +69,6 @@ function isInViewport(lat, lng) {
 
 // Fix Issue 4: Properly declared module-level globals (avoids ReferenceError in strict mode)
 let selectedContractorId = null;
-let currentUserData = null;
 
 // Fix Issue 1: MapOverlay is moved INSIDE initMap() so it only
 // runs after google.maps is confirmed ready. This variable is a
