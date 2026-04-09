@@ -93,7 +93,14 @@ function initMap(tripData) {
 }
 
 function updateDriverLocation(loc) {
-    const pos = { lat: loc.latitude, lng: loc.longitude };
+    // Read the exact keys pushed by the Android app
+    const pos = { 
+        lat: loc.current_latitude || loc.latitude, 
+        lng: loc.current_longitude || loc.longitude 
+    };
+
+    // Safety check: skip if coordinates are missing to prevent marker crash
+    if (!pos.lat || !pos.lng) return;
 
     if (!driverMarker) {
         driverMarker = new google.maps.Marker({

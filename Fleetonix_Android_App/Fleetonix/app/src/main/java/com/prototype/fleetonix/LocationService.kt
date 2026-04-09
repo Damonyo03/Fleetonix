@@ -578,7 +578,9 @@ class LocationService : Service() {
 
     private fun updateLocationInFirestore(driverEmail: String, location: android.location.Location) {
         val firestore = FirebaseFirestore.getInstance()
-        val driverRef = firestore.collection("driver_locations").document(driverEmail)
+        // Use UID as primary document ID to match Web app listener expectation, fallback to Email
+        val targetDocId = if (driverUid.isNotEmpty()) driverUid else driverEmail
+        val driverRef = firestore.collection("driver_locations").document(targetDocId)
 
         serviceScope.launch {
             val humanReadableAddress = getAddressFromLocation(location)
