@@ -607,9 +607,13 @@ fun DriverDashboard(
         if (currentLatitude == 0.0 || currentLongitude == 0.0) return@LaunchedEffect
 
         val origin = "$currentLatitude,$currentLongitude"
+        val curIdx = schedule.current_segment_index ?: 0
+
         val destination = when (tripPhase) {
-            "pending", "assigned", "accepted", "moving_to_pickup", "return_pickup" -> 
-                if (schedule.pickup_location?.firstOrNull()?.latitude != null) "${schedule.pickup_location.firstOrNull()!!.latitude},${schedule.pickup_location.firstOrNull()!!.longitude}" else null
+            "pending", "assigned", "accepted", "moving_to_pickup", "return_pickup" -> {
+                val currentPickup = schedule.pickup_location?.getOrNull(curIdx) ?: schedule.pickup_location?.firstOrNull()
+                if (currentPickup?.latitude != null) "${currentPickup.latitude},${currentPickup.longitude}" else null
+            }
             "picked_up", "moving_to_dropoff", "dropoff" -> 
                 if (schedule.dropoff_location?.latitude != null) "${schedule.dropoff_location.latitude},${schedule.dropoff_location.longitude}" else null
             else -> null
@@ -2328,7 +2332,26 @@ fun DriverDashboard(
                                 phase == "moving_to_pickup" -> {
                                     Button(
                                         onClick = {
-                                            showOdometerDialog = true
+                                            val curIdx = nextSchedule?.current_segment_index ?: 0
+                                            if (curIdx == 0) {
+                                                showOdometerDialog = true
+                                            } else {
+                                                val docId = nextSchedule?.docId ?: return@Button
+                                                scope.launch {
+                                                    try {
+                                                        isMarkingPickup = true
+                                                        db.collection("schedules").document(docId).update(
+                                                            "trip_phase", "picked_up",
+                                                            "picked_up_at", LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+                                                        ).await()
+                                                        tripActionSuccess = "Stop ${curIdx + 1} picked up! Proceeding."
+                                                    } catch (e: Exception) {
+                                                        tripActionError = "Failed: ${e.message}"
+                                                    } finally {
+                                                        isMarkingPickup = false
+                                                    }
+                                                }
+                                            }
                                         },
                                         modifier = Modifier.fillMaxWidth().height(64.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
@@ -2457,7 +2480,8 @@ fun DriverDashboard(
                                 phase == "dropped_off" || phase == "ready_to_complete" || phase == "return_pickup" -> {
                                     Button(
                                         onClick = {
-                                            showOdometerDialog = true
+                                            endOdometerValue = lastVehicleMileage + (totalDistanceMetres / 1000.0)
+                                            showSignatureDialog = true
                                         },
                                         modifier = Modifier.fillMaxWidth().height(64.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),

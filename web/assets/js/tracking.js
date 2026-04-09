@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, onSnapshot, getDoc } from "firebase/firestore";
+import { getAuth, signInAnonymously } from "firebase/auth";
 
 // Using the same config as the rest of the app
 const firebaseConfig = {
@@ -13,6 +14,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
 
 let googleMap = null;
 let driverMarker = null;
@@ -26,6 +28,14 @@ async function initTracking() {
     }
 
     document.getElementById('trip-id-display').textContent = `TRIP-ID: ${tripId.substring(0, 8).toUpperCase()}`;
+
+    // ADD THIS BLOCK to satisfy your firestore.rules
+    try {
+        await signInAnonymously(auth);
+    } catch (error) {
+        showError("Authentication failed: " + error.message);
+        return;
+    }
 
     // 1. Fetch Trip Details
     const tripSnap = await getDoc(doc(db, "schedules", tripId));
