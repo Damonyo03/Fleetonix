@@ -23,6 +23,40 @@ let activeSchedulesData = {};      // driverId -> { stops:[], final:{}, tripId:"
 let driverPaths = {};              // driverId -> [{lat, lng, speedKmh}]
 let driverPolylineSegments = {};   // driverId -> [google.maps.Polyline] (colored segments)
 let activeQuickInfoDriverId = null; // currently pinned Quick Info driver
+let uiUpdateTimeout = null;
+let listUpdateTimeout = null;
+
+// ── Batch Render Queue (C1) ───────────────────────────────────────────────────
+const pendingRenderSet = new Set();
+let renderFrameScheduled = false;
+
+function scheduleRender(id) {
+    pendingRenderSet.add(id);
+    if (!renderFrameScheduled) {
+        renderFrameScheduled = true;
+        requestAnimationFrame(flushRenderQueue);
+    }
+}
+
+function flushRenderQueue() {
+    renderFrameScheduled = false;
+    const MAX_PER_FRAME = 25;
+    let count = 0;
+    for (const id of pendingRenderSet) {
+        if (count++ >= MAX_PER_FRAME) {
+            renderFrameScheduled = true;
+            requestAnimationFrame(flushRenderQueue);
+            break;
+        }
+        refreshMarker(id);
+        pendingRenderSet.delete(id);
+    }
+}
+
+function isInViewport(lat, lng) {
+    const bounds = driversMap?.getBounds();
+    return !bounds || bounds.contains(new google.maps.LatLng(lat, lng));
+}
 
 // Fix Issue 4: Properly declared module-level globals (avoids ReferenceError in strict mode)
 let selectedContractorId = null;
@@ -184,7 +218,8 @@ function initDashboardUI() {
 
 
 function refreshDashboardData() {
-    unsubscribeStats.forEach(unsub => unsub());
+    // 1. Cleanup existing listeners to avoid memory leaks
+    unsubscribeStats.forEach(unsub => unsub && unsub());
     unsubscribeStats = [];
     initStats();
     initDTRStatusSync();
@@ -237,7 +272,17 @@ function initStats() {
     let usersQuery = collection(db, "users");
     let bookingsQuery = query(collection(db, "bookings"), where("status", "==", "pending"));
     let schedulesQuery = collection(db, "schedules");
-    let completedSchedulesQuery = query(collection(db, "schedules"), where("status", "==", "completed"));
+    
+    // 4. Completed Missions (C6 - Bounded Query Optimization)
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 30);
+    
+    const completedSchedulesQuery = query(
+        collection(db, "schedules"),
+        where("status", "==", "completed"),
+        where("updated_at", ">=", cutoff),
+        limit(100)
+    );
 
     const unsubUsers = onSnapshot(usersQuery, (snapshot) => {
         const drivers = snapshot.docs.filter(d => (d.data().user_type === 'driver' || d.data().role === 'driver')).length;
@@ -359,22 +404,24 @@ function initStats() {
 }
 
 function animateMarkerTo(marker, newPos) {
-    if (!marker) return;
-    const startPos = marker.getPosition();
-    const startTime = performance.now();
-    const duration = 4500; 
-
+    // Cancel any in-progress animation for this marker (C2)
     if (marker.animationId) {
         cancelAnimationFrame(marker.animationId);
+        marker.animationId = null;
     }
+    if (!marker.getPosition()) {
+        marker.setPosition(newPos);
+        return;
+    }
+    const startPos = marker.getPosition();
+    const startTime = performance.now();
+    const duration = 4500;
 
-    function step(currentTime) {
-        const elapsed = currentTime - startTime;
-        const progress = Math.min(elapsed / duration, 1);
+    function step(now) {
+        const progress = Math.min((now - startTime) / duration, 1);
         const lat = startPos.lat() + (newPos.lat - startPos.lat()) * progress;
         const lng = startPos.lng() + (newPos.lng - startPos.lng()) * progress;
         marker.setPosition({ lat, lng });
-
         if (progress < 1) {
             marker.animationId = requestAnimationFrame(step);
         } else {
@@ -439,8 +486,14 @@ function initMap() {
     // ────────────────────────────────────────────────────────────────────────
     // NEW UNIFIED REAL-TIME DRIVER TRACKING (Standardized logic)
     // ────────────────────────────────────────────────────────────────────────
+    /**
+     * REAL-TIME DRIVER MONITORING:
+     * We use a Firestore onSnapshot listener to receive push updates from the 'drivers' collection.
+     * The query filters for status == 'online', which is asserted by the driver app's 
+     * LocationService and PresenceManager.
+     */
     const onlineDriversQuery = query(collection(db, "drivers"), where("status", "==", "online"));
-    onSnapshot(onlineDriversQuery, (snapshot) => {
+    unsubscribeDrivers = onSnapshot(onlineDriversQuery, (snapshot) => {
         snapshot.docChanges().forEach(change => {
             const id = change.doc.id; // UID
             const data = change.doc.data();
@@ -470,7 +523,7 @@ function initMap() {
     });
 
     // Fallback: Listen to Users collection for basic driver info (names/profiles)
-    onSnapshot(query(collection(db, "users"), where("role", "==", "driver")), (snapshot) => {
+    const unsubUsers = onSnapshot(query(collection(db, "users"), where("role", "==", "driver")), (snapshot) => {
         snapshot.docChanges().forEach(change => {
             if (change.type === "removed") return;
             const id = change.doc.id;
@@ -486,13 +539,35 @@ function initMap() {
             }
         });
     });
+    unsubscribeStats.push(unsubUsers);
 
     // Periodically refresh list for time-based online counting
     setInterval(() => {
         updateOnlineDriversList();
         updateOnlineDisplay();
     }, 30000);
+
+    // Global Cleanup Loop: Purge ghost drivers every 5 minutes
+    setInterval(() => {
+        const now = Date.now();
+        Object.keys(allDriversData).forEach(id => {
+            const d = allDriversData[id];
+            const lastActive = d.last_updated
+                ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated)))
+                : 0;
+            const lastActiveMs = Math.max(lastActive, d.last_location_push || 0);
+            
+            if (now - lastActiveMs > HEARTBEAT_EXPIRY_MS) {
+                if (driverMarkers[id]) {
+                    driverMarkers[id].setMap(null);
+                    delete driverMarkers[id];
+                }
+                // We keep metadata in allDriversData but marker is purged
+            }
+        });
+    }, 5 * 60 * 1000);
 }
+
 
 function updateDriverState(id, data, source) {
     if (!allDriversData[id]) {
@@ -512,6 +587,7 @@ function updateDriverState(id, data, source) {
         driver_email: data.driver_email?.toLowerCase()?.trim() || existing.driver_email,
         profile_image_url: data.profile_image_url || existing.profile_image_url,
         is_background: data.is_background !== undefined ? data.is_background : existing.is_background,
+        device_health: data.device_health || existing.device_health,
         current_latitude: data.current_latitude !== undefined ? data.current_latitude : existing.current_latitude,
         current_longitude: data.current_longitude !== undefined ? data.current_longitude : existing.current_longitude,
         current_speed: data.current_speed !== undefined ? data.current_speed : existing.current_speed,
@@ -522,17 +598,39 @@ function updateDriverState(id, data, source) {
     });
 
     if (source === 'realtime') {
-        refreshMarker(id);
+        scheduleRender(id);
     }
-    updateOnlineDriversList();
-    updateOnlineDisplay();
+    
+    // Throttled UI Updates
+    if (!listUpdateTimeout) {
+        listUpdateTimeout = setTimeout(() => {
+            updateOnlineDriversList();
+            listUpdateTimeout = null;
+        }, 1500); // Refresh list every 1.5s
+    }
+    
+    if (!uiUpdateTimeout) {
+        uiUpdateTimeout = setTimeout(() => {
+            updateOnlineDisplay();
+            uiUpdateTimeout = null;
+        }, 3000); // Refresh headers every 3s
+    }
 }
+
+
 
 const HEARTBEAT_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes — ghost driver threshold
 
 function refreshMarker(id) {
     const d = allDriversData[id];
     if (!d || !d.current_latitude || !d.current_longitude) return;
+
+    // Viewport culling (C5) — skip expensive render for off-screen drivers
+    const inViewport = isInViewport(d.current_latitude, d.current_longitude);
+    if (!inViewport) {
+        if (driverMarkers[id]) driverMarkers[id].setVisible(false);
+        return;
+    }
 
     const pos = { lat: d.current_latitude, lng: d.current_longitude };
     const status = d.current_trip_phase || d.current_status || 'available';
@@ -633,31 +731,31 @@ function refreshMarker(id) {
                 if (driverPaths[id].length > 120) driverPaths[id].shift();
             }
 
-            // Re-draw all segments as colored polylines
-            if (!driverPolylineSegments[id]) driverPolylineSegments[id] = [];
-            
-            // Only rebuild if path grew (avoid full redraw on every tick)
+            // A7: Incremental Polyline Append (C3)
             const path = driverPaths[id];
-            if (path.length >= 2) {
-                // Clear old segments
-                driverPolylineSegments[id].forEach(seg => seg.setMap(null));
-                driverPolylineSegments[id] = [];
-
-                for (let i = 0; i < path.length - 1; i++) {
-                    const segSpeed = path[i + 1].speedKmh || path[i].speedKmh || 0;
-                    let segColor = '#10b981'; // Green – moving fast (>40 km/h)
-                    if (segSpeed < 10)       segColor = '#ef4444'; // Red – heavy traffic
-                    else if (segSpeed < 40)  segColor = '#f59e0b'; // Orange – light traffic
-
-                    const seg = new google.maps.Polyline({
-                        path: [{ lat: path[i].lat, lng: path[i].lng }, { lat: path[i+1].lat, lng: path[i+1].lng }],
+            if (path && path.length >= 2) {
+                const prev = path[path.length - 2];
+                const curr = path[path.length - 1];
+                
+                // Only add if it's the latest point (incremental)
+                if (prev.lat !== curr.lat || prev.lng !== curr.lng) {
+                    const color = (curr.speedKmh > 40) ? '#10b981' : (curr.speedKmh > 10 ? '#f59e0b' : '#ef4444');
+                    const newSeg = new google.maps.Polyline({
+                        path: [{ lat: prev.lat, lng: prev.lng }, { lat: curr.lat, lng: curr.lng }],
                         geodesic: true,
-                        strokeColor: segColor,
+                        strokeColor: color,
                         strokeOpacity: 0.85,
                         strokeWeight: 4,
                         map: driversMap
                     });
-                    driverPolylineSegments[id].push(seg);
+                    if (!driverPolylineSegments[id]) driverPolylineSegments[id] = [];
+                    driverPolylineSegments[id].push(newSeg);
+
+                    // Evict oldest segment when path is pruned (matches 120-point cap)
+                    if (driverPolylineSegments[id].length > 119) {
+                        const oldest = driverPolylineSegments[id].shift();
+                        if (oldest) oldest.setMap(null);
+                    }
                 }
             }
         }
@@ -908,7 +1006,13 @@ function updateOnlineDisplay() {
     if (mapStatusEl) {
         mapStatusEl.innerText = `Live: ${onlineCount} drivers online`;
     }
+
+    // Re-render all drivers when admin pans/zooms (C5)
+    driversMap.addListener('idle', () => {
+        Object.keys(allDriversData).forEach(id => scheduleRender(id));
+    });
 }
+
 
 window.focusDriver = function(driverId) {
     const marker = driverMarkers[driverId];
@@ -1033,6 +1137,73 @@ function showQuickInfoPanel(driverId, driver) {
             driversMap.setZoom(17);
         }
     };
+
+    // Phase E: Remote Command (Ping)
+    let pingBtn = document.getElementById('qipPingBtn');
+    if (!pingBtn) {
+        pingBtn = document.createElement('button');
+        pingBtn.id = 'qipPingBtn';
+        pingBtn.className = 'qip-action-btn ping';
+        pingBtn.style.background = '#6366f1';
+        pingBtn.style.color = 'white';
+        pingBtn.style.marginTop = '12px';
+        pingBtn.style.width = '100%';
+        pingBtn.style.borderRadius = '8px';
+        pingBtn.style.padding = '8px';
+        pingBtn.style.border = 'none';
+        pingBtn.style.cursor = 'pointer';
+        pingBtn.innerHTML = '<i class="fas fa-satellite"></i> PING DEVICE';
+        document.querySelector('.qip-actions').appendChild(pingBtn);
+    }
+    
+    pingBtn.onclick = async () => {
+        pingBtn.disabled = true;
+        pingBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> PINGING...';
+        try {
+            const driverRef = doc(db, "drivers", driverId);
+            await updateDoc(driverRef, { command: 'ping' });
+            setTimeout(() => {
+                pingBtn.disabled = false;
+                pingBtn.innerHTML = '<i class="fas fa-check"></i> PING SENT';
+                setTimeout(() => { pingBtn.innerHTML = '<i class="fas fa-satellite"></i> PING DEVICE'; }, 2000);
+            }, 1000);
+        } catch (e) {
+            console.error("Ping failed", e);
+            pingBtn.disabled = false;
+            pingBtn.innerHTML = '<i class="fas fa-exclamation-triangle"></i> FAILED';
+        }
+    };
+
+    // Phase E: Health Indicators
+    let healthBox = document.getElementById('qipHealthBox');
+    if (!healthBox) {
+        healthBox = document.createElement('div');
+        healthBox.id = 'qipHealthBox';
+        healthBox.style.display = 'flex';
+        healthBox.style.gap = '10px';
+        healthBox.style.marginTop = '10px';
+        healthBox.style.padding = '10px';
+        healthBox.style.background = 'rgba(255,255,255,0.05)';
+        healthBox.style.borderRadius = '8px';
+        document.querySelector('.qip-body').insertBefore(healthBox, document.querySelector('.qip-traffic'));
+    }
+
+    const health = driver.device_health || {};
+    const battery = health.battery || '--';
+    const isCharging = health.is_charging ? '<i class="fas fa-bolt" style="color:#fbbf24; margin-left:4px;"></i>' : '';
+    const network = health.network || 'Unknown';
+    const netIcon = network.includes('WIFI') ? 'fa-wifi' : 'fa-signal';
+
+    healthBox.innerHTML = `
+        <div style="flex:1;">
+            <small style="color:#94a3b8; display:block; font-size:10px;">BATTERY</small>
+            <span style="font-weight:600; color:${battery < 20 ? '#ef4444' : '#fff'};">${battery}% ${isCharging}</span>
+        </div>
+        <div style="flex:1; border-left:1px solid rgba(255,255,255,0.1); padding-left:10px;">
+            <small style="color:#94a3b8; display:block; font-size:10px;">NETWORK</small>
+            <span style="font-weight:600; color:#fff;"><i class="fas ${netIcon}" style="font-size:10px; margin-right:4px;"></i> ${network}</span>
+        </div>
+    `;
 
     // Show panel (re-trigger animation)
     panel.classList.remove('active');

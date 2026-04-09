@@ -1,5 +1,6 @@
 package com.prototype.fleetonix
 
+import androidx.compose.ui.platform.LocalContext
 import android.util.Patterns
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -63,6 +64,7 @@ fun LoginScreen(
     onLoginSuccess: () -> Unit,
     onForgotPassword: () -> Unit = {}
 ) {
+    val context = LocalContext.current
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
@@ -103,7 +105,7 @@ fun LoginScreen(
                 }
                 
                 // Upon success, update presence and notify flow
-                PresenceManager.updateStatus(true)
+                PresenceManager.updateStatus(context, true)
                 onLoginSuccess()
                 
             } catch (ex: Exception) {

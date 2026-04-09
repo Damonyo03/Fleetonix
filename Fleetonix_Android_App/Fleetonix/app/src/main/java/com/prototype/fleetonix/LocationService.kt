@@ -12,6 +12,8 @@ import android.os.IBinder
 import android.os.Looper
 import android.util.Log
 import android.app.PendingIntent
+import android.os.HandlerThread
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
@@ -39,16 +41,43 @@ import android.location.Geocoder
 import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
+/**
+ * LocationService is the backbone of the Fleetonix driver-side logic.
+ * 
+ * CORE FUNCTIONALITY:
+ * 1. PERSISTENCE: Runs as a Foreground Service to ensure location updates continue even when 
+ *    the application is minimized or the screen is off.
+ * 2. SYNC: Pushes real-time coordinates, speed, and heading to the 'driver_locations' collection.
+ * 3. PRESENCE: Periodically re-asserts the driver's 'online' status to the 'drivers' collection
+ *    to prevent the Admin Dashboard from timing out the driver.
+ * 4. TELEMATICS: Calculates G-Force and smooths speed data using a Kalman Filter (via TelematicsProcessor).
+ */
 class LocationService : Service() {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var geofencingClient: GeofencingClient
-    private lateinit var locationCallback: LocationCallback
+    private var locationRequest: LocationRequest? = null
+    private var locationCallback: LocationCallback? = null
     private lateinit var sensorManager: SensorManager
     private lateinit var wifiManager: WifiManager
     private val telematicsProcessor = TelematicsProcessor()
+    private var wakeLock: PowerManager.WakeLock? = null
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private lateinit var locationHandlerThread: HandlerThread // A4: Dedicated HandlerThread
+    
+    // Phase E: Connectivity
+    private var commandListener: com.google.firebase.firestore.ListenerRegistration? = null
+
+    // A5: Vehicle log throttling
+    private var lastLoggedLocation: android.location.Location? = null
+    private var lastLogTimestamp = 0L
+    private val LOG_INTERVAL_MS = 30_000L
+    private val LOG_MIN_DISTANCE_M = 50f
+
 
     private var totalDistanceMetres = 0f
     private var lastLocation: android.location.Location? = null
@@ -87,8 +116,12 @@ class LocationService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        locationHandlerThread = HandlerThread("LocationCallbackThread").also { it.start() } // A4
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         geofencingClient = LocationServices.getGeofencingClient(this)
+        
+        // Phase E: Initialize Command Listener
+        initCommandListener()
         
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
@@ -118,7 +151,13 @@ class LocationService : Service() {
                     // 3. Push to Firestore for Admin Dashboard (Real-time tracking)
                     if (driverEmail.isNotEmpty()) {
                         updateLocationInFirestore(driverEmail, location)
-                        pushToVehicleLogs(driverEmail, location)
+                        
+                        // A5: Throttle vehicle_logs to save battery/data
+                        if (shouldLogTelemetry(location)) {
+                            pushToVehicleLogs(driverEmail, location)
+                            lastLoggedLocation = location
+                            lastLogTimestamp = System.currentTimeMillis()
+                        }
                     }
 
                     // 4. Broadcast for internal UI (DriverDashboard)
@@ -158,7 +197,7 @@ class LocationService : Service() {
                 Log.e("LocationService", "ShakeDetector triggered! Reporting accident incident.")
                 if (driverEmail.isNotEmpty()) {
                     val email = driverEmail
-                    CoroutineScope(Dispatchers.IO).launch {
+                    serviceScope.launch {
                         try {
                             val db = FirebaseFirestore.getInstance()
                             
@@ -250,28 +289,40 @@ class LocationService : Service() {
         if (extraUid != null) driverUid = extraUid.trim()
         if (extraEmail != null) driverEmail = extraEmail.lowercase().trim()
         
-        // Fallback for legacy calls
-        if (driverUid.isEmpty() && extraLegacyId != null && !extraLegacyId.contains("@")) {
-            driverUid = extraLegacyId.trim()
-        }
-        if (driverEmail.isEmpty() && extraLegacyId != null && extraLegacyId.contains("@")) {
-            driverEmail = extraLegacyId.lowercase().trim()
+        // A7: Persist or Restore Identifiers
+        if (driverUid.isNotEmpty() && driverEmail.isNotEmpty()) {
+            getSharedPreferences("fleetonix_prefs", Context.MODE_PRIVATE).edit()
+                .putString("driver_uid", driverUid)
+                .putString("driver_email", driverEmail)
+                .apply()
+        } else {
+            // Service restarted by OS with null intent — restore from prefs
+            val prefs = getSharedPreferences("fleetonix_prefs", Context.MODE_PRIVATE)
+            driverUid = prefs.getString("driver_uid", "") ?: ""
+            driverEmail = prefs.getString("driver_email", "") ?: ""
         }
 
         if (driverEmail.isNotEmpty()) {
-            Log.d("LocationService", "Tracking active for: $driverEmail [UID: ${driverUid.ifEmpty { "Pending" }}]")
+            Log.d("LocationService", "Tracking active for: $driverEmail [UID: ${driverUid.ifEmpty { "Restored" }}]")
         }
 
         when (intent?.action) {
             ACTION_START -> {
-                PresenceManager.updateStatus(true)
+                PresenceManager.updateStatus(this@LocationService, true)
                 Log.d("LocationService", "Service started: Driver $driverEmail is now ONLINE")
             }
             ACTION_STOP -> {
-                isTripActive = false
                 actualRoutePoints.clear()
-                PresenceManager.updateStatus(false)
-                stopForeground(true)
+                PresenceManager.updateStatus(this@LocationService, false)
+                
+                // A6: stopForeground Deprecation Fix
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                } else {
+                    @Suppress("DEPRECATION")
+                    stopForeground(true)
+                }
+                
                 stopSelf()
                 return START_NOT_STICKY
             }
@@ -314,7 +365,15 @@ class LocationService : Service() {
 
         startLocationUpdates()
 
+        // Acquire WakeLock to prevent CPU sleep during background tracking
+        val powerManager = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        wakeLock = powerManager.newWakeLock(
+            android.os.PowerManager.PARTIAL_WAKE_LOCK,
+            "Fleetonix:LocationTrackingLock"
+        ).apply { acquire() }
+
         return START_STICKY
+
     }
 
     private fun startLocationUpdates() {
@@ -325,8 +384,8 @@ class LocationService : Service() {
         try {
             fusedLocationClient.requestLocationUpdates(
                 locationRequest,
-                locationCallback,
-                Looper.getMainLooper()
+                locationCallback!!,
+                locationHandlerThread.looper // A4: Offload from MainThread
             )
         } catch (e: SecurityException) {
             Log.e("LocationService", "Location permission missing", e)
@@ -334,11 +393,83 @@ class LocationService : Service() {
     }
 
     override fun onDestroy() {
-        PresenceManager.updateStatus(false)
-        super.onDestroy()
-        fusedLocationClient.removeLocationUpdates(locationCallback)
+        Log.d("LocationService", "Destroying LocationService")
+        
+        // Phase E: Stop Command Listener
+        commandListener?.remove()
+        commandListener = null
+        
+        // Update presence with context
+        PresenceManager.updateStatus(this, false)
+        
+        // A3: Unregister ShakeDetector to prevent leak
+        shakeDetector?.let { sensorManager.unregisterListener(it) }
+        
+        // A4: Quit HandlerThread safely
+        locationHandlerThread.quitSafely()
+
+        // Release resources and cancel background tasks to prevent leaks
+        serviceScope.cancel()
+        
+        // A1: Release WakeLock
+        wakeLock?.let { lock -> 
+            if (lock.isHeld) lock.release() 
+        }
+        wakeLock = null
+
+        fusedLocationClient.removeLocationUpdates(locationCallback!!)
         sensorManager.unregisterListener(sensorListener)
+        
+        super.onDestroy()
     }
+    
+    private fun initCommandListener() {
+        val uid = driverUid.ifEmpty { 
+            // Fallback to searching by email if UID not set yet
+            getSharedPreferences("fleetonix_prefs", Context.MODE_PRIVATE)
+                .getString("driver_uid", "") ?: ""
+        }
+        if (uid.isEmpty()) return
+        
+        val db = FirebaseFirestore.getInstance()
+        commandListener = db.collection("drivers").document(uid)
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) {
+                    Log.w("LocationService", "Command listener failed", e)
+                    return@addSnapshotListener
+                }
+                if (snapshot != null && snapshot.exists()) {
+                    val command = snapshot.getString("command")
+                    if (!command.isNullOrEmpty()) {
+                        handleAdminCommand(command)
+                        // Clear command after processing to avoid re-triggering
+                        snapshot.reference.update("command", null)
+                    }
+                }
+            }
+        Log.d("LocationService", "Remote command listener active for $uid")
+    }
+
+    private fun handleAdminCommand(command: String) {
+        Log.i("LocationService", "Executing Remote Admin Command: $command")
+        when (command.lowercase()) {
+            "ping", "refresh", "force_refresh" -> {
+                // Force an immediate location update bypass
+                lastLogTimestamp = 0
+                fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
+                    loc?.let { updateLocationInFirestore(driverEmail, it) }
+                }
+            }
+            "sos", "alert" -> {
+                // Broadcast for UI notification
+                val alertIntent = Intent("com.prototype.fleetonix.APP_NOTIFICATION")
+                alertIntent.putExtra("title", "ADMIN ALERT")
+                alertIntent.putExtra("message", "Priority message from Fleet Operations.")
+                sendBroadcast(alertIntent)
+            }
+        }
+    }
+
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         // App was swiped away, but service is in foreground and should persist.
@@ -395,7 +526,7 @@ class LocationService : Service() {
         val firestore = FirebaseFirestore.getInstance()
         val driverRef = firestore.collection("driver_locations").document(driverEmail)
 
-        CoroutineScope(Dispatchers.IO).launch {
+        serviceScope.launch {
             var humanReadableAddress = "Lat: ${String.format(Locale.US, "%.4f", location.latitude)}, Lng: ${String.format(Locale.US, "%.4f", location.longitude)}"
             try {
                 val geocoder = Geocoder(applicationContext, Locale.getDefault())
@@ -427,16 +558,21 @@ class LocationService : Service() {
                 "wifi_ssid" to currentWifiSsid,
                 "wifi_rssi" to currentWifiRssi,
                 "is_background" to AppLifecycleObserver.isAppInBackground,
+                "device_health" to mapOf(
+                    "battery" to PresenceManager.getBatteryLevel(applicationContext),
+                    "is_charging" to PresenceManager.isCharging(applicationContext),
+                    "network" to PresenceManager.getNetworkType(applicationContext)
+                ),
                 "last_updated" to FieldValue.serverTimestamp()
             )
 
             // Ping presence with every location update to keep status active on dashboard
-            PresenceManager.updateStatus(true, AppLifecycleObserver.isAppInBackground)
+            PresenceManager.updateStatus(this@LocationService, true, AppLifecycleObserver.isAppInBackground)
 
             driverRef.set(locationData, SetOptions.merge())
                 .addOnSuccessListener {
                     if (BuildConfig.DEBUG) {
-                        Log.d("LocationService", "Pushed Enriched Telematics: G=$currentGForce SSID=$currentWifiSsid")
+                        Log.d("LocationService", "Pushed Enriched Telematics: G=$currentGForce Health Reported.")
                     }
                 }
                 .addOnFailureListener { e ->
@@ -476,6 +612,13 @@ class LocationService : Service() {
         }
     }
 
+    private fun shouldLogTelemetry(location: android.location.Location): Boolean {
+        val now = System.currentTimeMillis()
+        val timeSinceLast = now - lastLogTimestamp
+        val distanceSinceLast = lastLoggedLocation?.distanceTo(location) ?: Float.MAX_VALUE
+        return timeSinceLast >= LOG_INTERVAL_MS || distanceSinceLast >= LOG_MIN_DISTANCE_M
+    }
+
     private fun pushToVehicleLogs(driverId: String, location: android.location.Location) {
         val firestore = FirebaseFirestore.getInstance()
         val logData = hashMapOf(
@@ -489,6 +632,10 @@ class LocationService : Service() {
             "accuracy" to location.accuracy,
             "acceleration_g" to currentGForce,
             "wifi_ssid" to currentWifiSsid,
+            "device_health" to mapOf(
+                "battery" to PresenceManager.getBatteryLevel(applicationContext),
+                "network" to PresenceManager.getNetworkType(applicationContext)
+            ),
             "timestamp" to FieldValue.serverTimestamp()
         )
 

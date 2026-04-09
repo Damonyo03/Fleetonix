@@ -15,17 +15,40 @@ const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 const nodemailer = require("nodemailer");
 const axios = require("axios");
+const crypto = require("crypto");
+const { defineSecret } = require("firebase-functions/params");
+
+// D2: Secret Definitions
+const GMAIL_APP_PASSWORD = defineSecret("GMAIL_APP_PASSWORD");
 
 admin.initializeApp();
 
-// Initialize Nodemailer
-const mailTransport = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: "fleetonix.noreply@gmail.com",
-    pass: "uhaugdxsaycurjxl",
-  },
-});
+// D1: Role-Based Access Control Middleware
+async function requireRole(req, res, allowedRoles = ["super_admin"]) {
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return null;
+  }
+  const authHeader = req.headers.authorization || "";
+  const idToken = authHeader.startsWith("Bearer ") ? authHeader.split("Bearer ")[1] : null;
+  if (!idToken) {
+    res.status(401).json({ success: false, message: "Unauthorized: missing token" });
+    return null;
+  }
+  try {
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    const userDoc = await admin.firestore().collection("users").doc(decoded.uid).get();
+    const role = userDoc.data()?.role;
+    if (!userDoc.exists || !allowedRoles.includes(role)) {
+      res.status(403).json({ success: false, message: "Forbidden: insufficient role" });
+      return null;
+    }
+    return { uid: decoded.uid, role };
+  } catch (e) {
+    res.status(401).json({ success: false, message: "Unauthorized: invalid token" });
+    return null;
+  }
+}
 
 /**
  * Premium HTML Template for OTP
@@ -77,88 +100,9 @@ function getOTPHtmlTemplate(otp, email, isRegistration = false) {
 
 setGlobalOptions({maxInstances: 10});
 
-// LocationIQ API Token (from legacy PHP script)
-const LOCATIONIQ_TOKEN = "pk.0b57c3a80ea3c7893de95270b2a3ad50";
+/// [LOCATION_SEARCH_PROXY_REMOVED]
+// We now use Google Places API directly on the client (web/mobile) via address-autocomplete.js
 
-/**
- * Address Search Proxy for LocationIQ
- * Replaces legacy PHP api/address_search.php
- */
-exports.addressSearch = onRequest({ cors: true }, async (req, res) => {
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-
-  const query = req.query.q || "";
-  const limit = parseInt(req.query.limit || "10");
-
-  if (query.length < 2) {
-    res.json([]);
-    return;
-  }
-
-  try {
-    const url = `https://us1.locationiq.com/v1/autocomplete.php?key=${LOCATIONIQ_TOKEN}&q=${encodeURIComponent(query)}&limit=${limit}&dedupe=1&normalizecity=1&countrycodes=ph`;
-
-    const response = await axios.get(url, {
-      headers: {
-        "Accept-Encoding": "gzip",
-      },
-    });
-
-    if (response.status !== 200 || !response.data) {
-      res.json([]);
-      return;
-    }
-
-    const results = response.data.map((entry) => {
-      const address = entry.address || {};
-      const houseNumber = address.house_number || "";
-      const street = address.road || address.neighbourhood || "";
-      const city = address.city || address.town || address.municipality || address.county || "";
-      const province = address.state || address.region || address.province || "";
-      const zipCode = address.postcode || "";
-
-      let regionCategory = "Philippines";
-      const displayName = entry.display_name || "";
-      const ncrKeywords = ["Metro Manila", "NCR", "Manila", "Makati", "Quezon City", "Pasig", "Taguig", "Mandaluyong", "Pasay", "Parañaque", "Las Piñas", "Muntinlupa", "Marikina", "Caloocan", "Malabon", "Navotas", "Valenzuela", "San Juan"];
-
-      if (ncrKeywords.some((kw) => displayName.includes(kw))) {
-        regionCategory = "NCR";
-      } else if (displayName.includes("Pampanga") || displayName.includes("Angeles") || displayName.includes("San Fernando")) {
-        regionCategory = "Pampanga";
-      } else if (["Cavite", "Laguna", "Batangas", "Quezon", "Tagaytay"].some((kw) => displayName.includes(kw))) {
-        regionCategory = "South Luzon";
-      }
-
-      let fullAddress = displayName;
-      if (houseNumber && street) {
-        const components = [address.suburb, address.city, address.town, address.state, address.postcode, address.country]
-            .filter((c) => c);
-        fullAddress = `${houseNumber} ${street}, ${components.join(", ")}`;
-      }
-
-      return {
-        address: fullAddress,
-        place_name: displayName,
-        lat: parseFloat(entry.lat),
-        lng: parseFloat(entry.lon),
-        region: regionCategory,
-        province: province || regionCategory,
-        city: city,
-        house_number: houseNumber,
-        street: street,
-        zip_code: zipCode,
-      };
-    });
-
-    res.json(results);
-  } catch (error) {
-    logger.error("LocationIQ API Error", error);
-    res.json([]);
-  }
-});
 
 /**
  * Send Password Reset OTP
@@ -178,23 +122,31 @@ exports.sendPasswordResetOTP = onRequest({ cors: true }, async (req, res) => {
   try {
     const userRecord = await admin.auth().getUserByEmail(email);
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
 
-    // Store OTP with expiration
+    // Store OTP Hash with expiration (D3)
     await admin.firestore().collection("otps").doc(userRecord.uid).set({
       email: email,
-      otp: otp,
+      hash: otpHash,
       created_at: admin.firestore.FieldValue.serverTimestamp(),
       expires_at: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 5 * 60 * 1000)),
     });
 
-    // Send Email via Nodemailer
     const mailOptions = {
       from: '"Fleetonix System" <fleetonix.noreply@gmail.com>',
       to: email,
       subject: "Verification Code: " + otp,
       html: getOTPHtmlTemplate(otp, email),
     };
-    await mailTransport.sendMail(mailOptions);
+    
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: "fleetonix.noreply@gmail.com",
+        pass: GMAIL_APP_PASSWORD.value(), // D2: Secret access
+      },
+    });
+    await transporter.sendMail(mailOptions);
 
     logger.info(`Generated password reset OTP for ${email}`);
     res.json({success: true, message: "OTP sent successfully", data: {userId: userRecord.uid, email: email}});
@@ -230,7 +182,9 @@ exports.resetPasswordWithOTP = onRequest({ cors: true }, async (req, res) => {
     }
 
     const data = otpDoc.data();
-    if (data.otp !== otp) {
+    const incomingHash = crypto.createHash("sha256").update(otp).digest("hex");
+    
+    if (data.hash !== incomingHash) {
       res.status(401).json({success: false, message: "Invalid OTP code."});
       return;
     }
@@ -289,13 +243,10 @@ exports.verifyOTP = onRequest({ cors: true }, async (req, res) => {
 
 /**
  * Admin Create User
- * Safely creates a new Auth user and Firestore document without logging out the admin.
  */
 exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
+  const caller = await requireRole(req, res, ["super_admin", "company_admin"]);
+  if (!caller) return;
 
   const {email, password, fullName, role, companyName} = req.body;
 
@@ -354,13 +305,10 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
 
 /**
  * Admin Delete User
- * Safely removes a user from Firebase Auth and Firestore.
  */
 exports.adminDeleteUser = onRequest({ cors: true }, async (req, res) => {
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
+  const caller = await requireRole(req, res, ["super_admin"]);
+  if (!caller) return;
 
   const {uid, email} = req.body;
 
@@ -459,13 +407,10 @@ exports.onScheduleUpdate = onDocumentUpdated("schedules/{docId}", async (event) 
 
 /**
  * Admin Data Clearing Function
- * Securely deletes transaction data and returns a backup
  */
 exports.adminClearData = onRequest({ cors: true }, async (req, res) => {
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
+  const caller = await requireRole(req, res, ["super_admin"]);
+  if (!caller) return;
 
   if (req.method !== "POST") {
     res.status(405).send("Method Not Allowed");

@@ -1,9 +1,13 @@
 package com.prototype.fleetonix
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
+import android.os.PowerManager
 import android.provider.Settings
+import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
+
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -139,4 +143,19 @@ fun LocationGate(onReady: () -> Unit) {
         }
     }
 }
+
+/**
+ * Utility function to prompt the user to ignore battery optimizations for Fleetonix.
+ * This is critical for maintaining background foreground service stability.
+ */
+fun requestBatteryOptimizationExemption(activity: Activity) {
+    val pm = activity.getSystemService(Context.POWER_SERVICE) as PowerManager
+    if (!pm.isIgnoringBatteryOptimizations(activity.packageName)) {
+        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+            data = android.net.Uri.parse("package:${activity.packageName}")
+        }
+        activity.startActivity(intent)
+    }
+}
+
 

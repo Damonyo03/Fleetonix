@@ -7,7 +7,7 @@ import android.util.Log
 /**
  * Observes the application lifecycle to track foreground/background state.
  */
-class AppLifecycleObserver : DefaultLifecycleObserver {
+class AppLifecycleObserver(private val context: android.content.Context) : DefaultLifecycleObserver {
 
     companion object {
         var isAppInBackground: Boolean = false
@@ -18,13 +18,13 @@ class AppLifecycleObserver : DefaultLifecycleObserver {
         super.onStart(owner)
         isAppInBackground = false
         Log.d("AppLifecycleObserver", "App entered FOREGROUND")
-        PresenceManager.updateBackgroundStatus(false)
+        PresenceManager.updateBackgroundStatus(context, false)
     }
 
     override fun onStop(owner: LifecycleOwner) {
         super.onStop(owner)
         isAppInBackground = true
         Log.d("AppLifecycleObserver", "App entered BACKGROUND")
-        PresenceManager.updateBackgroundStatus(true)
+        PresenceManager.updateBackgroundStatus(context, true)
     }
 }
