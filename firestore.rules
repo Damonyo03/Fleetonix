@@ -46,6 +46,40 @@ service cloud.firestore {
              .data.role in ['super_admin', 'company_admin', 'admin'];
     }
 
+    // ── accidents: drivers can create; admins full access ───────────────
+    match /accidents/{docId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.driver_email.lower() == request.auth.token.email.lower();
+      allow update, delete: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid))
+             .data.role in ['super_admin', 'company_admin', 'admin'];
+    }
+
+    // ── vehicle_issues: drivers can create; admins full access ──────────
+    match /vehicle_issues/{docId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.driver_email.lower() == request.auth.token.email.lower();
+      allow update, delete: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid))
+             .data.role in ['super_admin', 'company_admin', 'admin'];
+    }
+
+    // ── trip_tickets: drivers create/update; admins full access ─────────
+    match /trip_tickets/{docId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.driver_email.lower() == request.auth.token.email.lower();
+      allow update: if request.auth != null
+        && (request.auth.token.email.lower() == resource.data.driver_email.lower() ||
+            get(/databases/$(database)/documents/users/$(request.auth.uid))
+              .data.role in ['super_admin', 'company_admin', 'admin']);
+      allow delete: if request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid))
+             .data.role in ['super_admin', 'company_admin', 'admin'];
+    }
+
     // ── dtr_logs: drivers write own records only ─────────────────────────
     match /dtr_logs/{docId} {
       allow read: if request.auth != null;
