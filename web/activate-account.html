@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fleetonix - Activate Account</title>
+    <link rel="icon" type="image/jpeg" href="img/logo.jpg">
+    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .activation-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+        }
+        .activation-card {
+            width: 100%;
+            max-width: 450px;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+        .logo-box {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        .logo-box img {
+            width: 80px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+        }
+        .logo-box h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+        .logo-box p {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+        .form-status {
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            margin-bottom: 24px;
+            display: none;
+        }
+        .status-error { background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); }
+        .status-success { background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.2); }
+        
+        .otp-inputs {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-bottom: 24px;
+        }
+        .otp-digit {
+            width: 45px;
+            height: 55px;
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            color: #00d4ff;
+        }
+        .otp-digit:focus {
+            border-color: #00d4ff;
+            outline: none;
+            background: rgba(0, 212, 255, 0.05);
+        }
+    </style>
+</head>
+<body class="login-body">
+    <div class="activation-container">
+        <div class="activation-card">
+            <div class="logo-box">
+                <img src="img/logo.jpg" alt="Logo">
+                <h1>Activate Account</h1>
+                <p>Verify your email and set your password to continue.</p>
+            </div>
+
+            <div id="statusMessage" class="form-status"></div>
+
+            <form id="activationForm">
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input type="email" id="email" class="form-input" placeholder="Enter your email" required>
+                </div>
+
+                <div class="form-group">
+                    <label>Verification Code (OTP)</label>
+                    <div class="otp-inputs">
+                        <input type="text" maxlength="1" class="otp-digit" required>
+                        <input type="text" maxlength="1" class="otp-digit" required>
+                        <input type="text" maxlength="1" class="otp-digit" required>
+                        <input type="text" maxlength="1" class="otp-digit" required>
+                        <input type="text" maxlength="1" class="otp-digit" required>
+                        <input type="text" maxlength="1" class="otp-digit" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>New Permanent Password</label>
+                    <div class="password-wrapper">
+                        <input type="password" id="newPassword" class="form-input" placeholder="Min 6 characters" required minlength="6">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Confirm Password</label>
+                    <div class="password-wrapper">
+                        <input type="password" id="confirmPassword" class="form-input" placeholder="Repeat password" required>
+                    </div>
+                </div>
+
+                <button type="submit" id="submitBtn" class="btn btn-primary" style="width: 100%; margin-top: 16px;">
+                    Verify & Activate
+                </button>
+            </form>
+
+            <div style="text-align: center; margin-top: 24px;">
+                <a href="login.html" style="color: var(--text-secondary); font-size: 0.875rem; text-decoration: none;">
+                    <i class="fas fa-arrow-left"></i> Back to Login
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        const statusEl = document.getElementById('statusMessage');
+        const submitBtn = document.getElementById('submitBtn');
+        const otpDigits = document.querySelectorAll('.otp-digit');
+        const emailInput = document.getElementById('email');
+
+        // Pre-fill email from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('email')) {
+            emailInput.value = urlParams.get('email');
+            // If email is provided, maybe disable it or just let it stay
+        }
+
+        // OTP Input Auto-focus sequence
+        otpDigits.forEach((digit, idx) => {
+            digit.addEventListener('keyup', (e) => {
+                if (e.key >= 0 && e.key <= 9) {
+                    if (idx < otpDigits.length - 1) otpDigits[idx + 1].focus();
+                } else if (e.key === 'Backspace') {
+                    if (idx > 0) otpDigits[idx - 1].focus();
+                }
+            });
+        });
+
+        document.getElementById('activationForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value.trim();
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const otp = Array.from(otpDigits).map(d => d.value).join('');
+
+            if (otp.length !== 6) {
+                showStatus('Please enter a valid 6-digit OTP.', 'error');
+                return;
+            }
+
+            if (newPassword !== confirmPassword) {
+                showStatus('Passwords do not match.', 'error');
+                return;
+            }
+
+            setLoading(true);
+            try {
+                const response = await fetch('https://us-central1-appfleetonix.cloudfunctions.net/verifyAndActivateAccount', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, otp, newPassword })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    showStatus(result.message, 'success');
+                    document.getElementById('activationForm').style.display = 'none';
+                    setTimeout(() => { window.location.href = 'login.html?activation=pending_approval'; }, 3000);
+                } else {
+                    showStatus(result.message || 'Activation failed. Please check your data.', 'error');
+                    setLoading(false);
+                }
+            } catch (err) {
+                showStatus('Connection failed. Please try again.', 'error');
+                setLoading(false);
+            }
+        });
+
+        function showStatus(msg, type) {
+            statusEl.innerText = msg;
+            statusEl.className = `form-status status-${type}`;
+            statusEl.style.display = 'block';
+        }
+
+        function setLoading(isLoading) {
+            submitBtn.disabled = isLoading;
+            submitBtn.innerText = isLoading ? 'Processing...' : 'Verify & Activate';
+        }
+    </script>
+</body>
+</html>

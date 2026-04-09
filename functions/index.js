@@ -109,6 +109,49 @@ function getOTPHtmlTemplate(otp, email, isRegistration = false) {
   `;
 }
 
+/**
+ * Premium HTML Template for Account Verified / Welcome
+ */
+function getWelcomeHtmlTemplate(fullName, email) {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; background-color: #0a0e27; color: #ffffff; }
+        .container { max-width: 600px; margin: 0 auto; padding: 40px 20px; background-color: #1a1f3a; border-radius: 12px; border: 1px solid #2d3447; }
+        .logo { display: block; width: 120px; margin: 0 auto 30px; border-radius: 12px; }
+        .header { text-align: center; color: #00c9a7; font-size: 24px; font-weight: 700; margin-bottom: 20px; letter-spacing: 0.5px; }
+        .content { text-align: center; color: #b0b8c8; font-size: 16px; line-height: 1.6; margin-bottom: 30px; }
+        .btn-container { text-align: center; margin-top: 30px; }
+        .btn { background-color: #00d4ff; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: 700; display: inline-block; }
+        .footer { text-align: center; margin-top: 40px; color: #6b7280; font-size: 13px; }
+        .accent { color: #00d4ff; font-weight: 600; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <img src="https://appfleetonix.web.app/img/logo.jpg" alt="Fleetonix" class="logo">
+        <div class="header">Account Verified!</div>
+        <div class="content">
+          Hello <span class="accent">${fullName}</span>,<br><br>
+          Great news! Your Fleetonix account (<span class="accent">${email}</span>) has been officially verified and approved by the Super Administrator.<br><br>
+          You are now free to use the application and access all features associated with your role.
+        </div>
+        <div class="btn-container">
+          <a href="https://appfleetonix.web.app/login.html" class="btn">Access Dashboard</a>
+        </div>
+        <div class="footer">
+          &copy; ${new Date().getFullYear()} Fleetonix Fleet Management. All rights reserved.<br>
+          This is an automated system message, please do not reply.
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
 setGlobalOptions({maxInstances: 10});
 
 /// [LOCATION_SEARCH_PROXY_REMOVED]
@@ -301,6 +344,7 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
       company_name: "Jettsan",
       created_at: admin.firestore.FieldValue.serverTimestamp(),
       user_type: role, // Compatibility for dual-schema
+      status: "pending_verification", // Security Stage 1
     };
 
     await admin.firestore().collection("users").doc(userRecord.uid).set(userData);
@@ -311,17 +355,105 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
         driver_name: fullName,
         driver_email: email.toLowerCase().trim(),
         current_status: "offline",
-        status: "active", // Admin-created drivers are active immediately
+        status: "pending_verification", // Mirroring user status
         created_at: admin.firestore.FieldValue.serverTimestamp(),
         updated_at: admin.firestore.FieldValue.serverTimestamp(),
       });
     }
 
-    logger.info(`Admin created new ${role}: ${email}`);
-    res.json({success: true, message: `New ${role} created successfully.`, uid: userRecord.uid});
+    // 4. Generate and Send Activation OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
+    
+    await admin.firestore().collection("registration_otps").doc(email.toLowerCase().trim()).set({
+      hash: otpHash,
+      email: email.toLowerCase().trim(),
+      uid: userRecord.uid,
+      created_at: admin.firestore.FieldValue.serverTimestamp(),
+      expires_at: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 24 * 60 * 60 * 1000)), // 24h expiration for admin creation
+    });
+
+    const mailOptions = {
+      from: '"Fleetonix Activation" <fleetonix.noreply@gmail.com>',
+      to: email,
+      subject: "Fleetonix Account Activation",
+      html: getOTPHtmlTemplate(otp, email, true),
+    };
+    await getMailTransport().sendMail(mailOptions);
+
+    logger.info(`Admin created new ${role}: ${email}. OTP sent for verification.`);
+    res.json({success: true, message: `New ${role} created. Activation OTP sent to ${email}.`, uid: userRecord.uid});
   } catch (error) {
     logger.error("Error creating user", error);
     res.status(500).json({success: false, message: error.message});
+  }
+});
+
+/**
+ * Verify OTP and Update Password (Step 2 of Admin-Created Users)
+ */
+exports.verifyAndActivateAccount = onRequest({ cors: true }, async (req, res) => {
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+
+  const { email, otp, newPassword } = req.body || {};
+  if (!email || !otp || !newPassword) {
+    res.status(400).json({ success: false, message: "Missing required fields: email, otp, and newPassword are required." });
+    return;
+  }
+
+  const emailLower = email.toLowerCase().trim();
+
+  try {
+    const otpDoc = await admin.firestore().collection("registration_otps").doc(emailLower).get();
+    if (!otpDoc.exists) {
+      res.status(400).json({ success: false, message: "Verification code not found or expired." });
+      return;
+    }
+
+    const storedData = otpDoc.data();
+    const incomingHash = crypto.createHash("sha256").update(otp).digest("hex");
+
+    if (storedData.hash !== incomingHash) {
+      res.status(400).json({ success: false, message: "Invalid verification code." });
+      return;
+    }
+
+    // Use email to find user UID
+    let uid = storedData.uid;
+    if (!uid) {
+        const userRec = await admin.auth().getUserByEmail(emailLower);
+        uid = userRec.uid;
+    }
+
+    // 1. Update Password in Auth
+    await admin.auth().updateUser(uid, {
+      password: newPassword,
+    });
+
+    // 2. Update Status in Firestore
+    await admin.firestore().collection("users").doc(uid).update({
+      status: "pending_approval",
+    });
+
+    // 3. Update Drivers collection if applicable
+    const driverSnap = await admin.firestore().collection("drivers").doc(uid).get();
+    if (driverSnap.exists) {
+        await admin.firestore().collection("drivers").doc(uid).update({
+            status: "pending_approval"
+        });
+    }
+
+    // 4. Cleanup OTP
+    await admin.firestore().collection("registration_otps").doc(emailLower).delete();
+
+    logger.info(`User ${emailLower} verified OTP and updated password. Status: pending_approval.`);
+    res.json({ success: true, message: "Verification successful! Your account is now pending final Super Admin approval." });
+  } catch (error) {
+    logger.error("Error in verifyAndActivateAccount", error);
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
@@ -653,7 +785,7 @@ exports.completeRegistration = onRequest({ cors: true }, async (req, res) => {
       phone: phone || userData.phone || "",
       company_name: "Jettsan",
       user_type: role,
-      status: "pending", // Default to pending for Super Admin approval
+      status: "pending_approval", // Default to pending for Super Admin approval
       created_at: admin.firestore.FieldValue.serverTimestamp(),
     });
     logger.info(`Firestore user doc created for: ${userRecord.uid}`);
@@ -663,7 +795,7 @@ exports.completeRegistration = onRequest({ cors: true }, async (req, res) => {
           driver_name: userData.full_name,
           driver_email: email.toLowerCase().trim(),
           current_status: "offline",
-          status: "pending",
+          status: "pending_approval",
           created_at: admin.firestore.FieldValue.serverTimestamp(),
           updated_at: admin.firestore.FieldValue.serverTimestamp(),
         });
@@ -674,6 +806,32 @@ exports.completeRegistration = onRequest({ cors: true }, async (req, res) => {
   } catch (error) {
     logger.error("Error in completeRegistration", error);
     res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * Send Welcome Email upon Super Admin Approval
+ */
+exports.onUserApproval = onDocumentUpdated("users/{uid}", async (event) => {
+  const before = event.data.before.data();
+  const after = event.data.after.data();
+
+  // Trigger when status changes to 'active'
+  if (before.status !== "active" && after.status === "active") {
+    try {
+      const mailOptions = {
+        from: '"Fleetonix System" <fleetonix.noreply@gmail.com>',
+        to: after.email,
+        subject: "Account Verified - Welcome to Fleetonix",
+        html: getWelcomeHtmlTemplate(after.full_name || "User", after.email),
+      };
+      
+      const transporter = getMailTransport();
+      await transporter.sendMail(mailOptions);
+      logger.info(`Welcome email successfully sent to ${after.email}`);
+    } catch (error) {
+      logger.error(`Failed to send welcome email to ${after.email}:`, error);
+    }
   }
 });
 

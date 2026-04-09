@@ -83,9 +83,17 @@
             connectFirestoreEmulator(db, "localhost", 8080);
         }
 
-        const loginForm = document.getElementById('loginForm');
         const loginBtn = document.getElementById('loginBtn');
         const errorMessage = document.getElementById('errorMessage');
+
+        // Check for activation status messages from URL
+        if (urlParams.get('activation') === 'pending_approval') {
+            errorMessage.innerHTML = `<i class="fas fa-check-circle"></i> Verification successful! <br><span style="font-size:0.875rem;">Your account is now awaiting final approval by the Super Admin.</span>`;
+            errorMessage.style.background = 'rgba(16, 185, 129, 0.1)';
+            errorMessage.style.color = '#10b981';
+            errorMessage.style.borderColor = 'rgba(16, 185, 129, 0.2)';
+            errorMessage.style.display = 'block';
+        }
 
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -107,11 +115,36 @@
                 if (!querySnapshot.empty) {
                     const userData = querySnapshot.docs[0].data();
                     console.log("User found in Firestore:", userData);
-                    const adminRoles = ['admin', 'super_admin', 'company_admin'];
+                    
+                    const status = userData.status || 'active';
+
+                    // Lifecycle Guard: Verification
+                    if (status === 'pending_verification') {
+                        window.location.href = 'activate-account.html?email=' + encodeURIComponent(email);
+                        return;
+                    }
+
+                    // Lifecycle Guard: Approval
+                    if (status === 'pending_approval') {
+                        errorMessage.innerHTML = `<i class="fas fa-clock"></i> Account pending final Super Admin approval. <br><span style="font-size:0.75rem; opacity:0.8;">You will receive an email once your credentials have been vetted.</span>`;
+                        errorMessage.style.background = 'rgba(0, 212, 255, 0.1)';
+                        errorMessage.style.color = '#00d4ff';
+                        errorMessage.style.borderColor = 'rgba(0, 212, 255, 0.2)';
+                        errorMessage.style.display = 'block';
+                        loginBtn.classList.remove('loading');
+                        loginBtn.innerText = 'Log in';
+                        return;
+                    }
+
+                    const adminRoles = ['admin', 'super_admin'];
                     if (adminRoles.includes(userData.user_type || userData.role)) {
                         window.location.href = 'admin/dashboard.html';
-                    } else if (userData.user_type === 'client') {
-                        window.location.href = 'client/dashboard.html';
+                    } else if (userData.user_type === 'driver' || userData.role === 'driver') {
+                        // Drivers use the mobile app usually, but redirect to a placeholder if needed
+                        errorMessage.innerText = "Driver access is restricted to the mobile application.";
+                        errorMessage.style.display = 'block';
+                        loginBtn.classList.remove('loading');
+                        loginBtn.innerText = 'Log in';
                     } else {
                         console.warn("User type not recognized:", userData.user_type);
                         window.location.href = 'login.html?error=invalid_role';

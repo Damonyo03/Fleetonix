@@ -242,7 +242,7 @@ async function showCreateUserModal() {
                 throw new Error(result.message || "Failed to create user");
             }
 
-            alert(`User account for ${fullName} created successfully!`);
+            alert(result.message || `User account for ${fullName} created successfully!`);
 
             // Removed company-specific counter logic for NSCRP
         } catch (err) {

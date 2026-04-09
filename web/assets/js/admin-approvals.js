@@ -36,8 +36,7 @@ onAuthStateChanged(auth, async (user) => {
 function loadApprovals() {
     const q = query(
         collection(db, "users"),
-        where("status", "==", "pending"),
-        where("user_type", "==", "driver")
+        where("status", "==", "pending_approval")
     );
 
     onSnapshot(q, (snapshot) => {
@@ -72,7 +71,12 @@ function renderApprovals() {
                         <div style="color: var(--text-muted); font-size: 0.875rem;">${driver.email}</div>
                     </div>
                 </div>
-                <div class="status-badge" style="background: rgba(255, 171, 0, 0.1); color: #ffab00; border: 1px solid rgba(255, 171, 0, 0.2);">PENDING</div>
+                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+                    <div class="status-badge" style="background: rgba(255, 171, 0, 0.1); color: #ffab00; border: 1px solid rgba(255, 171, 0, 0.2);">PENDING APPROVAL</div>
+                    <div class="badge" style="background: ${driver.role === 'super_admin' ? 'var(--accent-blue)' : driver.role === 'admin' ? 'var(--accent-purple, #8b5cf6)' : 'var(--accent-orange)'}; font-size: 0.75rem;">
+                        ${(driver.role || driver.user_type || 'driver').toUpperCase()}
+                    </div>
+                </div>
             </div>
 
             <div style="background: rgba(255,255,255,0.02); padding: 16px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 0.875rem;">
@@ -139,13 +143,15 @@ async function processApproval(driver) {
             approved_at: serverTimestamp()
         });
 
-        // 2. Update driver document (key is email)
-        const driverRef = doc(db, "drivers", driver.email.toLowerCase().trim());
-        await updateDoc(driverRef, {
-            status: "active",
-            approved_by: currentAdmin.email,
-            approved_at: serverTimestamp()
-        });
+        // 2. Update driver document if it exists (key is email)
+        const driverSnap = await getDoc(doc(db, "drivers", driver.uid));
+        if (driverSnap.exists()) {
+            await updateDoc(doc(db, "drivers", driver.uid), {
+                status: "active",
+                approved_by: currentAdmin.email,
+                approved_at: serverTimestamp()
+            });
+        }
 
         // 3. Log notification
         await addDoc(collection(db, "notifications"), {
@@ -166,7 +172,10 @@ async function processDecline(driver) {
     try {
         // In a real scenario, we might move to 'declined' or delete entirely
         await deleteDoc(doc(db, "users", driver.uid));
-        await deleteDoc(doc(db, "drivers", driver.email.toLowerCase().trim()));
+        const driverSnap = await getDoc(doc(db, "drivers", driver.uid));
+        if (driverSnap.exists()) {
+            await deleteDoc(doc(db, "drivers", driver.uid));
+        }
         
         // Log rejection
         await addDoc(collection(db, "activity"), {
