@@ -583,12 +583,22 @@ class LocationService : Service() {
         val driverRef = firestore.collection("driver_locations").document(targetDocId)
 
         serviceScope.launch {
+            val geocoder = Geocoder(applicationContext, Locale.getDefault())
+            val addresses = try { 
+                geocoder.getFromLocation(location.latitude, location.longitude, 1) 
+            } catch (e: Exception) { null }
+            
+            val city = if (!addresses.isNullOrEmpty()) {
+                addresses[0].locality ?: addresses[0].subAdminArea ?: "Unknown City"
+            } else "Unknown City"
+
             val humanReadableAddress = getAddressFromLocation(location)
 
             val locationData = hashMapOf(
                 "current_latitude" to location.latitude,
                 "current_longitude" to location.longitude,
                 "location_name" to humanReadableAddress,
+                "current_city" to city,
                 "current_speed" to smoothedSpeed,
                 "current_heading" to location.bearing,
                 "current_accuracy" to location.accuracy,
@@ -649,6 +659,7 @@ class LocationService : Service() {
 
                     val updates = hashMapOf<String, Any>(
                         "current_location_name" to humanReadableAddress,
+                        "current_city" to city,
                         "location" to GeoPoint(location.latitude, location.longitude),
                         "status" to "online",
                         "lastSeen" to FieldValue.serverTimestamp(),

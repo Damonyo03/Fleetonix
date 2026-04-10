@@ -118,13 +118,7 @@ async function showCreateBookingModal(clients) {
                 <input type="text" id="modal_contractor" class="form-input" value="Jettsan" readonly>
             </div>
             <div class="form-group">
-                <label for="modal_operating_area">Target Operating Area</label>
-                <select id="modal_operating_area" class="form-input" required>
-                    <option value="">-- Select Area --</option>
-                    <option value="Metro Manila">Metro Manila – unrestricted</option>
-                    <option value="South">South – up to Calamba / Banlic</option>
-                    <option value="North">North – up to Clark / Mabalacat</option>
-                </select>
+                <!-- Operating Area Removed per Core Stability Refactor -->
             </div>
         </div>
 
@@ -231,7 +225,6 @@ async function showCreateBookingModal(clients) {
         if (!pickup || !dropoff) throw new Error("Please fill in both pickup and dropoff locations.");
 
         const bookingId = generateNumericId().toString();
-        const operatingArea = document.getElementById('modal_operating_area').value;
         const date = document.getElementById('pickup_date').value;
         const time = document.getElementById('pickup_time').value;
         const driverId = document.getElementById('modal_driver').value;
@@ -246,8 +239,8 @@ async function showCreateBookingModal(clients) {
             client_email: clientEmail,
             client_phone: clientPhone,
             contractor: 'Jettsan',
-            operating_area: operatingArea,
             isOfficial: isOfficial,
+            is_published: false, // Core Stability Refactor: Start as Draft
 
             pickup_location: pickup,
             pickup_latitude: pickup_lat,
@@ -287,7 +280,6 @@ async function showCreateBookingModal(clients) {
                 schedule_id: generateNumericId(),
                 client_id: 'guest',
                 client_name: clientName,
-                operating_area: operatingArea,
                 driver_id: driverId,
                 driver_email: driverEmail.toLowerCase().trim(),
                 driver_name: driverName,
@@ -308,6 +300,7 @@ async function showCreateBookingModal(clients) {
                 return_to_pickup: document.getElementById('return_to_pickup').checked,
                 special_instructions: document.getElementById('special_instructions').value || '',
                 isOfficial: isOfficial,
+                is_published: false, // Core Stability Refactor: Start as Draft
                 created_at: serverTimestamp(),
                 updated_at: serverTimestamp()
             });
@@ -428,9 +421,6 @@ function initBookingList() {
     });
 
     if (statusFilter) statusFilter.addEventListener('change', applyFilters);
-    if (document.getElementById('areaFilter')) {
-        document.getElementById('areaFilter').addEventListener('change', applyFilters);
-    }
 }
 
 function applyFilters() {
@@ -440,8 +430,7 @@ function applyFilters() {
     const filtered = allBookings.filter(d => {
         const b = d.data();
         const matchStatus = status === 'all' || b.status === status;
-        const matchArea = area === 'all' || b.operating_area === area;
-        return matchStatus && matchArea;
+        return matchStatus;
     });
     renderBookings(filtered);
 }
@@ -461,7 +450,6 @@ function renderBookings(docs) {
         return `
             <tr>
                 <td>${displayName}</td>
-                <td><span class="badge badge-info" style="font-size: 0.65rem;">${booking.operating_area || 'Unassigned'}</span></td>
                 <td>${booking.pickup_location || 'N/A'}</td>
                 <td>${booking.dropoff_location || 'N/A'}</td>
                 <td>${booking.pickup_date || 'N/A'} ${booking.pickup_time || ''}</td>
@@ -618,6 +606,7 @@ window.assignDriver = async (id) => {
             return_to_pickup: booking.return_to_pickup || false,
             special_instructions: booking.special_instructions || '',
             isOfficial: booking.isOfficial || false,
+            is_published: false, // Core Stability Refactor: Start as Draft
             created_at: serverTimestamp(),
             updated_at: serverTimestamp()
         });

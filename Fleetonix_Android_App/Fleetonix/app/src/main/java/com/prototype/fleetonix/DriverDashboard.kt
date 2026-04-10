@@ -343,7 +343,7 @@ fun DriverDashboard(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val nextSchedule = feed?.schedules?.firstOrNull { it.isOfficial == true }
+    val nextSchedule = feed?.schedules?.firstOrNull { it.is_published == true }
     val tripPhase = nextSchedule?.trip_phase ?: "pending"
     val returnRequired = nextSchedule?.return_to_pickup == true
 
@@ -1040,6 +1040,17 @@ fun DriverDashboard(
                 }
             }
         }
+        // Polyline Clearing Safeguard
+        LaunchedEffect(nextSchedule, tripPhase) {
+            if (nextSchedule == null || tripPhase == "completed" || tripPhase == "cancelled") {
+                polylinePoints = emptyList()
+                activePolylineEncoded = null
+                tripETA = ""
+                tripDistance = ""
+                Log.d("Routing", "Route cleared: No active/published trip.")
+            }
+        }
+
         return // Don't render dashboard if GPS is blocked
     }
 

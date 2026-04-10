@@ -52,6 +52,7 @@ onAuthStateChanged(auth, async (user) => {
 
     initScheduleList();
     initClearDataFeature();
+    initPublishFeature();
     initExportFeature();
 });
 
@@ -81,6 +82,42 @@ function initExportFeature() {
             
             const dateStr = new Date().toISOString().split('T')[0];
             exportToExcel(data, `Fleetonix_All_Trips_${dateStr}.xlsx`, 'Active Schedules');
+        };
+    }
+}
+
+function initPublishFeature() {
+    const btn = document.getElementById('publishAllBtn');
+    if (btn) {
+        btn.onclick = async () => {
+            const unpublished = allSchedules.filter(d => d.data().is_published === false);
+            if (unpublished.length === 0) {
+                alert("No draft schedules to publish.");
+                return;
+            }
+
+            if (!confirm(`Are you sure you want to publish ${unpublished.length} draft schedules? This will make them visible to drivers immediately.`)) return;
+
+            try {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Publishing...';
+
+                const batchPromises = unpublished.map(d => 
+                    updateDoc(doc(db, "schedules", d.id), {
+                        is_published: true,
+                        updated_at: serverTimestamp()
+                    })
+                );
+
+                await Promise.all(batchPromises);
+                alert(`${unpublished.length} schedules published successfully!`);
+            } catch (error) {
+                console.error("Publish error:", error);
+                alert("Failed to publish schedules: " + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i> Post All Schedules';
+            }
         };
     }
 }
@@ -168,12 +205,16 @@ function renderSchedules(docs) {
             statusHtml = `<span class="status-badge ${p.cls}">${p.label}</span>`;
         }
 
+        if (sched.is_published === false) {
+            statusHtml = `<span class="status-badge" style="background: rgba(255, 171, 0, 0.1); color: #ffab00; border: 1px solid #ffab00;">DRAFT</span> ${statusHtml}`;
+        }
+
         const isTrackingAvailable = sched.status !== 'completed' && sched.status !== 'cancelled';
 
         return `
             <tr>
                 <td><div style="font-weight:700;">${sched.driver_name || 'N/A'}</div></td>
-                <td>${sched.passenger_name || sched.client_name || (sched.isOfficial ? 'Official' : 'Fleet Assign')}</td>
+                <td>${sched.passenger_name || sched.client_name || (sched.is_published ? 'Published' : 'Draft Assignment')}</td>
                 <td><div style="font-size:0.85rem; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${sched.pickup_location?.address || 'N/A'}">${sched.pickup_location?.address || (Array.isArray(sched.pickup_location) ? sched.pickup_location[0]?.address : sched.pickup_location) || 'N/A'}</div></td>
                 <td>${sched.schedule_time || 'N/A'}</td>
                 <td>${statusHtml}</td>

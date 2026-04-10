@@ -36,7 +36,8 @@ data class DriverProfile(
     @SerializedName("vehicle_type") val vehicleType: String? = null,
     @SerializedName("plate_number") val plateNumber: String? = null,
     @SerializedName("current_mileage") val currentMileage: Double? = null,
-    @SerializedName("current_status") val currentStatus: String? = null
+    @SerializedName("current_status") val currentStatus: String? = null,
+    @SerializedName("current_city") val currentCity: String? = null
 )
 
 // Feed Models
@@ -70,9 +71,11 @@ data class DriverSchedule(
     @SerializedName("odometer_end") val odometer_end: Double? = null,
     @SerializedName("total_km_travelled") val total_km_travelled: Double? = null,
     @SerializedName("completed_at") val completed_at: Any? = null,
+    @SerializedName("is_published") val is_published: Boolean = false,
     @SerializedName("isOfficial") val isOfficial: Boolean = false,
     @SerializedName("return_to_pickup") val return_to_pickup: Boolean = false,
     @SerializedName("return_pickup_time") val return_pickup_time: String? = null,
+    @SerializedName("current_city") val current_city: String? = null,
     @SerializedName("client") val client: DriverClientInfo? = null,
     @SerializedName("current_segment_index") val current_segment_index: Int? = null,
     @SerializedName("segments") val segments: List<DriverSegment>? = null,

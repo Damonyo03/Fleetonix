@@ -1074,6 +1074,9 @@ function getInfoWindowContent(driver) {
                 <div style="font-size:11px; color:#475569; background:#f0fdf4; padding:7px; border-radius:7px; grid-column:1 / span 2;">
                     <i class="fas fa-car" style="color:#10b981; width:14px;"></i> ${vehicleInfo}
                 </div>
+                <div style="font-size:11px; color:#475569; background:#fffbeb; padding:7px; border-radius:7px; grid-column:1 / span 2;">
+                    <i class="fas fa-city" style="color:#f59e0b; width:14px;"></i> <strong>${driver.current_city || 'Locating...'}</strong>
+                </div>
             </div>
             <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid #f1f5f9; padding-top:8px;">
                 <span style="font-size:10px; color:#94a3b8;">
@@ -1154,6 +1157,10 @@ function updateOnlineDriversList() {
                     <div class="detail-item">
                         <i class="fas fa-tachometer-alt"></i>
                         <span>${((driver.current_speed || 0) * 3.6).toFixed(1)} km/h</span>
+                    </div>
+                    <div class="detail-item" style="grid-column: 1 / -1; color: var(--accent-orange); font-weight: 600;">
+                        <i class="fas fa-city"></i>
+                        <span>${driver.current_city || 'Locating...'}</span>
                     </div>
                     
                     ${isOnJob && mission ? `
@@ -1248,6 +1255,12 @@ function showQuickInfoPanel(driverId, driver) {
         : 'No vehicle assigned';
     document.getElementById('qipVehicle').textContent = vehicle;
 
+    // City
+    const cityEl = document.getElementById('qipCity');
+    if (cityEl) {
+        cityEl.textContent = driver.current_city || 'Locating...';
+    }
+
     // Status badge
     const rawStatus = driver.current_trip_phase || driver.current_status || 'available';
     const badge = document.getElementById('qipBadge');
@@ -1320,6 +1333,11 @@ function showQuickInfoPanel(driverId, driver) {
             locText = `${Number(driver.current_latitude).toFixed(4)}, ${Number(driver.current_longitude).toFixed(4)}`;
         }
         document.getElementById('sdLocation').textContent = locText;
+        
+        const citySdEl = document.getElementById('sdCity');
+        if (citySdEl) {
+            citySdEl.textContent = driver.current_city || 'Locating...';
+        }
         
         const odoStart = driver.odometer_start !== undefined ? `${Number(driver.odometer_start).toFixed(1)} km` : '-- km';
         const odoEnd = driver.odometer_end !== undefined ? `${Number(driver.odometer_end).toFixed(1)} km` : '-- km';
@@ -1614,7 +1632,7 @@ window.instantDispatch = async function(bookingId, driverId, driverName, btn) {
             schedule_time: bookingData.pickup_time || "",
             return_to_pickup: bookingData.return_to_pickup || false,
             special_instructions: bookingData.special_instructions || "",
-            isOfficial: false, // Default is unofficial until posted
+            is_published: false, // Core Rule: Hidden until batch-published
             created_at: serverTimestamp(),
             updated_at: serverTimestamp()
         });
@@ -1748,19 +1766,9 @@ async function showCreateBookingModal(clients) {
                 <input type="tel" id="modal_passenger_phone" class="form-input" placeholder="+63 9XX XXX XXXX">
             </div>
         </div>
-        <div class="modal-form-row">
             <div class="form-group">
                 <label for="modal_contractor">Contractor</label>
                 <input type="text" id="modal_contractor" class="form-input" value="Jettsan" readonly>
-            </div>
-            <div class="form-group">
-                <label for="modal_operating_area">Target Operating Area</label>
-                <select id="modal_operating_area" class="form-input" required>
-                    <option value="">-- Select Area --</option>
-                    <option value="Metro Manila">Metro Manila – unrestricted</option>
-                    <option value="South">South – up to Calamba / Banlic</option>
-                    <option value="North">North – up to Clark / Mabalacat</option>
-                </select>
             </div>
         </div>
         <div id="segments_container">
@@ -1807,8 +1815,8 @@ async function showCreateBookingModal(clients) {
             <textarea id="special_instructions" class="form-input" rows="2" placeholder="e.g. Near main gate..."></textarea>
         </div>
         <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px; background: rgba(0, 212, 255, 0.05); padding: 12px; border-radius: 8px; border: 1px dashed var(--accent-blue);">
-            <input type="checkbox" id="modal_is_official" style="width: auto;" checked>
-            <label for="modal_is_official" style="margin: 0; cursor: pointer; color: var(--accent-blue); font-weight: 700;">Official Trip</label>
+            <input type="checkbox" id="modal_is_published" style="width: auto;">
+            <label for="modal_is_published" style="margin: 0; cursor: pointer; color: var(--accent-blue); font-weight: 700;">Publish Immediately</label>
         </div>
         <div class="form-group">
             <label for="modal_driver">Assign Driver (Optional)</label>
@@ -1867,8 +1875,7 @@ async function showCreateBookingModal(clients) {
             client_email: clientEmail,
             client_phone: clientPhone,
             contractor: 'Jettsan',
-            operating_area: document.getElementById('modal_operating_area').value,
-            isOfficial: isOfficial,
+            is_published: document.getElementById('modal_is_published').checked,
             segments: segments,
             pickup_location: segments[0].pickup,
             pickup_latitude: segments[0].pickup_latitude,
@@ -1911,7 +1918,7 @@ async function showCreateBookingModal(clients) {
                 dropoff_location: segments[segments.length - 1].dropoff,
                 schedule_date: date,
                 schedule_time: time,
-                isOfficial: isOfficial,
+                is_published: document.getElementById('modal_is_published').checked,
                 created_at: serverTimestamp(),
                 updated_at: serverTimestamp()
             });

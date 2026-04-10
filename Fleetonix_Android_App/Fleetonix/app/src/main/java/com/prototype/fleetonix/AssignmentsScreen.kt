@@ -494,7 +494,9 @@ fun AssignmentsScreen(onBack: () -> Unit) {
 
         val listener = db.collection("schedules")
             .whereEqualTo("driver_email", email)
-            .whereEqualTo("isOfficial", true)
+            .whereEqualTo("is_published", true)
+            .whereNotEqualTo("status", "completed")
+            .orderBy("status") // Required for compound query with whereNotEqualTo
             .orderBy("schedule_date", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 isLoading = false
