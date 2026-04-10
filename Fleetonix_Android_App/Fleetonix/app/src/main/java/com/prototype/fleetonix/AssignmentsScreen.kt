@@ -757,6 +757,21 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                                                         "odometer_start", odo,
                                                         "accepted_at", com.google.firebase.firestore.FieldValue.serverTimestamp()
                                                     ).await()
+
+                                                    // Sync to drivers collection
+                                                    val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+                                                    val email = auth.currentUser?.email
+                                                    if (email != null) {
+                                                        val driverSnap = db.collection("drivers")
+                                                            .whereEqualTo("driver_email", email.lowercase().trim())
+                                                            .get().await()
+                                                        driverSnap.documents.firstOrNull()?.reference?.update(
+                                                            "current_status", "on_schedule",
+                                                            "current_trip_id", item.docId,
+                                                            "current_trip_phase", "accepted"
+                                                        )
+                                                    }
+
                                                     onBack()
                                                 } catch (e: Exception) {
                                                     errorMsg = "Failed to accept job: ${e.message}"

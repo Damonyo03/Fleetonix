@@ -195,9 +195,10 @@ fun DriverDashboard(
     // Accident report states
     var showAccidentDialog by remember { mutableStateOf(false) }
     var isReportingAccident by remember { mutableStateOf(false) }
+    var incidentActive by remember { mutableStateOf(false) }
 
-    var isReportingVehicleIssue by remember { mutableStateOf(false) }
-    var showVehicleIssueDialog by remember { mutableStateOf(false) }
+    // TNVS Flow States
+    var showActiveTripPopup by remember { mutableStateOf(false) }
 
     // NSCRP States
     var monthlyOTHours by remember { mutableStateOf(0.0) }
@@ -271,7 +272,16 @@ fun DriverDashboard(
                 if (lastTimeInTS != null) {
                     lastTimeInObj = LocalDateTime.ofInstant(lastTimeInTS.toDate().toInstant(), ZoneId.systemDefault())
                 }
+
+                incidentActive = doc.getBoolean("incident_active") ?: false
             }
+        }
+    }
+
+    // Auto-trigger Active Trip Popup when phase becomes 'accepted'
+    LaunchedEffect(tripPhase) {
+        if (tripPhase == "accepted") {
+            showActiveTripPopup = true
         }
     }
 
@@ -349,15 +359,40 @@ fun DriverDashboard(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val nextSchedule = feed?.schedules?.filter { it.is_published == true }
-        ?.sortedByDescending { 
-            when (it.trip_phase?.lowercase()) {
-                "accepted", "en_route_pickup", "picked_up", "en_route_dropoff", "dropped_off" -> 100
-                "pending" -> 50
-                "completed" -> 0
-                else -> 10
-            }
-        }?.firstOrNull()
+    val nextSchedule = feed?.schedules?.filter { 
+        val status = it.trip_phase?.lowercase() ?: "pending"
+        // 1. Relax is_published filter if already accepted/active
+        val isExplicitlyAssigned = it.is_published == true || status != "pending"
+        
+        // 2. 1-hour Window Rule for Pending trips
+        val isWithinWindow = if (status == "pending") {
+            try {
+                val sDate = it.schedule_date ?: ""
+                val sTime = it.scheduled_time ?: ""
+                val now = LocalDateTime.now()
+                val today = now.toLocalDate()
+                val targetDate = LocalDate.parse(sDate)
+                
+                if (!targetDate.isEqual(today)) false
+                else {
+                    val timeParts = sTime.split(":")
+                    val targetTime = LocalTime.of(timeParts[0].toInt(), timeParts[1].toInt())
+                    val targetDateTime = LocalDateTime.of(today, targetTime)
+                    val diffMinutes = java.time.Duration.between(now, targetDateTime).toMinutes()
+                    diffMinutes <= 60 && diffMinutes >= -120 // 1 hour before, up to 2 hours after start (grace period)
+                }
+            } catch (e: Exception) { true } // Fallback to visible if parsing fails
+        } else true
+        
+        isExplicitlyAssigned && isWithinWindow
+    }?.sortedByDescending { 
+        when (it.trip_phase?.lowercase()) {
+            "accepted", "en_route_pickup", "picked_up", "en_route_dropoff", "dropped_off" -> 100
+            "pending" -> 50
+            "completed" -> 0
+            else -> 10
+        }
+    }?.firstOrNull()
 
     val tripPhase = nextSchedule?.trip_phase ?: "pending"
     val returnRequired = nextSchedule?.return_to_pickup == true
@@ -1321,33 +1356,6 @@ fun DriverDashboard(
                                 }
                             }
 
-                            // Vehicle Issue
-                            TextButton(
-                                onClick = {
-                                    scope.launch { drawerState.close() }
-                                    showVehicleIssueDialog = true
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    horizontalArrangement = Arrangement.Start,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Warning,
-                                        contentDescription = "Vehicle Issue",
-                                        tint = AccentOrange,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.padding(horizontal = 8.dp))
-                                    Text(
-                                        text = "Vehicle Issue",
-                                        color = TextPrimary,
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                }
-                            }
                         }
 
                         Spacer(modifier = Modifier.weight(1f))
@@ -1381,6 +1389,44 @@ fun DriverDashboard(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                    // Accident Resolution Banner
+                    if (incidentActive) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFF6B6B)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(Icons.Default.Warning, contentDescription = null, tint = Color.White)
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("ACCIDENT REPORTED", color = Color.White, fontWeight = FontWeight.Bold)
+                                    Text("Blinking indicator is active on Admin map.", color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall)
+                                }
+                                Button(
+                                    onClick = {
+                                        scope.launch {
+                                            try {
+                                                val uid = auth.currentUser?.uid ?: return@launch
+                                                db.collection("drivers").document(uid).update("incident_active", false).await()
+                                                incidentActive = false
+                                                tripActionSuccess = "Accident status resolved."
+                                            } catch (e: Exception) {
+                                                tripActionError = "Failed to resolve: ${e.message}"
+                                            }
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text("RESOLVE", color = Color(0xFFFF6B6B), fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
                 // Header with hamburger menu
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -2385,6 +2431,104 @@ fun DriverDashboard(
                                     border = BorderStroke(1.dp, Color.White.copy(alpha = 0.5f))
                                 ) {
                                     Text("VIEW DETAILS", color = Color.White)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // TNVS Active Trip Auto-Popup
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showActiveTripPopup && nextSchedule != null && tripPhase == "accepted",
+                    enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandVertically(),
+                    exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.shrinkVertically(),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.9f))
+                            .padding(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = CardBlue),
+                            shape = RoundedCornerShape(24.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(20.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.DirectionsCar,
+                                    contentDescription = null,
+                                    tint = AccentTeal,
+                                    modifier = Modifier.size(64.dp)
+                                )
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("TRIP READY", color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                                    Text("Assignment accepted. Start route now?", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                                }
+                                
+                                val pickup = nextSchedule?.pickup_location?.address ?: nextSchedule?.pickup_location?.text ?: "Unknown"
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = Midnight.copy(alpha = 0.5f)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(16.dp)) {
+                                        Text("PICKUP AT:", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                                        Text(pickup, color = Color.White, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+
+                                Button(
+                                    onClick = {
+                                        showActiveTripPopup = false
+                                        // Trigger the "START PICKUP ROUTE" logic
+                                        val docId = nextSchedule?.docId ?: return@Button
+                                        scope.launch {
+                                            try {
+                                                isStartingTrip = true
+                                                db.collection("schedules").document(docId).update(
+                                                    "trip_phase", "en_route_pickup",
+                                                    "started_at", FieldValue.serverTimestamp()
+                                                ).await()
+                                                
+                                                val startTripIntent = Intent(context, LocationService::class.java).apply {
+                                                    action = LocationService.ACTION_START_TRIP
+                                                    putExtra(LocationService.EXTRA_DRIVER_UID, auth.currentUser?.uid)
+                                                    putExtra(LocationService.EXTRA_DRIVER_EMAIL, auth.currentUser?.email?.lowercase()?.trim() ?: "")
+                                                    putExtra(LocationService.EXTRA_SCHEDULE_ID, docId)
+                                                }
+                                                context.startService(startTripIntent)
+                                                
+                                                val email = auth.currentUser?.email
+                                                if (email != null) {
+                                                    db.collection("drivers")
+                                                        .whereEqualTo("driver_email", email.lowercase().trim())
+                                                        .get().await().documents.firstOrNull()?.reference?.update(
+                                                            "current_status", "En Route to Pickup",
+                                                            "current_trip_phase", "en_route_pickup"
+                                                        )
+                                                }
+                                            } catch (e: Exception) {
+                                                tripActionError = "Navigation failed: ${e.message}"
+                                            } finally {
+                                                isStartingTrip = false
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth().height(64.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
+                                    shape = RoundedCornerShape(16.dp)
+                                ) {
+                                    Text("START PICKUP ROUTE", color = Midnight, fontWeight = FontWeight.Bold)
+                                }
+
+                                TextButton(onClick = { showActiveTripPopup = false }) {
+                                    Text("LATER", color = TextSecondary)
                                 }
                             }
                         }
