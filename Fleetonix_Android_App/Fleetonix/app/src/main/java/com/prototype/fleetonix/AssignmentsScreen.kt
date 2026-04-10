@@ -36,7 +36,7 @@ import com.prototype.fleetonix.ui.theme.*
 // ─────────────────────────────────────────────────────────────
 // Data model for a single assignment (parsed from Firestore)
 // ─────────────────────────────────────────────────────────────
-data class Assignment(
+data class AssignmentModel(
     val docId: String,
     val scheduleId: String,
     val tripPhase: String,
@@ -89,8 +89,8 @@ private fun phaseColor(phase: String): Color = when (phase.lowercase()) {
 // ─────────────────────────────────────────────────────────────
 @Composable
 fun AssignmentCard(
-    assignment: Assignment,
-    onAcceptJob: (Assignment) -> Unit
+    assignment: AssignmentModel,
+    onAcceptJob: (AssignmentModel) -> Unit
 ) {
     val phase = assignment.tripPhase
     val badgeColor by animateColorAsState(
@@ -480,7 +480,7 @@ fun AssignmentsScreen(onBack: () -> Unit) {
     val auth = remember { FirebaseAuth.getInstance() }
     val db = remember { FirebaseFirestore.getInstance() }
 
-    var assignments by remember { mutableStateOf<List<Assignment>>(emptyList()) }
+    var assignments by remember { mutableStateOf<List<AssignmentModel>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
 
@@ -548,7 +548,7 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                             else -> data["dropoff_location"] as? String
                         }
 
-                        Assignment(
+                        AssignmentModel(
                             docId = doc.id,
                             scheduleId = (data["schedule_id"] as? Number)?.toString() ?: doc.id.take(8).uppercase(),
                             tripPhase = phase,
@@ -568,7 +568,7 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                             isOfficial = data["isOfficial"] as? Boolean ?: false
                         )
                     }.sortedWith(
-                        compareBy<Assignment> {
+                        compareBy<AssignmentModel> {
                             when (it.tripPhase) {
                                 "pickup", "dropoff", "return_pickup", "ready_to_complete" -> 0
                                 "accepted" -> 1

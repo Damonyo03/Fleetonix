@@ -266,7 +266,7 @@ fun AuthFlow() {
                             status = data["status"] as? String,
                             schedule_date = data["schedule_date"] as? String,
                             scheduled_time = data["schedule_time"] as? String,
-                            pickup_location = if (parsedPickups.isEmpty()) listOf(DriverScheduleLocation(address = rawPickup as? String)) else parsedPickups,
+                            pickup_location = parsedPickups.firstOrNull() ?: DriverScheduleLocation(address = rawPickup as? String),
                             dropoff_location = parsedDropoff,
                             client = DriverClientInfo(
                                 company = data["company_name"] as? String,

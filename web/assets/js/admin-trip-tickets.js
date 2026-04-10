@@ -202,39 +202,7 @@ function renderTickets(tickets) {
             </div>
         `;
 
-        if (ticket.segments && Array.isArray(ticket.segments) && ticket.segments.length > 0) {
-            routeHtml = `
-                <div class="segment-timeline">
-                    ${ticket.segments.map((seg, idx) => `
-                        <div class="timeline-point">
-                            <div class="timeline-marker pickup"></div>
-                            <div class="timeline-content">
-                                <span class="timeline-label">Pickup ${idx + 1}</span>
-                                <div class="timeline-address">
-                                    <a href="https://www.google.com/maps?q=${encodeURIComponent(seg.pickup || '')}" target="_blank" style="color: inherit; text-decoration: none; border-bottom: 1px dotted var(--text-muted);">${seg.pickup}</a>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="timeline-point">
-                            <div class="timeline-marker ${idx === ticket.segments.length - 1 ? 'final' : 'dropoff'}"></div>
-                            <div class="timeline-content">
-                                <span class="timeline-label">Drop-off ${idx + 1}</span>
-                                <div class="timeline-address">
-                                    <a href="https://www.google.com/maps?q=${encodeURIComponent(seg.dropoff || '')}" target="_blank" style="color: inherit; text-decoration: none; border-bottom: 1px dotted var(--text-muted);">${seg.dropoff}</a>
-                                </div>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-        }
 
-        const signatureHtml = ticket.driver_signature ? `
-            <div class="signature-display" style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 15px;">
-                <div style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px;"><i class="fas fa-signature"></i> Driver Digital Signature</div>
-                <img src="${ticket.driver_signature}" style="height: 60px; filter: grayscale(1) invert(1) contrast(2); background: rgba(255,255,255,0.05); padding: 5px; border-radius: 4px;" alt="Driver Signature">
-            </div>
-        ` : '';
 
         return `
             <div class="ticket-card" id="ticket-${ticket.id}">
@@ -268,8 +236,6 @@ function renderTickets(tickets) {
                 </div>
 
                 ${routeHtml}
-                
-                ${signatureHtml}
 
                 <div class="ticket-client" style="margin-top: 15px; font-size: 0.85rem; color: var(--text-muted); border-top: 1px solid rgba(255,255,255,0.05); padding-top: 12px;">
                     <i class="fas fa-user-tie"></i> Client: ${ticket.client_name || '—'} &nbsp;

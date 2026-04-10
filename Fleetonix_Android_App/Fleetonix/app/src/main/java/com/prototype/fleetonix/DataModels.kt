@@ -59,33 +59,24 @@ data class DriverSchedule(
     @SerializedName("schedule_time") val scheduled_time: String? = null,
     @SerializedName("trip_phase") val trip_phase: String? = null, 
     @SerializedName("status") val status: String? = null,
-    @SerializedName("isOfficial") val isOfficial: Boolean = false,
-    @SerializedName("return_to_pickup") val return_to_pickup: Boolean = false,
-    @SerializedName("return_pickup_time") val return_pickup_time: String? = null,
-    
-    // Multi-point pickups (NSCRP Update: pickup_location is now an array)
-    @SerializedName("pickup_points") val pickup_points: List<PickupPoint>? = null,
-    @SerializedName("pickup_location") val pickup_location: List<DriverScheduleLocation>? = null,
-    @SerializedName("dropoff_location") val dropoff_location: DriverScheduleLocation? = null,
-    
-    // Odometer & Authorization (NSCRP Update)
-    @SerializedName("odometer_start") val odometer_start: Double? = null,
-    @SerializedName("odometer_end") val odometer_end: Double? = null,
-    @SerializedName("overtime_hours") val overtime_hours: Double? = null,
-    @SerializedName("passenger_signature_url") val passenger_signature_url: String? = null,
-    @SerializedName("signature_url") val signature_url: String? = null,
-    @SerializedName("refusal_reason") val refusal_reason: String? = null,
-    
-    @SerializedName("total_km_travelled") val total_km_travelled: Double? = null,
-    @SerializedName("completed_at") val completed_at: Any? = null,
     @SerializedName("client_name") val client_name: String? = null,
     @SerializedName("passenger_name") val passenger_name: String? = null,
     @SerializedName("passenger_email") val passenger_email: String? = null,
     @SerializedName("passenger_phone") val passenger_phone: String? = null,
+    @SerializedName("pickup_location") val pickup_location: DriverScheduleLocation? = null,
+    @SerializedName("dropoff_location") val dropoff_location: DriverScheduleLocation? = null,
     @SerializedName("special_instructions") val special_instructions: String? = null,
-    @SerializedName("current_segment_index") val current_segment_index: Int? = 0,
-    val segments: List<DriverSegment>? = null,
-    val client: DriverClientInfo? = null
+    @SerializedName("odometer_start") val odometer_start: Double? = null,
+    @SerializedName("odometer_end") val odometer_end: Double? = null,
+    @SerializedName("total_km_travelled") val total_km_travelled: Double? = null,
+    @SerializedName("completed_at") val completed_at: Any? = null,
+    @SerializedName("isOfficial") val isOfficial: Boolean = false,
+    @SerializedName("return_to_pickup") val return_to_pickup: Boolean = false,
+    @SerializedName("return_pickup_time") val return_pickup_time: String? = null,
+    @SerializedName("client") val client: DriverClientInfo? = null,
+    @SerializedName("current_segment_index") val current_segment_index: Int? = null,
+    @SerializedName("segments") val segments: List<DriverSegment>? = null,
+    @SerializedName("pickup_points") val pickup_points: List<PickupPoint>? = null
 )
 
 data class DriverSegment(

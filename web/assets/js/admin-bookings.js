@@ -128,31 +128,19 @@ async function showCreateBookingModal(clients) {
             </div>
         </div>
 
-
-        <div id="segments_container">
-            <div class="segment-group" style="margin-bottom: 24px; padding: 16px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px;">
-                <div style="font-size: 0.75rem; font-weight: 800; color: var(--accent-blue); margin-bottom: 12px; text-transform: uppercase;">Booking 1 (Primary)</div>
-                <div class="form-group pickup-point" style="position: relative;">
-                    <label>Pickup Location</label>
-                    <div class="input-with-action">
-                        <input type="text" class="form-input pickup-input" placeholder="Search for pickup..." required autocomplete="off">
-                    </div>
-                    <input type="hidden" class="lat-input" value="0">
-                    <input type="hidden" class="lng-input" value="0">
-                </div>
-                <div class="form-group dropoff-point" style="position: relative;">
-                    <label>Dropoff Location</label>
-                    <div class="input-with-action">
-                        <input type="text" class="form-input dropoff-input" placeholder="Search for dropoff..." required autocomplete="off">
-                    </div>
-                    <input type="hidden" class="drop-lat-input" value="0">
-                    <input type="hidden" class="drop-lng-input" value="0">
-                </div>
-            </div>
+        <!-- Single Pickup & Dropoff -->
+        <div class="form-group pickup-point" style="position: relative;">
+            <label>Pickup Location</label>
+            <input type="text" id="modal_pickup" class="form-input pickup-input" placeholder="Search for pickup..." required autocomplete="off">
+            <input type="hidden" id="modal_lat" class="lat-input" value="0">
+            <input type="hidden" id="modal_lng" class="lng-input" value="0">
         </div>
-        <button type="button" id="add_segment" class="btn-secondary" style="margin-bottom: 20px; padding: 8px 16px; font-size: 0.85em;">
-            <i class="fas fa-plus-circle"></i> Add Secondary Stop (Pickup & Dropoff)
-        </button>
+        <div class="form-group dropoff-point" style="position: relative;">
+            <label>Dropoff Location</label>
+            <input type="text" id="modal_dropoff" class="form-input dropoff-input" placeholder="Search for dropoff..." required autocomplete="off">
+            <input type="hidden" id="modal_drop_lat" class="drop-lat-input" value="0">
+            <input type="hidden" id="modal_drop_lng" class="drop-lng-input" value="0">
+        </div>
 
         <div class="modal-form-row">
             <div class="form-group">
@@ -233,17 +221,14 @@ async function showCreateBookingModal(clients) {
             }
         }
 
-        const segments = Array.from(document.querySelectorAll('.segment-group')).map((el, i) => ({
-            pickup: el.querySelector('.pickup-input').value,
-            pickup_latitude: parseFloat(el.querySelector('.lat-input').value) || 0,
-            pickup_longitude: parseFloat(el.querySelector('.lng-input').value) || 0,
-            dropoff: el.querySelector('.dropoff-input').value,
-            dropoff_latitude: parseFloat(el.querySelector('.drop-lat-input').value) || 0,
-            dropoff_longitude: parseFloat(el.querySelector('.drop-lng-input').value) || 0,
-            order: i + 1
-        }));
+        const pickup = document.getElementById('modal_pickup').value;
+        const pickup_lat = parseFloat(document.getElementById('modal_lat').value) || 0;
+        const pickup_lng = parseFloat(document.getElementById('modal_lng').value) || 0;
+        const dropoff = document.getElementById('modal_dropoff').value;
+        const drop_lat = parseFloat(document.getElementById('modal_drop_lat').value) || 0;
+        const drop_lng = parseFloat(document.getElementById('modal_drop_lng').value) || 0;
 
-        if (segments.some(s => !s.pickup || !s.dropoff)) throw new Error("Please fill in all pickup and dropoff locations for each segment.");
+        if (!pickup || !dropoff) throw new Error("Please fill in both pickup and dropoff locations.");
 
         const bookingId = generateNumericId().toString();
         const operatingArea = document.getElementById('modal_operating_area').value;
@@ -264,13 +249,12 @@ async function showCreateBookingModal(clients) {
             operating_area: operatingArea,
             isOfficial: isOfficial,
 
-            segments: segments,
-            pickup_location: segments[0].pickup,
-            pickup_latitude: segments[0].pickup_latitude,
-            pickup_longitude: segments[0].pickup_longitude,
-            dropoff_location: segments[segments.length - 1].dropoff,
-            dropoff_latitude: segments[segments.length - 1].dropoff_latitude,
-            dropoff_longitude: segments[segments.length - 1].dropoff_longitude,
+            pickup_location: pickup,
+            pickup_latitude: pickup_lat,
+            pickup_longitude: pickup_lng,
+            dropoff_location: dropoff,
+            dropoff_latitude: drop_lat,
+            dropoff_longitude: drop_lng,
 
             pickup_date: date,
             pickup_time: time,
@@ -312,14 +296,12 @@ async function showCreateBookingModal(clients) {
                 car_color: dData.car_color || "",
                 trip_phase: "pending",
                 status: "pending",
-                segments: segments,
-                current_segment_index: 0,
-                pickup_location: segments[0].pickup,
-                pickup_latitude: segments[0].pickup_latitude,
-                pickup_longitude: segments[0].pickup_longitude,
-                dropoff_location: segments[segments.length - 1].dropoff,
-                dropoff_latitude: segments[segments.length - 1].dropoff_latitude,
-                dropoff_longitude: segments[segments.length - 1].dropoff_longitude,
+                pickup_location: pickup,
+                pickup_latitude: pickup_lat,
+                pickup_longitude: pickup_lng,
+                dropoff_location: dropoff,
+                dropoff_latitude: drop_lat,
+                dropoff_longitude: drop_lng,
                 schedule_date: date,
                 schedule_time: time,
                 passengers: parseInt(document.getElementById('passengers').value) || 1,
@@ -374,47 +356,6 @@ async function showCreateBookingModal(clients) {
         alert("Booking created successfully! " + (autoDispatch ? "It has been sent to dispatch." : "It is now pending approval."));
     });
 
-    // Initialize Dynamic UI components
-    setTimeout(async () => {
-        // Dynamic Segments
-        const addSegmentBtn = document.getElementById('add_segment');
-        const container = document.getElementById('segments_container');
-        let segmentCount = 1;
-
-        if (addSegmentBtn && container) {
-            addSegmentBtn.onclick = () => {
-                segmentCount++;
-                const div = document.createElement('div');
-                div.className = 'segment-group';
-                div.style.cssText = 'margin-bottom: 24px; padding: 16px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; position: relative;';
-                div.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <div style="font-size: 0.75rem; font-weight: 800; color: var(--accent-blue); text-transform: uppercase;">Booking ${segmentCount} (Secondary)</div>
-                        <button type="button" class="btn-icon remove-segment" style="color: var(--accent-error);"><i class="fas fa-trash"></i></button>
-                    </div>
-                    <div class="form-group pickup-point" style="position: relative;">
-                        <label>Pickup Location</label>
-                        <input type="text" class="form-input pickup-input" placeholder="Secondary pickup..." required autocomplete="off">
-                        <input type="hidden" class="lat-input" value="0">
-                        <input type="hidden" class="lng-input" value="0">
-                    </div>
-                    <div class="form-group dropoff-point" style="position: relative;">
-                        <label>Dropoff Location</label>
-                        <input type="text" class="form-input dropoff-input" placeholder="Secondary dropoff..." required autocomplete="off">
-                        <input type="hidden" class="drop-lat-input" value="0">
-                        <input type="hidden" class="drop-lng-input" value="0">
-                    </div>
-                `;
-                container.appendChild(div);
-
-                // Re-init autocompletes if needed
-                if (window.initAutocompleteForInput) {
-                    div.querySelectorAll('input[type="text"]').forEach(input => window.initAutocompleteForInput(input));
-                }
-                
-                div.querySelector('.remove-segment').onclick = () => div.remove();
-            };
-        }
 
         const driverSelect = document.getElementById('modal_driver');
         if (driverSelect) {
@@ -464,10 +405,11 @@ async function showCreateBookingModal(clients) {
                     driverSelect.innerHTML = '<option value="">No available drivers found</option>';
                 }
             } catch (err) {
-                console.error("Error loading drivers for booking:", err);
-            }
+        // Initialize Autocompletes
+        if (window.initAutocompleteForInput) {
+            window.initAutocompleteForInput(document.getElementById('modal_pickup'));
+            window.initAutocompleteForInput(document.getElementById('modal_dropoff'));
         }
-    }, 100);
 }
 
 // --- Booking List ---

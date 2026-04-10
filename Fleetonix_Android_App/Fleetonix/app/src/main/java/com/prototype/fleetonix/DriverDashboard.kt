@@ -70,150 +70,83 @@ fun TripTicketDialog(
     timeOfDeparture: String,
     timeOfArrival: String,
     totalKm: Double,
-    calculatedOdometer: Double? = 0.0,
-    pickupLocation: String? = "",
-    dropoffLocation: String? = "",
-    segments: List<DriverSegment>? = null,
-    routePoints: List<LatLng>? = null,
-    isSubmitting: Boolean,
-    onConfirm: (String) -> Unit
+    pickupLocation: String? = null,
+    dropoffLocation: String? = null,
+    routePoints: List<LatLng> = emptyList(),
+    isSubmitting: Boolean = false,
+    onConfirm: () -> Unit
 ) {
-    val driverPaths = remember { mutableStateListOf<PathState>() }
-    var error by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
-
-    androidx.compose.ui.window.Dialog(onDismissRequest = { }) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp),
-            shape = RoundedCornerShape(24.dp),
-            color = CardBlue,
-            tonalElevation = 8.dp
-        ) {
+    AlertDialog(
+        onDismissRequest = { },
+        title = {
+            Text(
+                "TRIP TICKET SUMMARY",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = AccentTeal
+            )
+        },
+        text = {
             Column(
                 modifier = Modifier
-                    .padding(24.dp)
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Header (Receipt Style)
-                Text("TRAVEL TRIP TICKET", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = AccentTeal)
-                Divider(color = Color.White.copy(alpha = 0.1f), thickness = 1.dp)
-
-                // Body Section
-                Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ReceiptRow("DRIVER'S NAME", driverName)
-                    ReceiptRow("VEHICLE", "$vehiclePlate ($vehicleType)")
-                    ReceiptRow("DEPARTURE", pickupLocation ?: "Start")
-                    ReceiptRow("ARRIVAL", dropoffLocation ?: "End")
-                    ReceiptRow("TOTAL KM", "%.2f KM".format(totalKm))
-                    ReceiptRow("FINAL ODOMETER", "%.1f".format(calculatedOdometer ?: 0.0))
-                }
-
-                // Optional Map Visualization
-                if (!routePoints.isNullOrEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                    ) {
-                        val cameraPositionState = rememberCameraPositionState {
-                            val center = routePoints[routePoints.lastIndex / 2]
-                            position = CameraPosition.fromLatLngZoom(center, 13f)
-                        }
-                        
-                        LaunchedEffect(routePoints) {
-                            if (routePoints.size >= 2) {
-                                try {
-                                    val boundsBuilder = LatLngBounds.builder()
-                                    routePoints.forEach { boundsBuilder.include(it) }
-                                    cameraPositionState.animate(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 50))
-                                } catch (e: Exception) {
-                                    android.util.Log.e("TripTicketDialog", "Bounds build failed", e)
-                                }
-                            }
-                        }
-
-                        GoogleMap(
-                            modifier = Modifier.fillMaxSize(),
-                            cameraPositionState = cameraPositionState,
-                            uiSettings = MapUiSettings(zoomControlsEnabled = false),
-                            properties = MapProperties(mapStyleOptions = MapStyleOptions(MapStyles.AUBERGINE))
-                        ) {
-                            Polyline(points = routePoints, color = AccentTeal, width = 10f, jointType = JointType.ROUND)
-                            Marker(state = MarkerState(position = routePoints.first()), title = "Start")
-                            Marker(state = MarkerState(position = routePoints.last()), title = "End")
-                        }
-                    }
-                }
-
-                // Route Timeline
-                if (!segments.isNullOrEmpty()) {
-                    Text("TRIP ROUTE TIMELINE", style = MaterialTheme.typography.labelMedium, color = TextSecondary, fontWeight = FontWeight.Bold)
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Midnight.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
-                            .padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        segments.forEachIndexed { index, seg ->
-                            TimelineItem(index + 1, seg.pickup ?: "Unknown", seg.dropoff ?: "Unknown")
-                        }
-                    }
-                }
-
-                Divider(color = Color.White.copy(alpha = 0.1f), thickness = 1.dp)
-
-                // Final Driver Sign-off
-                Text("DRIVER VERIFICATION SIGN-OFF", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Color.White)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(150.dp)
-                        .background(Color.White, RoundedCornerShape(12.dp))
-                        .border(1.dp, Color.LightGray, RoundedCornerShape(12.dp))
+                // Main Info Card
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Midnight),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    SignaturePad(paths = driverPaths, modifier = Modifier.fillMaxSize())
-                    if (driverPaths.isEmpty()) {
-                        Text("Driver Signature", color = Color.LightGray, modifier = Modifier.align(Alignment.Center))
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        DetailRow("Driver", driverName)
+                        DetailRow("Vehicle", "$vehicleType ($vehiclePlate)")
+                        Divider(color = Color.White.copy(alpha = 0.1f))
+                        DetailRow("Departure", timeOfDeparture)
+                        DetailRow("Arrival", timeOfArrival)
+                        DetailRow("Distance", "%.2f KM".format(totalKm))
                     }
                 }
 
-                if (error != null) {
-                    Text(error!!, color = Color.Red, style = MaterialTheme.typography.bodySmall)
-                }
-
-                Button(
-                    onClick = {
-                        if (driverPaths.isEmpty()) {
-                            error = "Driver signature is required"
-                            return@Button
-                        }
-                        scope.launch {
-                            try {
-                                error = null
-                                val bitmap = FirebaseStorageHelper.createBitmapFromPaths(driverPaths, 800, 400)
-                                val url = FirebaseStorageHelper.uploadSignature(bitmap, "driver_signoff_" + System.currentTimeMillis())
-                                onConfirm(url)
-                            } catch (e: Exception) {
-                                error = "Upload Failed: ${e.message}"
-                            }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
-                    enabled = !isSubmitting && driverPaths.isNotEmpty()
-                ) {
-                    if (isSubmitting) CircularProgressIndicator(color = Midnight, modifier = Modifier.size(24.dp))
-                    else Text("CONFIRM AND CLOSE", fontWeight = FontWeight.Bold, color = Midnight)
+                // Locations
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("ROUTE", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.size(8.dp).background(AccentBlue, androidx.compose.foundation.shape.CircleShape))
+                        Spacer(Modifier.width(12.dp))
+                        Text(pickupLocation ?: "Origin", color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    
+                    Box(modifier = Modifier.width(2.dp).height(12.dp).padding(start = 3.dp).background(Color.White.copy(alpha = 0.1f)))
+                    
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.size(8.dp).background(AccentOrange, androidx.compose.foundation.shape.CircleShape))
+                        Spacer(Modifier.width(12.dp))
+                        Text(dropoffLocation ?: "Destination", color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
             }
-        }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = !isSubmitting,
+                colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
+            ) {
+                if (isSubmitting) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Midnight)
+                else Text("CONFIRM & COMPLETE", color = Midnight, fontWeight = FontWeight.Bold)
+            }
+        },
+        containerColor = CardBlue
+    )
+}
+
+@Composable
+fun DetailRow(label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+        Text(value, color = Color.White, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -222,27 +155,6 @@ fun ReceiptRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
         Text(value, color = TextPrimary, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-    }
-}
-
-@Composable
-fun TimelineItem(order: Int, pickup: String, dropoff: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(32.dp)) {
-            Box(
-                modifier = Modifier.size(24.dp).background(AccentTeal, RoundedCornerShape(12.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(order.toString(), color = Midnight, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-            }
-        }
-        Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-            Text("P: $pickup", color = Color.White, style = MaterialTheme.typography.bodySmall)
-            Text("D: $dropoff", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
-        }
     }
 }
 
@@ -288,9 +200,6 @@ fun DriverDashboard(
     var endOdometer by remember { mutableStateOf("") }
     var lastVehicleMileage by remember { mutableStateOf(0.0) } // Legacy ref for compatibility
     var showOdometerDialog by remember { mutableStateOf(false) }
-    var showSignatureDialog by remember { mutableStateOf(false) }
-    var signatureBase64 by remember { mutableStateOf<String?>(null) }
-    var refusalReason by remember { mutableStateOf("") }
 
     fun getAddressFromLocation(lat: Double, lng: Double): String {
         return try {
@@ -439,13 +348,13 @@ fun DriverDashboard(
     val returnRequired = nextSchedule?.return_to_pickup == true
 
     // Determine which time to show in "Next Pickup" stat
-    val nextPickupTime = when {
+    val nextPickupTime: String = when {
         returnRequired && (tripPhase == "return_pickup" || tripPhase == "ready_to_complete") -> {
-            nextSchedule?.return_pickup_time?.let { formatScheduleTime(it) } ?: "--"
+            nextSchedule?.return_pickup_time?.let { time -> formatScheduleTime(time) } ?: "--"
         }
 
         else -> {
-            nextSchedule?.scheduled_time?.let { formatScheduleTime(it) } ?: "--"
+            nextSchedule?.scheduled_time?.let { time -> formatScheduleTime(time) } ?: "--"
         }
     }
     val stopsCount = (feed?.schedules?.size ?: 0)
@@ -475,12 +384,7 @@ fun DriverDashboard(
     var completedAt by remember { mutableStateOf<String?>(null) }
     var showTripTicket by remember { mutableStateOf(false) }
     var targetTripId by remember { mutableStateOf<String?>(null) }
-    var clientSignatureUrl by remember { mutableStateOf<String?>(null) }
-    var clientRefusalReason by remember { mutableStateOf<String?>(null) }
-    var driverSignatureUrl by remember { mutableStateOf<String?>(null) }
     var activeTicketId by remember { mutableStateOf<String?>(null) }
-    var showDriverSignatureCapture by remember { mutableStateOf(false) }
-    var capturedDriverSignature by remember { mutableStateOf<String?>(null) }
 
     // New Task Popup states
     var lastKnownScheduleId by remember { mutableStateOf<Int?>(null) }
@@ -613,11 +517,13 @@ fun DriverDashboard(
 
         val destination = when (tripPhase) {
             "pending", "assigned", "accepted", "moving_to_pickup", "return_pickup" -> {
-                val currentPickup = schedule.pickup_location?.getOrNull(curIdx) ?: schedule.pickup_location?.firstOrNull()
-                if (currentPickup?.latitude != null) "${currentPickup.latitude},${currentPickup.longitude}" else null
+                val loc = schedule.pickup_location
+                if (loc?.latitude != null && loc.latitude != 0.0) "${loc.latitude},${loc.longitude}" else null
             }
-            "picked_up", "moving_to_dropoff", "dropoff" -> 
-                if (schedule.dropoff_location?.latitude != null) "${schedule.dropoff_location.latitude},${schedule.dropoff_location.longitude}" else null
+            "picked_up", "moving_to_dropoff", "dropoff" -> {
+                val loc = schedule.dropoff_location
+                if (loc?.latitude != null && loc.latitude != 0.0) "${loc.latitude},${loc.longitude}" else null
+            }
             else -> null
         }
 
@@ -1048,8 +954,8 @@ fun DriverDashboard(
 
             when (tripPhase) {
                 "pickup", "return_pickup" -> {
-                    val lat = schedule.pickup_location?.firstOrNull()?.latitude
-                    val lng = schedule.pickup_location?.firstOrNull()?.longitude
+                    val lat = schedule.pickup_points?.firstOrNull()?.latitude
+                    val lng = schedule.pickup_points?.firstOrNull()?.longitude
                     if (lat != null && lng != null && lat != 0.0 && lng != 0.0) {
                         intent.action = LocationService.ACTION_SET_GEOFENCE
                         intent.putExtra(LocationService.EXTRA_GEOFENCE_ID, docId)
@@ -1060,8 +966,8 @@ fun DriverDashboard(
                     }
                 }
                 "dropoff" -> {
-                    val lat = schedule.dropoff_location?.latitude
-                    val lng = schedule.dropoff_location?.longitude
+                    val lat = schedule.pickup_points?.lastOrNull()?.latitude
+                    val lng = schedule.pickup_points?.lastOrNull()?.longitude
                     if (lat != null && lng != null && lat != 0.0 && lng != 0.0) {
                         intent.action = LocationService.ACTION_SET_GEOFENCE
                         intent.putExtra(LocationService.EXTRA_GEOFENCE_ID, docId)
@@ -1796,10 +1702,9 @@ fun DriverDashboard(
                                     IconButton(
                                         onClick = {
                                             val dest = polylinePoints.last()
-                                            val address = if (tripPhase == "pickup" || tripPhase == "pending") 
-                                                nextSchedule?.pickup_location?.firstOrNull()?.address ?: "" 
-                                            else 
-                                                nextSchedule?.dropoff_location?.address ?: ""
+                                            val pickupAddr: String = nextSchedule?.pickup_location?.address ?: nextSchedule?.pickup_location?.text ?: ""
+                                            val dropoffAddr: String = nextSchedule?.dropoff_location?.address ?: nextSchedule?.dropoff_location?.text ?: ""
+                                            val address: String = if (tripPhase == "pickup" || tripPhase == "pending") pickupAddr else dropoffAddr
                                             openExternalMaps(context, dest.latitude, dest.longitude, address)
                                         },
                                         modifier = Modifier
@@ -1978,10 +1883,10 @@ fun DriverDashboard(
                                             scope.launch {
                                                 isReRouting = true
                                                 try {
-                                                    val dest = if (tripPhase == "pickup") nextSchedule?.pickup_location?.firstOrNull() else nextSchedule?.dropoff_location
+                                                    val dest = if (tripPhase == "pickup") nextSchedule?.pickup_location else nextSchedule?.dropoff_location
                                                     if (dest != null) {
                                                         val originStr = "${currentLatitude},${currentLongitude}"
-                                                        val destStr = "${dest.latitude},${dest.longitude}"
+                                                        val destStr = dest.address ?: dest.text ?: ""
                                                         val MapsKey = context.getString(R.string.google_maps_key).ifEmpty { "YOUR_KEY_HERE" }
                                                         val resp = GoogleMapsService.api.getDirections(originStr, destStr, MapsKey)
                                                         if (resp.status == "OK" && resp.routes.isNotEmpty()) {
@@ -2114,9 +2019,9 @@ fun DriverDashboard(
                                                 "passenger_name" to (nextSchedule?.passenger_name ?: nextSchedule?.client_name ?: "Unknown"),
                                                 "client_name" to (nextSchedule?.client_name ?: "Jettsan"),
                                                 "vehicle_plate" to (session.driver?.plateNumber ?: ""),
-                                                "pickup_location" to (nextSchedule?.pickup_location?.firstOrNull()?.address ?: "Unknown"),
-                                                "dropoff_location" to (nextSchedule?.dropoff_location?.address ?: "Unknown"),
-                                                "time_of_departure" to "", 
+                                                "pickup_location" to (nextSchedule?.pickup_location?.address ?: nextSchedule?.pickup_location?.text ?: "Unknown"),
+                                                "dropoff_location" to (nextSchedule?.dropoff_location?.address ?: nextSchedule?.dropoff_location?.text ?: "Unknown"),
+                                                "time_of_departure" to (pickedUpAt ?: ""),
                                                 "time_of_arrival" to "",
                                                 "total_km" to 0.0,
                                                 "route_polyline" to "",
@@ -2416,51 +2321,25 @@ fun DriverDashboard(
                                                      isMarkingDropoff = true
                                                      tripActionError = null
                                                       val docRef = db.collection("schedules").document(docId)
-                                                      val doc = docRef.get().await()
                                                       
-                                                      val segments = doc.get("segments") as? List<*> ?: emptyList<Any>()
-                                                      val curIdx = (doc.get("current_segment_index") as? Number)?.toInt() ?: 0
-                                                      
-                                                      if (curIdx + 1 < segments.size) {
-                                                          // Progressive Multi-Segment logic
-                                                          val nextIdx = curIdx + 1
-                                                          docRef.update(
-                                                              "current_segment_index", nextIdx,
-                                                              "trip_phase", "moving_to_pickup"
-                                                          ).await()
-                                                          
-                                                          // Sync to drivers collection
-                                                          val email = auth.currentUser?.email
-                                                          if (email != null) {
-                                                              val dSnap = db.collection("drivers")
-                                                                  .whereEqualTo("driver_email", email.lowercase().trim())
-                                                                  .get().await()
-                                                              dSnap.documents.firstOrNull()?.reference?.update(
-                                                                  "current_status", "moving_to_pickup",
-                                                                  "current_trip_phase", "moving_to_pickup"
-                                                              )
-                                                          }
-                                                          tripActionSuccess = "Segment ${curIdx + 1} Done! Moving to Pickup ${nextIdx + 1}."
-                                                      } else {
-                                                          // Final Segment logic
-                                                          val returnReq = doc.getBoolean("return_to_pickup") ?: false
-                                                          val nextP = if (returnReq) "return_pickup" else "ready_to_complete"
-                                                          
-                                                          docRef.update("trip_phase", nextP, "total_segments_completed", segments.size, "dropped_off_at", FieldValue.serverTimestamp()).await()
-                                                          
-                                                          // Sync to drivers collection
-                                                          val email = auth.currentUser?.email
-                                                          if (email != null) {
-                                                              val dSnap = db.collection("drivers")
-                                                                  .whereEqualTo("driver_email", email.lowercase().trim())
-                                                                  .get().await()
-                                                              dSnap.documents.firstOrNull()?.reference?.update(
-                                                                  "current_status", nextP,
-                                                                  "current_trip_phase", nextP
-                                                              )
-                                                          }
-                                                          tripActionSuccess = if (returnReq) "Arrived! Return required." else "Arrived! Trip ready to complete."
-                                                      }
+                                                       // Simplified Single-Point Logic
+                                                       docRef.update(
+                                                           "trip_phase", "ready_to_complete",
+                                                           "dropped_off_at", FieldValue.serverTimestamp()
+                                                       ).await()
+                                                       
+                                                       // Sync to drivers collection
+                                                       val email = auth.currentUser?.email
+                                                       if (email != null) {
+                                                           val dSnap = db.collection("drivers")
+                                                               .whereEqualTo("driver_email", email.lowercase().trim())
+                                                               .get().await()
+                                                           dSnap.documents.firstOrNull()?.reference?.update(
+                                                               "current_status", "ready_to_complete",
+                                                               "current_trip_phase", "ready_to_complete"
+                                                           )
+                                                       }
+                                                       tripActionSuccess = "Arrived at destination! Trip ready to complete."
                                                  } catch (e: Exception) {
                                                      tripActionError = "Failed: ${e.message}"
                                                  } finally {
@@ -2483,7 +2362,8 @@ fun DriverDashboard(
                                     Button(
                                         onClick = {
                                             endOdometerValue = lastVehicleMileage + (totalDistanceMetres / 1000.0)
-                                            showSignatureDialog = true
+                                            completedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+                                            showTripTicket = true
                                         },
                                         modifier = Modifier.fillMaxWidth().height(64.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
@@ -2545,29 +2425,14 @@ fun DriverDashboard(
 
                                     Divider(color = Color.White.copy(alpha = 0.1f))
 
-                                    // All pick-up and drop-off points (Full Segment Visibility)
-                                    if (!nextSchedule?.segments.isNullOrEmpty()) {
-                                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                            Text("TRIP ROUTE:", color = TextSecondary, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                                            nextSchedule?.segments?.forEachIndexed { index, segment ->
-                                                Column(modifier = Modifier.padding(start = 4.dp)) {
-                                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                                        Box(modifier = Modifier.size(6.dp).background(AccentBlue, androidx.compose.foundation.shape.CircleShape))
-                                                        Spacer(Modifier.width(8.dp))
-                                                        Text("P${index+1}: ${segment.pickup}", color = Color.White, style = MaterialTheme.typography.bodySmall)
-                                                    }
-                                                    Spacer(modifier = Modifier.height(2.dp))
-                                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                                        Box(modifier = Modifier.size(6.dp).background(AccentOrange, androidx.compose.foundation.shape.CircleShape))
-                                                        Spacer(Modifier.width(8.dp))
-                                                        Text("D${index+1}: ${segment.dropoff}", color = Color.White, style = MaterialTheme.typography.bodySmall)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        Text("Pickup: ${nextSchedule?.pickup_location?.firstOrNull()?.address ?: "Pending"}", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                                        Text("Dropoff: ${nextSchedule?.dropoff_location?.address ?: "Pending"}", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                                    // Simplified Single Point Location
+                                    val pickup = nextSchedule?.pickup_location?.address ?: nextSchedule?.pickup_location?.text ?: "Pending"
+                                    val dropoff = nextSchedule?.dropoff_location?.address ?: nextSchedule?.dropoff_location?.text ?: "Pending"
+                                    
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text("TRIP ROUTE:", color = TextSecondary, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                        Text("Pickup: $pickup", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                                        Text("Dropoff: $dropoff", color = Color.White, style = MaterialTheme.typography.bodySmall)
                                     }
 
                                     if (!nextSchedule?.special_instructions.isNullOrBlank()) {
@@ -2627,8 +2492,8 @@ fun DriverDashboard(
                                                     "passenger_name" to (nextSchedule?.passenger_name ?: nextSchedule?.client_name ?: "Unknown"),
                                                     "client_name" to (nextSchedule?.client_name ?: "Jettsan"),
                                                     "vehicle_plate" to (session.driver?.plateNumber ?: ""),
-                                                    "pickup_location" to (nextSchedule?.pickup_location?.firstOrNull()?.address ?: "Unknown"),
-                                                    "dropoff_location" to (nextSchedule?.dropoff_location?.address ?: "Unknown"),
+                                                    "pickup_location" to (nextSchedule?.pickup_location?.address ?: nextSchedule?.pickup_location?.text ?: "Unknown"),
+                                                    "dropoff_location" to (nextSchedule?.dropoff_location?.address ?: nextSchedule?.dropoff_location?.text ?: "Unknown"),
                                                     "time_of_departure" to "",
                                                     "time_of_arrival" to "",
                                                     "total_km" to 0.0,
@@ -2694,110 +2559,7 @@ fun DriverDashboard(
                     }
                 }
 
-        if (showTripTicket) {
-            TripTicketDialog(
-                driverName = session.user?.name ?: "Driver",
-                vehiclePlate = session.driver?.plateNumber ?: "N/A",
-                vehicleType = session.driver?.vehicleAssigned ?: "Vehicle",
-                timeOfDeparture = pickedUpAt ?: "--:--",
-                timeOfArrival = completedAt ?: "--:--",
-                totalKm = totalDistanceMetres / 1000.0,
-                routePoints = actualRoutePoints.toList(),
-                segments = nextSchedule?.segments,
-                isSubmitting = isCompletingTrip,
-                onConfirm = {
-                    if (capturedDriverSignature == null) {
-                        showDriverSignatureCapture = true
-                    } else {
-                        val docId = targetTripId ?: return@TripTicketDialog
-                        scope.launch {
-                            try {
-                                isCompletingTrip = true
-                                tripActionError = null
-                                
-                                val tripData = hashMapOf(
-                                    "status" to "completed",
-                                    "trip_phase" to "completed",
-                                    "driver_signature" to (capturedDriverSignature ?: ""),
-                                    "completed_at" to FieldValue.serverTimestamp(),
-                                    "accepted_at" to (acceptedAt ?: ""),
-                                    "picked_up_at" to (pickedUpAt ?: ""),
-                                    "time_of_departure" to (pickedUpAt ?: ""),
-                                    "time_of_arrival" to (completedAt ?: ""),
-                                    "total_km_travelled" to (totalDistanceMetres / 1000.0),
-                                "vehicle_type" to (session.driver?.vehicleAssigned ?: ""),
-                                "plate_number" to (session.driver?.plateNumber ?: ""),
-                                "route_polyline" to GoogleMapsService.encodePolyline(actualRoutePoints),
-                                "segments" to (nextSchedule?.segments?.map { mapOf("pickup" to it.pickup, "dropoff" to it.dropoff) } ?: emptyList<Map<String, String>>())
-                            )
-                            
-                            db.collection("schedules").document(docId).update(tripData as Map<String, Any>).await()
-                            
-                            // Encode the actual route points traveled
-                            val routePolyline = if (actualRoutePoints.isNotEmpty()) {
-                                GoogleMapsService.encodePolyline(actualRoutePoints.toList())
-                            } else {
-                                ""
-                            }
 
-                            // Save the actual Trip Ticket for the Admin Dashboard and History
-                            val ticketData = hashMapOf(
-                                "schedule_id" to docId,
-                                "driver_uid" to (auth.currentUser?.uid ?: ""),
-                                "driver_email" to (auth.currentUser?.email?.lowercase()?.trim() ?: ""),
-                                "driver_name" to liveDriverName,
-                                "passenger_name" to (nextSchedule?.passenger_name ?: nextSchedule?.client_name ?: "Unknown"),
-                                "client_name" to (nextSchedule?.client_name ?: "Jettsan"),
-                                "vehicle_plate" to (session.driver?.plateNumber ?: ""),
-                                "pickup_location" to (nextSchedule?.pickup_location?.firstOrNull()?.address ?: "Unknown"),
-                                "dropoff_location" to (nextSchedule?.dropoff_location?.address ?: "Unknown"),
-                                "time_of_departure" to (pickedUpAt ?: ""),
-                                "time_of_arrival" to (completedAt ?: ""),
-                                "total_km" to (totalDistanceMetres / 1000.0),
-                                "route_polyline" to GoogleMapsService.encodePolyline(actualRoutePoints),
-                                "segments" to (nextSchedule?.segments?.map { mapOf("pickup" to it.pickup, "dropoff" to it.dropoff) } ?: emptyList<Map<String, String>>()),
-                                "status" to "completed",
-                                "completed_at" to FieldValue.serverTimestamp()
-                            )
-                            activeTicketId?.let { ticketId ->
-                                db.collection("trip_tickets").document(ticketId).update(ticketData as Map<String, Any>).await()
-                            }
-                            activeTicketId = null
-                            
-                            // Update driver back to available and sync to drivers collection
-                            val currentMileage = session.driver?.currentMileage ?: 0.0
-                            val newMileage = currentMileage + (totalDistanceMetres / 1000.0)
-                            
-                            val email = auth.currentUser?.email
-                            if (email != null) {
-                                val dSnap = db.collection("drivers")
-                                    .whereEqualTo("driver_email", email.lowercase().trim())
-                                    .get().await()
-                                    
-                                dSnap.documents.firstOrNull()?.reference?.update(
-                                    "current_status", "available",
-                                    "current_trip_id", "",
-                                    "current_trip_phase", "completed",
-                                    "current_mileage", newMileage,
-                                    "active_ticket_id", "",
-                                    "last_updated", com.google.firebase.firestore.FieldValue.serverTimestamp()
-                                )?.await()
-                            }
-                            
-                            tripActionSuccess = "Trip completed successfully!"
-                            showTripTicket = false
-                            capturedDriverSignature = null
-                        } catch (e: Exception) {
-                            tripActionError = "Failed: ${e.message}"
-                            Log.e("DriverDashboard", "Trip completion failed", e)
-                        } finally {
-                            isCompletingTrip = false
-                        }
-                    }
-                }
-            }
-            )
-        }
 
         // Accident Report Dialog (outside ModalNavigationDrawer but inside Box)
         if (showAccidentDialog) {
@@ -2849,40 +2611,24 @@ fun DriverDashboard(
                             }
                             
                             // 2. Update Schedule with Odometer
-                            val updateData = if (isStarting) {
+                            if (isStarting) {
                                 val timestampStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
-                                val updatedSegments = nextSchedule?.segments?.toMutableList() ?: mutableListOf()
-                                val curIdx = nextSchedule?.current_segment_index ?: 0
-                                if (curIdx < updatedSegments.size) {
-                                    val currentSeg = updatedSegments[curIdx]
-                                    updatedSegments[curIdx] = currentSeg.copy(arrived_at = timestampStr)
-                                }
-                                mapOf(
+                                val updateData = mapOf(
                                     "odometer_start" to mileage,
                                     "trip_phase" to "picked_up",
-                                    "picked_up_at" to timestampStr,
-                                    "segments" to updatedSegments
+                                    "picked_up_at" to timestampStr
                                 )
-                            }
- else {
-                                endOdometerValue = mileage
-                                showSignatureDialog = true
-                                emptyMap<String, Any>()
-                            }
-                            
-                            if (isStarting) {
                                 db.collection("schedules").document(docId).update(updateData).await()
                                 // 3. Update Driver's Current Mileage
                                 db.collection("drivers").document(uid).update("current_mileage", mileage).await()
                                 tripActionSuccess = "Trip started! Please drive safely to the destination."
+                            } else {
+                                // End odometer flow
+                                endOdometerValue = mileage
+                                completedAt = formatCurrentTime()
+                                showTripTicket = true
                             }
                             lastVehicleMileage = mileage
-                            
-                            if (!isStarting) {
-                                showSignatureDialog = true
-                            } else {
-                                tripActionSuccess = "Odometer recorded. Trip started!"
-                            }
                         } catch (e: Exception) {
                             tripActionError = "Odometer failed: ${e.message}"
                         } finally {
@@ -2894,26 +2640,6 @@ fun DriverDashboard(
             )
         }
 
-        // NSCRP: Signature / Refusal Dialog (Client Verification)
-        if (showSignatureDialog) {
-            val tId = nextSchedule?.docId ?: ""
-            SignatureDialog(
-                tripId = tId,
-                onConfirm = { url ->
-                    clientSignatureUrl = url
-                    clientRefusalReason = null
-                    showSignatureDialog = false
-                    showTripTicket = true
-                },
-                onRefuse = { reason ->
-                    clientRefusalReason = reason
-                    clientSignatureUrl = null
-                    showSignatureDialog = false
-                    showTripTicket = true
-                },
-                onDismiss = { showSignatureDialog = false }
-            )
-        }
 
         // NSCRP: Final Trip Ticket (Summary + Driver Verification)
         if (showTripTicket) {
@@ -2923,35 +2649,72 @@ fun DriverDashboard(
                 vehiclePlate = session.driver?.plateNumber ?: "N/A",
                 vehicleType = session.driver?.vehicleAssigned ?: "Vehicle",
                 timeOfDeparture = nextSchedule?.scheduled_time ?: "--:--",
-                timeOfArrival = formatCurrentTime(),
+                timeOfArrival = completedAt ?: formatCurrentTime(),
                 totalKm = (totalDistanceMetres / 1000.0),
-                calculatedOdometer = endOdometerValue,
-                pickupLocation = nextSchedule?.pickup_location?.firstOrNull()?.text ?: "Start",
-                dropoffLocation = nextSchedule?.dropoff_location?.text ?: "End",
-                segments = nextSchedule?.segments,
+                pickupLocation = nextSchedule?.pickup_location?.address ?: nextSchedule?.pickup_location?.text ?: "Start",
+                dropoffLocation = nextSchedule?.dropoff_location?.address ?: nextSchedule?.dropoff_location?.text ?: "End",
+                routePoints = actualRoutePoints,
                 isSubmitting = isCompletingTrip,
-                onConfirm = { sigUrl ->
-                    driverSignatureUrl = sigUrl
+                onConfirm = {
                     scope.launch {
                         try {
                             isCompletingTrip = true
+                            // Final updates to schedule
                             db.collection("schedules").document(dId).update(
-                                "passenger_signature_url", clientSignatureUrl,
-                                "refusal_reason", clientRefusalReason,
-                                "driver_signature_url", driverSignatureUrl,
                                 "odometer_end", endOdometerValue,
                                 "trip_phase", "completed",
                                 "status", "completed",
                                 "completed_at", FieldValue.serverTimestamp()
                             ).await()
                             
+                            // Save ticket data and update driver status
+                            // Logic moved here for direct control
+                            val ticketData = hashMapOf(
+                                "schedule_id" to dId,
+                                "driver_uid" to (auth.currentUser?.uid ?: ""),
+                                "driver_email" to (auth.currentUser?.email?.lowercase()?.trim() ?: ""),
+                                "driver_name" to liveDriverName,
+                                "passenger_name" to (nextSchedule?.passenger_name ?: nextSchedule?.client_name ?: "Unknown"),
+                                "client_name" to (nextSchedule?.client_name ?: "Jettsan"),
+                                "vehicle_plate" to (session.driver?.plateNumber ?: ""),
+                                "pickup_location" to (nextSchedule?.pickup_location?.address ?: nextSchedule?.pickup_location?.text ?: "Unknown"),
+                                "dropoff_location" to (nextSchedule?.dropoff_location?.address ?: nextSchedule?.dropoff_location?.text ?: "Unknown"),
+                                "time_of_departure" to (pickedUpAt ?: ""),
+                                "time_of_arrival" to (completedAt ?: ""),
+                                "total_km" to (totalDistanceMetres / 1000.0),
+                                "route_polyline" to GoogleMapsService.encodePolyline(actualRoutePoints),
+                                "status" to "completed",
+                                "completed_at" to FieldValue.serverTimestamp()
+                            )
+                            
+                            activeTicketId?.let { tId ->
+                                db.collection("trip_tickets").document(tId).update(ticketData as Map<String, Any>).await()
+                            }
+                            
+                            // Update driver capacity/status
+                            val email = auth.currentUser?.email
+                            if (email != null) {
+                                val dSnap = db.collection("drivers")
+                                    .whereEqualTo("driver_email", email.lowercase().trim())
+                                    .get().await()
+                                    
+                                dSnap.documents.firstOrNull()?.reference?.update(
+                                    "current_status", "available",
+                                    "current_trip_id", "",
+                                    "current_trip_phase", "completed",
+                                    "current_mileage", endOdometerValue,
+                                    "active_ticket_id", "",
+                                    "last_updated", FieldValue.serverTimestamp()
+                                )?.await()
+                            }
+
                             showTripTicket = false
-                            tripActionSuccess = "Trip successfully finalized and recorded!"
-                            // Reset local stats
+                            tripActionSuccess = "Trip successfully finalized!"
                             totalDistanceMetres = 0f
                             actualRoutePoints.clear()
+                            activeTicketId = null
                         } catch (e: Exception) {
-                            tripActionError = "Verification Failed: ${e.message}"
+                            tripActionError = "Finalization Failed: ${e.message}"
                         } finally {
                             isCompletingTrip = false
                         }
@@ -2974,20 +2737,10 @@ fun DriverDashboard(
             BackHandler { showDtrHistory = false }
             DTRHistoryScreen(onBack = { showDtrHistory = false })
         }
-
-        if (showDriverSignatureCapture) {
-            SignatureCaptureDialog(
-                onDismiss = { showDriverSignatureCapture = false },
-                onConfirm = { incomingSignatureBase64 ->
-                    capturedDriverSignature = incomingSignatureBase64
-                    showDriverSignatureCapture = false
-                }
-            )
-        }
-        }
-    } // End of ModalNavigationDrawer main content lambda
-} // End of outer Box (1167)
-} // End of DriverDashboard function (236)
+    }
+}
+}
+}
 
 @Composable
 fun SpeedometerWidget(speedKmH: Float, modifier: Modifier = Modifier) {
@@ -3132,150 +2885,7 @@ fun OdometerDialog(
     }
 }
 
-@Composable
-fun SignatureDialog(
-    tripId: String,
-    onConfirm: (String) -> Unit,
-    onRefuse: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    var refusalReasonVal by remember { mutableStateOf("") }
-    var showRefusalField by remember { mutableStateOf(false) }
-    var isSubmitting by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    
-    val paths = remember { mutableStateListOf<PathState>() }
-    val scope = rememberCoroutineScope()
-
-    androidx.compose.ui.window.Dialog(onDismissRequest = { if (!isSubmitting) onDismiss() }) {
-        Surface(
-            shape = RoundedCornerShape(24.dp), 
-            color = CardBlue,
-            modifier = Modifier.fillMaxWidth().padding(16.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(24.dp), 
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text("CLIENT VERIFICATION", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = Color.White)
-                
-                if (!showRefusalField) {
-                    Text("Please ask the passenger to sign below:", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
-                    
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(250.dp)
-                            .background(Color.White, RoundedCornerShape(12.dp))
-                            .border(2.dp, AccentTeal.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                    ) {
-                        SignaturePad(
-                            paths = paths,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                        
-                        if (paths.isEmpty()) {
-                            Text("Draw signature here", color = Color.LightGray, modifier = Modifier.align(Alignment.Center))
-                        }
-                    }
-
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(
-                            onClick = { paths.clear() },
-                            enabled = !isSubmitting && paths.isNotEmpty()
-                        ) {
-                            Text("Clear", color = AccentOrange)
-                        }
-                        Spacer(Modifier.weight(1f))
-                        TextButton(
-                            onClick = { showRefusalField = true },
-                            enabled = !isSubmitting
-                        ) {
-                            Text("Client Refuses to Sign", color = Color.White.copy(alpha = 0.7f))
-                        }
-                    }
-
-                    if (error != null) {
-                        Text(error!!, color = Color.Red, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
-                    }
-
-                    Button(
-                        onClick = {
-                            if (paths.isEmpty()) {
-                                error = "Signature is required"
-                                return@Button
-                            }
-                            scope.launch {
-                                try {
-                                    isSubmitting = true
-                                    error = null
-                                    val bitmap = FirebaseStorageHelper.createBitmapFromPaths(paths, 800, 500)
-                                    val url = FirebaseStorageHelper.uploadSignature(bitmap, tripId)
-                                    onConfirm(url)
-                                } catch (e: Exception) {
-                                    error = "UPLOAD FAILED: OBJECT DOES NOT EXIST AT LOCATION."
-                                } finally {
-                                    isSubmitting = false
-                                }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth().height(56.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),
-                        enabled = !isSubmitting && paths.isNotEmpty()
-                    ) {
-                        if (isSubmitting) CircularProgressIndicator(color = Midnight, modifier = Modifier.size(24.dp))
-                        else Text("SAVE SIGNATURE", fontWeight = FontWeight.Bold, color = Midnight)
-                    }
-                } else {
-                    Text("REFUSAL TO SIGN", color = AccentOrange, fontWeight = FontWeight.Bold)
-                    Text("REFUSAL TO SIGN: THE REASON SHOULD BE INDICATED ON THE REPORT", color = TextSecondary, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
-                    
-                    OutlinedTextField(
-                        value = refusalReasonVal,
-                        onValueChange = { refusalReasonVal = it },
-                        label = { Text("Reason for refusal") },
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 3,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedBorderColor = AccentOrange,
-                            cursorColor = AccentOrange,
-                            focusedLabelColor = AccentOrange
-                        )
-                    )
-                    
-                    if (error != null) {
-                        Text(error!!, color = Color.Red, style = MaterialTheme.typography.bodySmall)
-                    }
-
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = { showRefusalField = false }) {
-                            Text("Back to Signature", color = TextSecondary)
-                        }
-                    }
-
-                    Button(
-                        onClick = {
-                            if (refusalReasonVal.length < 5) {
-                                error = "Please provide a valid reason"
-                                return@Button
-                            }
-                            onRefuse(refusalReasonVal)
-                        },
-                        modifier = Modifier.fillMaxWidth().height(56.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentOrange),
-                        enabled = !isSubmitting
-                    ) {
-                        Text("SUBMIT REFUSAL", fontWeight = FontWeight.Bold, color = Color.White)
-                    }
-                }
-            }
-        }
-    }
-}
-
+@RequiresApi(Build.VERSION_CODES.O)
 fun formatCurrentTime(): String {
-    return LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+    return java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
 }

@@ -495,28 +495,16 @@ function initStats() {
                 if (allDriversData[driverId]) delete allDriversData[driverId].odometer_start;
             } else {
                 const stops = [];
-                if (data.segments && Array.isArray(data.segments)) {
-                    data.segments.forEach((seg, idx) => {
-                        stops.push({ 
-                            latitude: seg.pickup_latitude, 
-                            longitude: seg.pickup_longitude, 
-                            label: `P${idx + 1}` 
-                        });
-                        stops.push({ 
-                            latitude: seg.dropoff_latitude, 
-                            longitude: seg.dropoff_longitude, 
-                            label: `D${idx + 1}` 
-                        });
-                    });
-                } else {
-                    if (data.pickup_latitude && data.pickup_longitude) {
-                        stops.push({ latitude: data.pickup_latitude, longitude: data.pickup_longitude, label: 'P' });
-                    }
+                if (data.pickup_latitude && data.pickup_longitude) {
+                    stops.push({ latitude: data.pickup_latitude, longitude: data.pickup_longitude, label: 'P' });
                 }
 
                 activeSchedulesData[driverId] = {
                     stops: stops,
-                    final: data.dropoff_location,
+                    final: { 
+                        latitude: data.dropoff_latitude, 
+                        longitude: data.dropoff_longitude 
+                    },
                     tripId: change.doc.id,
                     status: data.status
                 };
@@ -940,14 +928,14 @@ function refreshMarker(id) {
             driverStopMarkers[id].forEach(m => m.setMap(null));
             driverStopMarkers[id] = [];
 
-            // 1. Numbered Intermediate Stops
+            // 1. Single Pickup Marker
             if (mission.stops && mission.stops.length > 0) {
-                mission.stops.forEach((stop, index) => {
+                mission.stops.forEach((stop) => {
                     if (stop.latitude && stop.longitude) {
                         const stopPos = { lat: Number(stop.latitude), lng: Number(stop.longitude) };
                         const overlay = new MapOverlay(
                             stopPos,
-                            `<span>${stop.label || (index + 1)}</span>`,
+                            `<span>P</span>`,
                             'stop-marker-numbered'
                         );
                         overlay.setMap(driversMap);
