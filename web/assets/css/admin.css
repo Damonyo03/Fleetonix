@@ -1167,3 +1167,47 @@ body {
 .marker-pulse-ring.on_job {
     border-color: var(--accent-green);
 }
+
+/* --- Status Identification Enhancements --- */
+.pulse-glow {
+    animation: pulseGlow 2s infinite ease-in-out;
+    box-shadow: 0 0 10px currentcolor;
+}
+
+@keyframes pulseGlow {
+    0% { filter: brightness(1); box-shadow: 0 0 5px currentcolor; }
+    50% { filter: brightness(1.4); box-shadow: 0 0 20px currentcolor; }
+    100% { filter: brightness(1); box-shadow: 0 0 5px currentcolor; }
+}
+
+.qip-badge {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.qip-badge.available,
+.status-badge.available {
+    background: rgba(0, 255, 136, 0.15) !important;
+    color: var(--accent-green) !important;
+    border-color: rgba(0, 255, 136, 0.3) !important;
+    text-shadow: 0 0 8px rgba(0, 255, 136, 0.5);
+}
+
+.qip-badge.pickup,
+.status-badge.pickup {
+    background: rgba(255, 159, 67, 0.15) !important;
+    color: var(--accent-orange) !important;
+    border-color: rgba(255, 159, 67, 0.3) !important;
+}
+
+.qip-badge.dropoff,
+.status-badge.dropoff {
+    background: rgba(29, 209, 161, 0.15) !important;
+    color: var(--accent-teal-bright) !important;
+    border-color: rgba(29, 209, 161, 0.3) !important;
+}

@@ -343,11 +343,12 @@ function updateOnlineDriversList() {
                 
                 <div class="flex items-center gap-4">
                     <!-- Avatar with Status Ring -->
-                    <div class="relative">
+                    <div class="relative p-0.5">
+                        <div class="absolute inset-0 rounded-full ${isRecent ? 'bg-accent-green/30 animate-pulse blur-[2px]' : 'bg-transparent'}"></div>
                         <img src="${d.profile_image_url || '../img/default-avatar.png'}" 
-                             class="w-12 h-12 rounded-full object-cover border-2 ${isRecent ? 'border-accent-green' : 'border-slate-600'}"
+                             class="relative w-12 h-12 rounded-full object-cover border-2 ${isRecent ? 'border-accent-green shadow-[0_0_12px_rgba(0,255,136,0.4)]' : 'border-slate-600'}"
                              onerror="this.src='../img/default-avatar.png'">
-                        ${isRecent ? '<div class="absolute bottom-0 right-0 w-3 h-3 bg-accent-green rounded-full border-2 border-slate-900 animate-pulse"></div>' : ''}
+                        ${isRecent ? '<div class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-accent-green rounded-full border-2 border-slate-900 animate-pulse shadow-[0_0_8px_#00ff88]"></div>' : ''}
                     </div>
 
                     <!-- Heart of the Card -->
@@ -426,13 +427,13 @@ function showQuickInfoPanel(id, d) {
         </div>
 
         <div class="flex items-center gap-2 mb-6">
-            <span class="qip-badge ${status}">${status.replace(/_/g, ' ')}</span>
+            <span class="qip-badge ${status} pulse-glow">${status.replace(/_/g, ' ')}</span>
             <div class="flex gap-1 ml-auto">
-                <div class="w-1 h-3 rounded-full bg-accent-green opacity-40"></div>
-                <div class="w-1 h-3 rounded-full bg-accent-green opacity-60"></div>
-                <div class="w-1 h-3 rounded-full bg-accent-green"></div>
+                <div class="w-1.5 h-4 rounded-full bg-accent-green opacity-40"></div>
+                <div class="w-1.5 h-4 rounded-full bg-accent-green opacity-60"></div>
+                <div class="w-1.5 h-4 rounded-full bg-accent-green shadow-[0_0_8px_#00ff88]"></div>
             </div>
-            <span class="text-[10px] font-bold text-accent-green">${network}</span>
+            <span class="text-[10px] font-black uppercase text-accent-green tracking-widest">${network}</span>
         </div>
 
         <div class="qip-grid">
