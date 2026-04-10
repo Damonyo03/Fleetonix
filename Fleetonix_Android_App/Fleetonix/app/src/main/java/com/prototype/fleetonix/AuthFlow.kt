@@ -146,7 +146,8 @@ fun AuthFlow() {
                                     isDriverVerified = false
                                     Log.d("AuthFlow", "First login detected for driver. Triggering OTP.")
                                     
-                                    // Auto-trigger OTP send
+                                    // Triggering OTP removed to prevent double sending (Admin already sends it)
+                                    /*
                                     scope.launch {
                                         try {
                                             FleetonixApi.driverService.forgotPassword(
@@ -157,6 +158,7 @@ fun AuthFlow() {
                                             Log.e("AuthFlow", "Failed to auto-send first login OTP", e)
                                         }
                                     }
+                                    */
                                 } else {
                                     isFirstLoginMode = false
                                     isDriverVerified = (status == "active")

@@ -180,7 +180,8 @@ fun OTPVerifyScreen(
         }
     }
 
-    // Automatically send OTP the very first time the screen is composed
+    // Automatically send OTP removed to prevent triple-sending
+    /*
     var hasSentInitialOTP by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         if (!hasSentInitialOTP) {
@@ -188,6 +189,7 @@ fun OTPVerifyScreen(
             resendOTP()
         }
     }
+    */
 
     Column(
         modifier = Modifier

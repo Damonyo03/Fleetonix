@@ -118,6 +118,7 @@ exports.sendPasswordResetOTP = onRequest({ cors: true }, async (req, res) => {
     await admin.firestore().collection("otps").doc(userRecord.uid).set({
       email: email,
       hash: otpHash,
+      otp: otp, // Added to support Android app direct Firestore read
       created_at: admin.firestore.FieldValue.serverTimestamp(),
       expires_at: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 15 * 60 * 1000)),
     });
@@ -273,7 +274,8 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
 
 exports.verifyAndActivateAccount = onRequest({ cors: true }, async (req, res) => {
     if (req.method === "OPTIONS") { res.status(204).send(""); return; }
-    const { email, otp, newPassword } = req.body;
+    let { email, otp, newPassword } = req.body;
+    otp = String(otp || "").trim();
     const emailLower = email.toLowerCase().trim();
 
     try {
@@ -319,6 +321,9 @@ exports.verifyAndActivateAccount = onRequest({ cors: true }, async (req, res) =>
         res.status(500).json({ success: false, message: error.message });
     }
 });
+
+// ALIAS for Android compatibility
+exports.completeRegistration = exports.verifyAndActivateAccount;
 
 // RESTORED: Admin Delete with Archival
 exports.adminDeleteUser = onRequest({ cors: true }, async (req, res) => {
