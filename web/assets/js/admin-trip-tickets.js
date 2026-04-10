@@ -131,7 +131,7 @@ function loadTickets() {
         // Fallback: listen to completed schedules only
         const q = query(collection(db, "schedules"), where("status", "==", "completed"));
         onSnapshot(q, (snapshot) => {
-            allTickets = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            allTickets = snapshot.docs.map(d => ({ id: d.id, _source: 'schedules', ...d.data() }));
             allTickets.sort((a, b) => {
                 const at = a.completed_at?.toMillis?.() || 0;
                 const bt = b.completed_at?.toMillis?.() || 0;
@@ -252,11 +252,14 @@ function renderTickets(tickets) {
                     </button>
                 ` : ''}
 
-                ${(!ticket.isValidated && (currentUserData?.role === 'admin' || currentUserData?.role === 'super_admin')) ? `
+                ${(() => {
+                    const role = currentUserData?.role || currentUserData?.user_type;
+                    return (!ticket.isValidated && (role === 'admin' || role === 'super_admin' || role === 'company_admin')) ? `
                     <button class="btn-verify-lock" onclick="verifyAndLockTrip('${ticket.id}', '${ticket._source}')" style="width: 100%; margin-top: 10px; background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--accent-blue); padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 700; transition: all 0.3s ease;">
                         <i class="fas fa-lock"></i> Verify & Lock for Payroll
                     </button>
-                ` : ''}
+                ` : '';
+                })()}
             </div>
         `;
     }).join('');

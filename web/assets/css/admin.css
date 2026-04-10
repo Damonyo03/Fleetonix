@@ -542,11 +542,11 @@ body {
     border-radius: 50%;
     box-shadow: 0 0 10px currentColor;
 }
-.driver-status.available { color: var(--accent-blue); background: currentColor; box-shadow: 0 0 12px var(--accent-blue); }
-.driver-status.on_schedule { color: var(--accent-green); background: currentColor; box-shadow: 0 0 12px var(--accent-green); }
-.driver-status.pickup, .driver-status.in_progress { color: var(--accent-green); background: currentColor; box-shadow: 0 0 12px var(--accent-green); }
-.driver-status.dropoff { color: var(--accent-green); background: currentColor; box-shadow: 0 0 12px var(--accent-green); }
-.driver-status.offline { color: var(--accent-stale); background: currentColor; opacity: 0.5; }
+.driver-status.available { color: var(--accent-blue); background: currentcolor; box-shadow: 0 0 12px var(--accent-blue); }
+.driver-status.on_schedule { color: var(--accent-green); background: currentcolor; box-shadow: 0 0 12px var(--accent-green); }
+.driver-status.pickup, .driver-status.in_progress { color: var(--accent-green); background: currentcolor; box-shadow: 0 0 12px var(--accent-green); }
+.driver-status.dropoff { color: var(--accent-green); background: currentcolor; box-shadow: 0 0 12px var(--accent-green); }
+.driver-status.offline { color: var(--accent-stale); background: currentcolor; opacity: 0.5; }
 
 /* Pulse Animation for Live Updates */
 @keyframes statusPulse {
@@ -956,4 +956,3 @@ body {
 .marker-pulse-ring.on_job {
     border-color: var(--accent-green);
 }
-
