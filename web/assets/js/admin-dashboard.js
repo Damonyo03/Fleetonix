@@ -852,6 +852,7 @@ function updateDriverState(id, data, source) {
         current_longitude: data.current_longitude !== undefined ? data.current_longitude : existing.current_longitude,
         current_speed: data.current_speed !== undefined ? data.current_speed : existing.current_speed,
         current_heading: data.current_heading !== undefined ? data.current_heading : existing.current_heading,
+        current_city: data.current_city || existing.current_city,
         last_updated: data.last_updated || existing.last_updated,
         lastSeen: data.lastSeen || existing.lastSeen,
         last_location_push: Date.now()
@@ -861,19 +862,23 @@ function updateDriverState(id, data, source) {
         scheduleRender(id);
     }
     
-    // Throttled UI Updates
+    // Intelligent UI Updates: Faster if driver is selected or moving
+    let throttleMs = 2500;
+    if (activeQuickInfoDriverId === id) throttleMs = 500; // Fast refresh for focused driver
+    else if (existing.current_speed > 2) throttleMs = 1500; // Medium refresh for moving drivers
+
     if (!listUpdateTimeout) {
         listUpdateTimeout = setTimeout(() => {
             updateOnlineDriversList();
             listUpdateTimeout = null;
-        }, 1500); // Refresh list every 1.5s
+        }, throttleMs);
     }
     
     if (!uiUpdateTimeout) {
         uiUpdateTimeout = setTimeout(() => {
             updateOnlineDisplay();
             uiUpdateTimeout = null;
-        }, 3000); // Refresh headers every 3s
+        }, 4000); 
     }
 }
 
@@ -1168,31 +1173,37 @@ function getInfoWindowContent(driver) {
 }
 
 function updateOnlineDriversList() {
+    // ── Throttling Performance Defense ──
+    if (listUpdateTimeout) return;
+    listUpdateTimeout = setTimeout(() => {
+        listUpdateTimeout = null;
+        renderOnlineDriversList();
+    }, 1500); // 1.5s throttle to prevent UI thread lock
+}
+
+function renderOnlineDriversList() {
     const listContainer = document.getElementById('onlineDriversList');
     const onlineCount = document.getElementById('onlineCount');
     if (!listContainer) return;
 
     const now = Date.now();
-    const liveThreshold = 30 * 1000;
     const onlineThreshold = 10 * 60 * 1000;
     
     const validDrivers = Object.values(allDriversData).filter(d => {
-        const lastSeen = d.lastSeen ? (d.lastSeen.toMillis ? d.lastSeen.toMillis() : (d.lastSeen.seconds ? d.lastSeen.seconds * 1000 : Number(d.lastSeen))) : 0;
         const lastUpdated = d.last_updated ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated))) : 0;
         const lastPulse = d.last_location_push || 0;
-        
-        const effectiveLastSeen = Math.max(lastSeen, lastUpdated, lastPulse);
+        const effectiveLastSeen = Math.max(lastUpdated, lastPulse);
         return !isNaN(effectiveLastSeen) && effectiveLastSeen > 0 && (now - effectiveLastSeen) < onlineThreshold;
     });
 
     const sortedDrivers = validDrivers.sort((a, b) => {
         const getPriority = (s) => {
-            if (['on_schedule', 'accepted', 'pickup', 'dropoff', 'in_progress'].includes(s)) return 1;
+            if (['on_schedule', 'accepted', 'pickup', 'dropoff', 'in_progress', 'moving_to_pickup', 'moving_to_dropoff', 'picked_up'].includes(s)) return 1;
             if (s === 'available') return 2;
             return 3;
         };
-        const priA = getPriority(a.current_status);
-        const priB = getPriority(b.current_status);
+        const priA = getPriority(a.current_trip_phase || a.current_status);
+        const priB = getPriority(b.current_trip_phase || b.current_status);
         if (priA !== priB) return priA - priB;
         return (a.driver_name || '').localeCompare(b.driver_name || '');
     });
@@ -1201,65 +1212,78 @@ function updateOnlineDriversList() {
         const status = driver.current_status || 'offline';
         const phase = driver.current_trip_phase || (status === 'on_schedule' ? 'accepted' : '');
         const displayStatus = phase ? phase : status;
-        const statusLabel = displayStatus.replace(/_/g, ' ');
-        const isLive = (now - (driver.last_location_push || 0)) < liveThreshold;
-        const isBackground = driver.is_background === true;
+        const statusLabel = displayStatus.replace(/_/g, ' ').toUpperCase();
         
-        const vehicleInfo = driver.vehicle_assigned ? `${driver.vehicle_assigned}${driver.plate_number ? ' · ' + driver.plate_number : ''}` : '';
-        const email = driver.driver_email?.toLowerCase()?.trim();
+        const lastPulseAge = (now - (driver.last_location_push || 0)) / 1000;
+        const isLive = lastPulseAge < 45;
+        
+        const vehicle = driver.vehicle_assigned || 'Unassigned';
+        const plate = driver.plate_number || '---';
+        const speed = (driver.current_speed || 0) * 3.6;
+        const heading = Math.round(driver.current_heading || 0);
 
+        const email = driver.driver_email?.toLowerCase()?.trim();
         const displayName = (driver.driver_name && !['Loading...', 'Fleet Driver', 'Loading Driver...'].includes(driver.driver_name)) 
             ? driver.driver_name 
             : (driverDTRStatus[email]?.name || driver.driver_email || 'Fleet Driver');
 
-        const mission = activeSchedulesData[driver.id];
-        const isOnJob = ['on_schedule', 'accepted', 'pickup', 'dropoff', 'in_progress', 'moving_to_pickup', 'moving_to_dropoff', 'picked_up'].includes(displayStatus);
+        const isMoving = speed > 5;
+        const isActive = activeQuickInfoDriverId === driver.id;
 
         return `
-            <div class="driver-item ${status === 'offline' ? 'offline' : ''} ${isLive ? 'pulse' : ''}" onclick="focusDriver('${driver.id}')">
+            <div class="driver-item ${isActive ? 'active-focus' : ''}" onclick="focusDriver('${driver.id}')">
                 <div class="driver-item-header">
-                    <div class="status-dot ${displayStatus}"></div>
-                    <div class="driver-name">${displayName}</div>
-                    <div class="driver-badge-area">
-                        ${displayStatus === 'available' ? `<span class="status-badge available ${isLive ? 'premium' : ''}">Available</span>` : ''}
-                        ${isOnJob ? `<span class="status-badge on_job">${statusLabel}</span>` : ''}
+                    <div class="driver-avatar-sm">
+                        ${driver.profile_image_url ? `<img src="${driver.profile_image_url}" alt="">` : `<i class="fas fa-user-circle" style="font-size:24px; color:var(--text-muted);"></i>`}
+                    </div>
+                    <div class="driver-main-info">
+                        <div class="driver-name">${displayName} ${driver.is_background ? '<span class="bg-active-tag">BG</span>' : ''}</div>
+                        <div class="driver-sub-info">
+                            <span class="driver-status-badge status-${displayStatus}">${statusLabel}</span>
+                            <span>•</span>
+                            <span>${vehicle}</span>
+                        </div>
                     </div>
                 </div>
 
-                <div class="driver-details-grid">
-                    <div class="detail-item">
-                        <i class="fas fa-car-side"></i>
-                        <span>${vehicleInfo || 'No Vehicle'}</span>
+                <div class="driver-stats-grid">
+                    <div class="stat-pill">
+                        <span class="stat-label">Velocity</span>
+                        <span class="stat-value" style="color:${isMoving ? 'var(--accent-green)' : 'var(--text-secondary)'}">
+                            <i class="fas fa-tachometer-alt"></i> ${speed.toFixed(1)} <small>km/h</small>
+                        </span>
                     </div>
-                    <div class="detail-item">
-                        <i class="fas fa-tachometer-alt"></i>
-                        <span>${((driver.current_speed || 0) * 3.6).toFixed(1)} km/h</span>
+                    <div class="stat-pill">
+                        <span class="stat-label">Heading</span>
+                        <span class="stat-value">
+                            <i class="fas fa-compass" style="transform: rotate(${heading}deg);"></i> ${heading}°
+                        </span>
                     </div>
-                    <div class="detail-item" style="grid-column: 1 / -1; color: var(--accent-orange); font-weight: 600;">
-                        <i class="fas fa-city"></i>
-                        <span>${driver.current_city || 'Locating...'}</span>
+                    <div class="stat-pill" style="grid-column: 1 / span 2;">
+                        <span class="stat-label">Current Position</span>
+                        <span class="stat-value" style="font-size:0.7rem; color:var(--accent-blue);">
+                            <i class="fas fa-map-marker-alt"></i> ${driver.current_city || 'Tracking coordinates...'}
+                        </span>
                     </div>
-                    
-                    ${isOnJob && mission ? `
-                        <div class="detail-item booking-info" style="grid-column: 1 / -1; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 8px; margin-top: 4px;">
-                            <div style="display: flex; justify-content: space-between; width: 100%;">
-                                <span style="color: var(--accent-blue);"><i class="fas fa-user"></i> ${mission.passenger_name}</span>
-                                <span style="font-size: 0.8em; color: var(--text-muted);">${(now - (driver.last_location_push || 0)) / 1000 < 60 ? 'LIVE' : Math.round((now - (driver.last_location_push || 0)) / 60000) + 'm'}</span>
-                            </div>
-                            <div style="font-size: 0.85em; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;">
-                                <i class="fas fa-map-marker-alt"></i> To: ${mission.final?.address || 'Destination'}
-                            </div>
-                        </div>
-                    ` : `
-                        <div class="detail-item" style="grid-column: 1 / -1; opacity: 0.6; font-size: 0.8em;">
-                            <i class="fas fa-clock"></i> Last Pulse: ${Math.round((now - (driver.last_location_push || 0)) / 60000)}m ago
-                        </div>
-                    `}
                 </div>
-                ${isBackground ? '<div class="bg-pulse-label">BG ACTIVE</div>' : ''}
+
+                <div class="driver-actions-mini">
+                    <button class="action-btn-mini" onclick="event.stopPropagation(); window.open('tel:${driver.phone_number || ''}')">
+                        <i class="fas fa-phone-alt"></i> Call
+                    </button>
+                    <button class="action-btn-mini" onclick="event.stopPropagation(); window.location.href='trip-tickets.html?driver=${driver.id}'">
+                        <i class="fas fa-history"></i> Logs
+                    </button>
+                </div>
+
+                <div class="connection-bar ${isLive ? 'active' : ''}"></div>
             </div>
         `;
-    }).join('') : '<div style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 0.85em;">No online drivers found.</div>';
+    }).join('') : `
+        <div style="text-align: center; color: var(--text-muted); padding: 40px;">
+            <i class="fas fa-satellite-dish" style="font-size:2rem; margin-bottom:12px; display:block; opacity:0.3;"></i>
+            <span style="font-size:0.85rem;">No drivers found on the radar.</span>
+        </div>`;
 
     if (onlineCount) onlineCount.innerText = validDrivers.length;
 }
@@ -1552,18 +1576,21 @@ function getMarkerIcon(status, vehicleDetails) {
                   (vehicleDetails || '').toLowerCase().includes('mpv') ||
                   (vehicleDetails || '').toLowerCase().includes('hiace');
     
+    // Directional Arrow Path (High-Fidelity Tracking Pointer)
+    const arrowPath = "M12,2L4.5,20.29L5.21,21L12,18L18.79,21L19.5,20.29L12,2Z";
+    
     // Sedan SVG Path (Simplified top-down view)
-    const sedanPath = "M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z";
+    const sedanPath = "M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99z";
     // Van SVG Path (Boxier)
-    const vanPath = "M20 8h-3V4H4c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM7 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13-1.2h-2c0 1.66-1.34 3-3 3s-3-1.34-3-3h-6c0 1.66-1.34 3-3 3s-3-1.34-3-3H4v-11h13v7h3v4.2zm-3-2.7c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z";
+    const vanPath = "M20 8h-3V4H4c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4z";
 
     return {
-        path: isVan ? vanPath : sedanPath,
+        path: arrowPath, // Use arrow for high-precision tracking
         fillColor: color,
         fillOpacity: 1,
         strokeWeight: 2,
         strokeColor: '#FFFFFF',
-        scale: 1.5,
+        scale: 1.2,
         anchor: new google.maps.Point(12, 12),
         labelOrigin: new google.maps.Point(12, 35)
     };

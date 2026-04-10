@@ -413,11 +413,21 @@ async function showCreateBookingModal(clients) {
                     driverSelect.innerHTML = '<option value="">No available drivers found</option>';
                 }
             } catch (err) {
-        // Initialize Autocompletes
-        if (window.initAutocompleteForInput) {
-            window.initAutocompleteForInput(document.getElementById('modal_pickup'));
-            window.initAutocompleteForInput(document.getElementById('modal_dropoff'));
+                console.error("Error populating drivers:", err);
+                driverSelect.innerHTML = '<option value="">Error loading drivers</option>';
+            }
         }
+    }, 50);
+
+    // ── ALWAYS Initialize Autocompletes (outside of try/catch) ───────────────────
+    setTimeout(() => {
+        if (window.initAutocompleteForInput) {
+            const pickupEl = document.getElementById('modal_pickup');
+            const dropoffEl = document.getElementById('modal_dropoff');
+            if (pickupEl) window.initAutocompleteForInput(pickupEl);
+            if (dropoffEl) window.initAutocompleteForInput(dropoffEl);
+        }
+    }, 100);
 }
 
 // --- Booking List ---

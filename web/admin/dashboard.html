@@ -178,7 +178,7 @@
                         <button class="btn btn-secondary" id="postScheduleBtn" title="Publish schedules immediately.">
                             <i class="fas fa-paper-plane"></i> Post Schedule
                         </button>
-                        <button class="btn btn-primary" id="newAdminBookingBtn">
+                        <button class="btn btn-primary premium-pulsing" id="newAdminBookingBtn">
                             <i class="fas fa-plus"></i> New Booking
                         </button>
                     </div>
@@ -308,12 +308,18 @@
                             </div>
 
                             <div class="glass-card" style="padding: 16px; border-radius: var(--radius-md); background: rgba(255,255,255,0.02);">
-                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                                    <span style="font-size:0.75rem; font-weight:800; color:var(--text-muted); letter-spacing:0.05em;">ONLINE DRIVERS</span>
-                                    <span id="onlineCount" class="badge badge-info">0</span>
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                                    <div>
+                                        <span style="font-size:0.7rem; font-weight:800; color:var(--text-muted); letter-spacing:0.1em; display:block; margin-bottom:2px;">FLEET STATUS</span>
+                                        <span style="font-size:1rem; font-weight:700;">Online Now</span>
+                                    </div>
+                                    <span id="onlineCount" class="badge badge-success" style="padding:6px 14px; font-size:0.9rem;">0</span>
                                 </div>
                                 <div class="online-list" id="onlineDriversList">
-                                    <div style="text-align:center; padding:20px; color:var(--text-muted); font-size:0.85rem;">Searching for online assets...</div>
+                                    <div style="text-align:center; padding:40px; color:var(--text-muted);">
+                                        <i class="fas fa-radar fa-spin" style="font-size:2rem; margin-bottom:12px; display:block; opacity:0.3;"></i>
+                                        <span style="font-size:0.85rem;">Initializing fleet tracking...</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
