@@ -540,7 +540,7 @@ body {
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    box-shadow: 0 0 10px currentColor;
+    box-shadow: 0 0 10px currentcolor;
 }
 .driver-status.available { color: var(--accent-blue); background: currentcolor; box-shadow: 0 0 12px var(--accent-blue); }
 .driver-status.on_schedule { color: var(--accent-green); background: currentcolor; box-shadow: 0 0 12px var(--accent-green); }

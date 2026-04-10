@@ -305,10 +305,21 @@ function initPostingFeature() {
             snap.docs.forEach(d => {
                 batch.update(d.ref, { 
                     isOfficial: true,
+                    is_published: true, // Sync new visibility field
                     posted_at: serverTimestamp()
                 });
             });
             
+            // Also update any pending bookings for this date
+            const bq = query(collection(db, "bookings"), 
+                where("pickup_date", "==", dateStr),
+                where("is_published", "==", false)
+            );
+            const bSnap = await getDocs(bq);
+            bSnap.docs.forEach(d => {
+                batch.update(d.ref, { is_published: true });
+            });
+
             await batch.commit();
             
             alert(`SUCCESS: ${batchCount} schedules have been posted and are now LIVE for drivers.`);
@@ -1228,8 +1239,35 @@ window.focusDriver = function(driverId) {
         driversMap.panTo(marker.getPosition());
         driversMap.setZoom(16);
         showQuickInfoPanel(driverId, allDriversData[driverId]);
+        drawAbPolyline(driverId); // Draw mission path
     }
 };
+
+let activeAbPolyline = null;
+function drawAbPolyline(id) {
+    if (activeAbPolyline) { activeAbPolyline.setMap(null); activeAbPolyline = null; }
+    const mission = activeSchedulesData[id];
+    if (!mission || !mission.stops || !mission.final) return;
+
+    const path = [];
+    const d = allDriversData[id];
+    if (d && d.current_latitude) path.push({ lat: d.current_latitude, lng: d.current_longitude });
+    
+    mission.stops.forEach(s => {
+        if (s.latitude) path.push({ lat: Number(s.latitude), lng: Number(s.longitude) });
+    });
+    if (mission.final.latitude) path.push({ lat: Number(mission.final.latitude), lng: Number(mission.final.longitude) });
+
+    activeAbPolyline = new google.maps.Polyline({
+        path: path,
+        geodesic: true,
+        strokeColor: '#00d4ff',
+        strokeOpacity: 0.6,
+        strokeWeight: 3,
+        icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 3 }, offset: '0', repeat: '20px' }],
+        map: driversMap
+    });
+}
 
 /**
  * Shows the Quick Info panel overlay on the map.
@@ -1467,15 +1505,15 @@ function getMarkerIcon(status, vehicleDetails) {
 
 function getStatusColor(status) {
     const colors = {
-        'available': '#10b981',   
-        'on_schedule': '#3b82f6', 
-        'accepted': '#3b82f6',
-        'pickup': '#3b82f6',     
-        'dropoff': '#3b82f6',    
-        'in_progress': '#3b82f6', 
-        'offline': '#94a3b8'      
+        'available': '#00d4ff',   // Blue for Standby
+        'on_schedule': '#00ff88', // Green for Active
+        'accepted': '#00ff88',
+        'pickup': '#00ff88',     
+        'dropoff': '#00ff88',    
+        'in_progress': '#00ff88', 
+        'offline': '#4a5568'      
     };
-    return colors[status] || '#94a3b8';
+    return colors[status] || '#4a5568';
 }
 
 function renderRecentCompletedBookings(snapshot) {
