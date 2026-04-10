@@ -570,7 +570,8 @@ fun AuthFlow() {
                                 id = user.uid,
                                 userType = "driver",
                                 name = userData?.get("full_name") as? String ?: user.displayName,
-                                email = user.email
+                                email = user.email,
+                                phone = userData?.get("phone") as? String
                             ),
                             driver = DriverProfile(currentStatus = "available")
                         ),

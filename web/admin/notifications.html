@@ -101,11 +101,7 @@
                         <span style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">TRIP ALERTS</span>
                         <div style="font-size:1.5rem; font-weight:800; color:var(--accent-blue);" id="tripCount">0</div>
                     </div>
-                    <div class="glass-card" style="text-align: center;">
-                        <span style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">VEHICLE ISSUES</span>
-                        <div style="font-size:1.5rem; font-weight:800; color:var(--accent-warning);" id="issueCount">0</div>
-                    </div>
-                    <div class="glass-card" style="text-align: center;">
+                    <div class="glass-card" style="text-align: center; grid-column: span 2;">
                         <span style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">INCIDENTS</span>
                         <div style="font-size:1.5rem; font-weight:800; color:var(--accent-error);" id="accidentCount">0</div>
                     </div>
@@ -115,7 +111,6 @@
                 <div class="filter-tabs">
                     <button class="tab-btn active" onclick="filterBy('all', this)">All Feeds</button>
                     <button class="tab-btn" onclick="filterBy('trip', this)">🚗 Trips</button>
-                    <button class="tab-btn" onclick="filterBy('vehicle_issue', this)">🛠️ Maintenance</button>
                     <button class="tab-btn" onclick="filterBy('accident', this)">🚨 Incidents</button>
                     <button class="tab-btn" onclick="filterBy('system', this)">⚙️ System</button>
                 </div>

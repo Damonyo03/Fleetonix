@@ -443,7 +443,8 @@ fun AssignmentsScreen(onBack: () -> Unit) {
     // Real-time Firestore listener
     DisposableEffect(auth.currentUser?.email) {
         val email = auth.currentUser?.email?.lowercase()?.trim()
-        if (email == null) {
+        val uid = auth.currentUser?.uid
+        if (email == null || uid == null) {
             isLoading = false
             return@DisposableEffect onDispose {}
         }
@@ -451,9 +452,6 @@ fun AssignmentsScreen(onBack: () -> Unit) {
         val listener = db.collection("schedules")
             .whereEqualTo("driver_email", email)
             .whereEqualTo("is_published", true)
-            .whereNotEqualTo("status", "completed")
-            .orderBy("status") // Required for compound query with whereNotEqualTo
-            .orderBy("schedule_date", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
                 isLoading = false
                 if (error != null) {
@@ -463,70 +461,85 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                 }
 
                 if (snapshot != null) {
-                    // Phase E: Mark *newly added* assignments as viewed by driver
-                    // Using documentChanges ensures we only check docs once when they enter the result set
-                    snapshot.documentChanges.forEach { change ->
-                        if (change.type == DocumentChange.Type.ADDED) {
-                            val doc = change.document
-                            if (doc.get("driver_viewed_at") == null) {
-                                doc.reference.update("driver_viewed_at", FieldValue.serverTimestamp())
+                    scope.launch {
+                        try {
+                            // Fetch user's creation time to filter out old data
+                            val userDoc = db.collection("users").document(uid).get().await()
+                            val createdAtTimestamp = userDoc.getTimestamp("created_at")
+                            val creationDate = createdAtTimestamp ?: com.google.firebase.Timestamp(0, 0)
+
+                            // Mark *newly added* assignments as viewed
+                            snapshot.documentChanges.forEach { change ->
+                                if (change.type == DocumentChange.Type.ADDED) {
+                                    val doc = change.document
+                                    if (doc.get("driver_viewed_at") == null) {
+                                        doc.reference.update("driver_viewed_at", FieldValue.serverTimestamp())
+                                    }
+                                }
                             }
+
+                            val parsed = snapshot.documents.mapNotNull { doc ->
+                                val data = doc.data ?: return@mapNotNull null
+                                val phase = data["trip_phase"] as? String ?: "pending"
+                                val status = data["status"] as? String ?: "pending"
+                                val docCreatedAt = doc.getTimestamp("created_at") ?: com.google.firebase.Timestamp(0, 0)
+
+                                // Filtering logic:
+                                // 1. Exclude completed trips
+                                // 2. Exclude trips created BEFORE account creation (hygiene)
+                                if (status == "completed" || docCreatedAt.seconds < creationDate.seconds) return@mapNotNull null
+
+                                // Parse pickup location
+                                val rawPickup = data["pickup_location"]
+                                val pickupAddress = when (rawPickup) {
+                                    is String -> rawPickup
+                                    is Map<*, *> -> rawPickup["address"] as? String ?: rawPickup["text"] as? String
+                                    else -> "Unknown Location"
+                                }
+
+                                // Parse dropoff location
+                                val rawDropoff = data["dropoff_location"]
+                                val dropoffAddress = when (rawDropoff) {
+                                    is String -> rawDropoff
+                                    is Map<*, *> -> rawDropoff["address"] as? String ?: rawDropoff["text"] as? String
+                                    else -> "Unknown Location"
+                                }
+
+                                AssignmentModel(
+                                    docId = doc.id,
+                                    scheduleId = (data["schedule_id"] as? Number)?.toString() ?: doc.id.take(8).uppercase(),
+                                    tripPhase = phase,
+                                    scheduleDate = data["schedule_date"] as? String,
+                                    scheduleTime = data["schedule_time"] as? String,
+                                    clientName = data["client_name"] as? String,
+                                    passengerName = data["passenger_name"] as? String,
+                                    passengerPhone = data["passenger_phone"] as? String,
+                                    pickupAddress = pickupAddress,
+                                    dropoffAddress = dropoffAddress,
+                                    returnToPickup = data["return_to_pickup"] as? Boolean ?: false,
+                                    returnPickupTime = data["return_pickup_time"] as? String,
+                                    specialInstructions = data["special_instructions"] as? String,
+                                    totalKm = (data["total_km_travelled"] as? Number)?.toDouble(),
+                                    isOfficial = data["isOfficial"] as? Boolean ?: false
+                                )
+                            }.sortedWith(
+                                compareBy<AssignmentModel> {
+                                    when (it.tripPhase) {
+                                        "pickup", "dropoff", "return_pickup", "ready_to_complete" -> 0
+                                        "accepted" -> 1
+                                        "pending" -> 2
+                                        "completed" -> 3
+                                        else -> 4
+                                    }
+                                }.thenByDescending { it.scheduleDate }
+                            )
+
+                            assignments = parsed
+                            Log.d("AssignmentsScreen", "Loaded ${parsed.size} assignments after client-side filtering")
+                        } catch (e: Exception) {
+                            Log.e("AssignmentsScreen", "Processing error", e)
                         }
                     }
-
-                    val parsed = snapshot.documents.mapNotNull { doc ->
-                        val data = doc.data ?: return@mapNotNull null
-                        val phase = data["trip_phase"] as? String ?: "pending"
-
-
-
-                        // Parse pickup location (handling String or simple Map)
-                        val rawPickup = data["pickup_location"]
-                        val pickupAddress = when (rawPickup) {
-                            is String -> rawPickup
-                            is Map<*, *> -> rawPickup["address"] as? String ?: rawPickup["text"] as? String
-                            else -> "Unknown Location"
-                        }
-
-                        // Parse dropoff location (handling String or simple Map)
-                        val rawDropoff = data["dropoff_location"]
-                        val dropoffAddress = when (rawDropoff) {
-                            is String -> rawDropoff
-                            is Map<*, *> -> rawDropoff["address"] as? String ?: rawDropoff["text"] as? String
-                            else -> "Unknown Location"
-                        }
-
-                        AssignmentModel(
-                            docId = doc.id,
-                            scheduleId = (data["schedule_id"] as? Number)?.toString() ?: doc.id.take(8).uppercase(),
-                            tripPhase = phase,
-                            scheduleDate = data["schedule_date"] as? String,
-                            scheduleTime = data["schedule_time"] as? String,
-                            clientName = data["client_name"] as? String,
-                            passengerName = data["passenger_name"] as? String,
-                            passengerPhone = data["passenger_phone"] as? String,
-                            pickupAddress = pickupAddress,
-                            dropoffAddress = dropoffAddress,
-                            returnToPickup = data["return_to_pickup"] as? Boolean ?: false,
-                            returnPickupTime = data["return_pickup_time"] as? String,
-                            specialInstructions = data["special_instructions"] as? String,
-                            totalKm = (data["total_km_travelled"] as? Number)?.toDouble(),
-                            isOfficial = data["isOfficial"] as? Boolean ?: false
-                        )
-                    }.sortedWith(
-                        compareBy<AssignmentModel> {
-                            when (it.tripPhase) {
-                                "pickup", "dropoff", "return_pickup", "ready_to_complete" -> 0
-                                "accepted" -> 1
-                                "pending" -> 2
-                                "completed" -> 3
-                                else -> 4
-                            }
-                        }.thenByDescending { it.scheduleDate }
-                    )
-
-                    assignments = parsed
-                    Log.d("AssignmentsScreen", "Loaded ${parsed.size} assignments")
                 }
             }
 

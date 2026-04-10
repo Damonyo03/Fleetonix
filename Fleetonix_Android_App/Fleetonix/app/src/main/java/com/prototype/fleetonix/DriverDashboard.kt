@@ -685,6 +685,11 @@ fun DriverDashboard(
 
                 db.collection("accidents").add(accidentData).await()
                 
+                // Set incident_active in drivers collection for blinking indicator on Admin Map
+                if (user?.uid != null) {
+                    db.collection("drivers").document(user.uid).update("incident_active", true).await()
+                }
+                
                 tripActionSuccess = "Accident reported successfully. Emergency services have been notified."
                 showAccidentDialog = false
             } catch (e: Exception) {
@@ -716,27 +721,9 @@ fun DriverDashboard(
                     }
                 }
             }
-            
-        // Listen to vehicle issues
-        val issueSub = db.collection("vehicle_issues")
-            .whereEqualTo("driver_email", email)
-            .whereEqualTo("status", "acknowledged")
-            .orderBy("acknowledged_at", Query.Direction.DESCENDING)
-            .limit(1)
-            .addSnapshotListener { snapshot, _ ->
-                val doc = snapshot?.documents?.firstOrNull()
-                if (doc != null) {
-                    val msg = "Admin acknowledged your vehicle issue report."
-                    if (latestAckMessage != msg) {
-                        latestAckMessage = msg
-                        tripActionSuccess = msg
-                    }
-                }
-            }
 
         onDispose {
             accidentSub.remove()
-            issueSub.remove()
         }
     }
 

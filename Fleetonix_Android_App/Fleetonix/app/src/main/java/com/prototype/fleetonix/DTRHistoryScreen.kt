@@ -43,34 +43,63 @@ fun DTRHistoryScreen(
         if (uid != null || email != null) {
             isLoading = true
             
-            // Listen to both UID and Email without orderBy to avoid index requirements
-            val uidSub = if (uid != null) {
-                db.collection("dtr_logs")
-                    .whereEqualTo("driver_uid", uid)
-                    .limit(100)
-                    .addSnapshotListener { snapshot, _ ->
-                        if (snapshot != null) {
-                            val uidLogs = snapshot.documents.map { it.data ?: emptyMap() }
-                            logs = (logs + uidLogs).distinctBy { it["timestamp"].toString() + (it["action"] ?: "") }
-                                .sortedByDescending { (it["timestamp"] as? com.google.firebase.Timestamp)?.seconds ?: 0L }
-                            isLoading = false
-                        }
+            try {
+                // 1. Fetch user creation date to filter out "ghost" logs from previous account lifecycles
+                var createdAt: com.google.firebase.Timestamp? = null
+                if (uid != null) {
+                    val userSnap = db.collection("users").document(uid).get().await()
+                    createdAt = userSnap.getTimestamp("created_at")
+                }
+                
+                if (createdAt == null && email != null) {
+                    val userQuery = db.collection("users")
+                        .whereEqualTo("email", email)
+                        .limit(1)
+                        .get()
+                        .await()
+                    if (!userQuery.isEmpty) {
+                        createdAt = userQuery.documents[0].getTimestamp("created_at")
                     }
-            } else null
+                }
 
-            val emailSub = if (email != null) {
-                db.collection("dtr_logs")
-                    .whereEqualTo("driver_email", email)
-                    .limit(100)
-                    .addSnapshotListener { snapshot, _ ->
-                        if (snapshot != null) {
-                            val emailLogs = snapshot.documents.map { it.data ?: emptyMap() }
-                            logs = (logs + emailLogs).distinctBy { it["timestamp"].toString() + (it["action"] ?: "") }
-                                .sortedByDescending { (it["timestamp"] as? com.google.firebase.Timestamp)?.seconds ?: 0L }
-                            isLoading = false
+                // Default to a very old date if not found (fallback)
+                val filterDate = createdAt ?: com.google.firebase.Timestamp(0, 0)
+
+                // 2. Listen to logs with date filter
+                val uidSub = if (uid != null) {
+                    db.collection("dtr_logs")
+                        .whereEqualTo("driver_uid", uid)
+                        .whereGreaterThanOrEqualTo("timestamp", filterDate)
+                        .limit(100)
+                        .addSnapshotListener { snapshot, _ ->
+                            if (snapshot != null) {
+                                val uidLogs = snapshot.documents.map { it.data ?: emptyMap() }
+                                logs = (logs + uidLogs).distinctBy { it["timestamp"].toString() + (it["action"] ?: "") }
+                                    .sortedByDescending { (it["timestamp"] as? com.google.firebase.Timestamp)?.seconds ?: 0L }
+                                isLoading = false
+                            }
                         }
-                    }
-            } else null
+                } else null
+
+                val emailSub = if (email != null) {
+                    db.collection("dtr_logs")
+                        .whereEqualTo("driver_email", email)
+                        .whereGreaterThanOrEqualTo("timestamp", filterDate)
+                        .limit(100)
+                        .addSnapshotListener { snapshot, _ ->
+                            if (snapshot != null) {
+                                val emailLogs = snapshot.documents.map { it.data ?: emptyMap() }
+                                logs = (logs + emailLogs).distinctBy { it["timestamp"].toString() + (it["action"] ?: "") }
+                                    .sortedByDescending { (it["timestamp"] as? com.google.firebase.Timestamp)?.seconds ?: 0L }
+                                isLoading = false
+                            }
+                        }
+                } else null
+                
+            } catch (e: Exception) {
+                Log.e("DTRHistory", "Failed to fetch history", e)
+                isLoading = false
+            }
         } else {
             isLoading = false
         }

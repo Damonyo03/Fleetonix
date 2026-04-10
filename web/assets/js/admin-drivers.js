@@ -320,6 +320,14 @@ window.editDriver = async (id) => {
         if (croppedImg) updateData.profile_image_url = croppedImg;
 
         await updateDoc(doc(db, "drivers", id), updateData);
+        
+        // SYNC: Update users collection as well
+        await updateDoc(doc(db, "users", id), {
+            full_name: updateData.driver_name,
+            phone: updateData.driver_phone,
+            updated_at: serverTimestamp()
+        }).catch(err => console.warn("Sync to users failed:", err));
+
         alert("Profile updated successfully!");
     });
     setTimeout(initModalCropper, 100);
@@ -361,6 +369,7 @@ if (addDriverBtn) {
                 await setDoc(doc(db, "users", uid), {
                     full_name: name,
                     email: email,
+                    phone: document.getElementById('modal_phone').value,
                     user_type: "driver",
                     role: "driver",
                     status: "pending_approval",
@@ -382,6 +391,7 @@ if (addDriverBtn) {
 window.deleteDriver = async (id) => {
     if (confirm("Permanently remove this driver and their assets? This action cannot be undone.")) {
         await deleteDoc(doc(db, "drivers", id));
+        await deleteDoc(doc(db, "users", id)).catch(err => console.warn("User deletion failed:", err));
         alert("Driver removed from system.");
     }
 };

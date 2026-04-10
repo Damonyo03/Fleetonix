@@ -25,7 +25,6 @@ onAuthStateChanged(auth, async (user) => {
     // Start Listeners
     listenToSystemLogs();
     listenToTrips();
-    listenToVehicleIssues();
     listenToAccidents();
 });
 
@@ -84,41 +83,7 @@ function listenToTrips() {
     });
 }
 
-/** Listens to vehicle issues from mobile app */
-function listenToVehicleIssues() {
-    const q = query(collection(db, "vehicle_issues"), orderBy("reported_at", "desc"));
-    onSnapshot(q, (snapshot) => {
-        const issues = snapshot.docs.map(d => {
-            const data = d.data();
-            return {
-                id: d.id, source: 'vehicle_issues', type: 'vehicle_issue',
-                title: `Vehicle Issue: ${data.issue_type || 'Reported'}`,
-                message: data.description || 'No description provided',
-                driver: data.driver_email,
-                coords: data.latitude && data.longitude ? `${data.latitude}, ${data.longitude}` : null,
-                created_at: data.reported_at,
-                is_read: false
-            };
-        });
-        mergeAndRender('issues', issues);
-    }, (err) => {
-        onSnapshot(collection(db, "vehicle_issues"), (snapshot) => {
-            const issues = snapshot.docs.map(d => {
-                const data = d.data();
-                return {
-                    id: d.id, source: 'vehicle_issues', type: 'vehicle_issue',
-                    title: `Vehicle Issue: ${data.issue_type || 'Reported'}`,
-                    message: data.description || 'No description provided',
-                    driver: data.driver_email,
-                    coords: data.latitude && data.longitude ? `${data.latitude}, ${data.longitude}` : null,
-                    created_at: data.reported_at,
-                    is_read: false
-                };
-            });
-            mergeAndRender('issues', issues);
-        });
-    });
-}
+
 
 /** Listens to accident reports from mobile app */
 function listenToAccidents() {
@@ -167,7 +132,7 @@ function mergeAndRender(source, items) {
 
     // Mark which ones are "newly" arrived unread alerts
     allNotifs.forEach(n => {
-        const isAlert = n.type === 'accident' || n.type === 'vehicle_issue';
+        const isAlert = n.type === 'accident';
         const isUnread = n.status !== 'acknowledged' && !n.is_read;
         
         if (isAlert && isUnread && !seenNotifs.has(n.id)) {
@@ -187,15 +152,13 @@ function updateStats() {
     const unreadNotifs = allNotifs.filter(n => n.status !== 'acknowledged' && !n.is_read);
     const counts = {
         trip: allNotifs.filter(n => n.type === 'trip').length,
-        issue: allNotifs.filter(n => n.type === 'vehicle_issue' && n.status !== 'acknowledged').length,
         accident: allNotifs.filter(n => n.type === 'accident' && n.status !== 'acknowledged').length,
         total: allNotifs.length,
-        unreadAlerts: allNotifs.filter(n => (n.type === 'accident' || n.type === 'vehicle_issue') && n.status !== 'acknowledged').length
+        unreadAlerts: allNotifs.filter(n => (n.type === 'accident') && n.status !== 'acknowledged').length
     };
 
     if (document.getElementById('totalCount')) document.getElementById('totalCount').textContent = counts.total;
     if (document.getElementById('tripCount')) document.getElementById('tripCount').textContent = counts.trip;
-    if (document.getElementById('issueCount')) document.getElementById('issueCount').textContent = counts.issue;
     if (document.getElementById('accidentCount')) document.getElementById('accidentCount').textContent = counts.accident;
 
     // Synchronize sidebar badge from here if on notifications page
@@ -212,7 +175,6 @@ function renderFiltered() {
     if (currentFilter !== 'all') {
         list = allNotifs.filter(n => {
             if (currentFilter === 'trip') return n.type === 'trip';
-            if (currentFilter === 'vehicle_issue') return n.type === 'vehicle_issue';
             if (currentFilter === 'accident') return n.type === 'accident';
             if (currentFilter === 'system') return n.type === 'system';
             return true;
@@ -252,7 +214,7 @@ function renderNotifications(items) {
                 <div class="notif-body">
                     <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                         <div class="notif-title">${n.title}</div>
-                        ${!isRead && (type === 'accident' || type === 'vehicle_issue') ? 
+                        ${!isRead && (type === 'accident') ? 
                             `<button class="btn-ack" onclick="acknowledgeNotif('${n.id}', '${n.source}')">Acknowledge</button>` : ''}
                     </div>
                     <div class="notif-message">${n.message}</div>
@@ -284,6 +246,19 @@ window.acknowledgeNotif = async function(id, source) {
             acknowledged_at: serverTimestamp(),
             acknowledged_by: auth.currentUser?.email || 'admin'
         });
+        
+        // If it was an accident, clear the incident_active flag on the driver
+        if (source === 'accidents') {
+            const accidentSnap = await getDoc(doc(db, "accidents", id));
+            if (accidentSnap.exists()) {
+                const driverId = accidentSnap.data().driver_uid || accidentSnap.data().driver_id;
+                if (driverId) {
+                    await updateDoc(doc(db, "drivers", driverId), {
+                        incident_active: false
+                    });
+                }
+            }
+        }
         
         console.log("Successfully acknowledged in Firestore");
 
@@ -322,7 +297,7 @@ window.filterBy = function(type, el) {
 };
 
 window.markAllRead = async function() {
-    const unreadAlerts = allNotifs.filter(n => (n.type === 'accident' || n.type === 'vehicle_issue') && n.status !== 'acknowledged');
+    const unreadAlerts = allNotifs.filter(n => (n.type === 'accident') && n.status !== 'acknowledged');
     if (unreadAlerts.length === 0) return;
 
     // Ensure we have access to the Firestore functions in this scope

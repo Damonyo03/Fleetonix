@@ -24,7 +24,8 @@ data class DriverUser(
     val id: String? = null,
     @SerializedName("user_type") val userType: String? = null,
     val name: String? = null,
-    val email: String? = null
+    val email: String? = null,
+    val phone: String? = null
 )
 
 data class DriverProfile(

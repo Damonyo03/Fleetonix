@@ -17,7 +17,6 @@ let activeQuickInfoDriverId = null;
 
 // Notification Counts
 let accidentCount = 0;
-let issueCount = 0;
 
 /**
  * ── Authentication & Layout Initialization ──────────────────────────────

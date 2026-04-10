@@ -53,51 +53,65 @@ fun TripHistoryScreen(
 
         isLoading = true
         
-        // Fetch ALL tickets for this user and filter/sort in memory to avoid missing index errors
-        val uidQuery = db.collection("trip_tickets")
-            .whereEqualTo("driver_uid", uid)
-            .limit(100)
+        try {
+            // 1. Fetch user creation date to filter out legacy tickets
+            var createdAt: com.google.firebase.Timestamp? = null
+            val userSnap = db.collection("users").document(uid).get().await()
+            createdAt = userSnap.getTimestamp("created_at")
+            
+            val filterDate = createdAt ?: com.google.firebase.Timestamp(0, 0)
 
-        val emailQuery = db.collection("trip_tickets")
-            .whereEqualTo("driver_email", emailPruned)
-            .limit(100)
+            // 2. Fetch ALL tickets for this user and filter/sort in memory to avoid missing index errors
+            val uidQuery = db.collection("trip_tickets")
+                .whereEqualTo("driver_uid", uid)
+                .whereGreaterThanOrEqualTo("created_at", filterDate)
+                .limit(100)
 
-        Log.d("TripHistory", "Starting simplified queries for UID: $uid and Email: $emailPruned")
+            val emailQuery = db.collection("trip_tickets")
+                .whereEqualTo("driver_email", emailPruned)
+                .whereGreaterThanOrEqualTo("created_at", filterDate)
+                .limit(100)
 
-        val validStatuses = listOf("completed", "cancelled", "rejected")
+            Log.d("TripHistory", "Starting simplified queries with creation filter: $filterDate")
 
-        val uidListener = uidQuery.addSnapshotListener { snapshot, error ->
-            if (error != null) {
-                Log.e("TripHistoryScreen", "UID Query failed: ${error.message}")
-                isLoading = false
-                return@addSnapshotListener
+            val validStatuses = listOf("completed", "cancelled", "rejected")
+
+            val uidListener = uidQuery.addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e("TripHistoryScreen", "UID Query failed: ${error.message}")
+                    isLoading = false
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    val uidResults = snapshot.documents.mapNotNull { buildTripItem(it) }
+                        .filter { it.status.lowercase() in validStatuses }
+                    
+                    tickets = (tickets + uidResults).distinctBy { it.id }.sortedByDescending { it.date }
+                    isLoading = false
+                }
             }
-            if (snapshot != null) {
-                val uidResults = snapshot.documents.mapNotNull { buildTripItem(it) }
-                    .filter { it.status.lowercase() in validStatuses }
-                
-                tickets = (tickets + uidResults).distinctBy { it.id }.sortedByDescending { it.date }
-                isLoading = false
-            }
-        }
 
-        val emailListener = emailQuery.addSnapshotListener { snapshot, error ->
-            if (error != null) {
-                Log.e("TripHistoryScreen", "Email Query failed: ${error.message}")
-                isLoading = false
-                return@addSnapshotListener
-            }
-            if (snapshot != null) {
-                val emailResults = snapshot.documents.mapNotNull { doc ->
-                    val docUid = doc.getString("driver_uid")
-                    if (docUid == null || docUid == "" || docUid == uid) {
-                        buildTripItem(doc)
-                    } else null
-                }.filter { it.status.lowercase() in validStatuses }
+            val emailListener = emailQuery.addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.e("TripHistoryScreen", "Email Query failed: ${error.message}")
+                    isLoading = false
+                    return@addSnapshotListener
+                }
+                if (snapshot != null) {
+                    val emailResults = snapshot.documents.mapNotNull { doc ->
+                        val docUid = doc.getString("driver_uid")
+                        if (docUid == null || docUid == "" || docUid == uid) {
+                            buildTripItem(doc)
+                        } else null
+                    }.filter { it.status.lowercase() in validStatuses }
 
-                tickets = (tickets + emailResults).distinctBy { it.id }.sortedByDescending { it.date }
-                isLoading = false
+                    tickets = (tickets + emailResults).distinctBy { it.id }.sortedByDescending { it.date }
+                    isLoading = false
+                }
             }
+        } catch (e: Exception) {
+            Log.e("TripHistory", "Setup failed", e)
+            isLoading = false
         }
     }
 
