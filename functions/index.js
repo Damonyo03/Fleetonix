@@ -460,8 +460,7 @@ exports.adminClearData = onRequest({ cors: true }, async (req, res) => {
  * AUTOMATED FLOW: Notify User on Approval
  */
 exports.onUserStatusUpdated = onDocumentUpdated({
-  document: "users/{uid}",
-  secrets: ["GMAIL_APP_PASSWORD"]
+  document: "users/{uid}"
 }, async (event) => {
   const before = event.data.before.data();
   const after = event.data.after.data();
