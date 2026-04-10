@@ -23,13 +23,18 @@ admin.initializeApp();
 setGlobalOptions({ maxInstances: 10 });
 
 // Shared Mail Transport
-const getMailTransport = () => nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: "fleetonix.noreply@gmail.com",
-    pass: process.env.GMAIL_APP_PASSWORD || "",
-  },
-});
+const getMailTransport = () => {
+    if (!process.env.GMAIL_APP_PASSWORD) {
+        logger.warn("CRITICAL: GMAIL_APP_PASSWORD is not set in environment variables. Emails will fail.");
+    }
+    return nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+            user: "fleetonix.noreply@gmail.com",
+            pass: process.env.GMAIL_APP_PASSWORD || "",
+        },
+    });
+};
 
 // RBAC Middleware
 async function requireRole(req, res, allowedRoles = ["super_admin", "admin"]) {
@@ -105,7 +110,7 @@ function getOTPHtmlTemplate(otp, email, isRegistration = false) {
 }
 
 // RESTORED: Password Reset Flows
-exports.sendPasswordResetOTP = onRequest({ cors: true, secrets: ["GMAIL_APP_PASSWORD"] }, async (req, res) => {
+exports.sendPasswordResetOTP = onRequest({ cors: true }, async (req, res) => {
   if (req.method === "OPTIONS") { res.status(204).send(""); return; }
   const { email } = req.body;
   if (!email) return res.status(400).json({ success: false, message: "Email is required" });
@@ -184,7 +189,7 @@ exports.verifyOTP = onRequest({ cors: true }, async (req, res) => {
 });
 
 // MODERNIZED: Admin/Driver Registration & Activation
-exports.sendRegistrationOTP = onRequest({ cors: true, secrets: ["GMAIL_APP_PASSWORD"] }, async (req, res) => {
+exports.sendRegistrationOTP = onRequest({ cors: true }, async (req, res) => {
   if (req.method === "OPTIONS") { res.status(204).send(""); return; }
   const { email } = req.body;
   if (!email) return res.status(400).json({ success: false, message: "Email required" });
@@ -214,7 +219,7 @@ exports.sendRegistrationOTP = onRequest({ cors: true, secrets: ["GMAIL_APP_PASSW
   }
 });
 
-exports.adminCreateUser = onRequest({ cors: true, secrets: ["GMAIL_APP_PASSWORD"] }, async (req, res) => {
+exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
   const caller = await requireRole(req, res, ["super_admin", "admin"]);
   if (!caller) return;
 
