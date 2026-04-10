@@ -77,6 +77,8 @@ data class DriverSchedule(
     @SerializedName("return_to_pickup") val return_to_pickup: Boolean = false,
     @SerializedName("return_pickup_time") val return_pickup_time: String? = null,
     @SerializedName("current_city") val current_city: String? = null,
+    @SerializedName("cancellation_reason") val cancellation_reason: String? = null,
+    @SerializedName("cancelled_at") val cancelled_at: Any? = null,
     @SerializedName("client") val client: DriverClientInfo? = null
 )
 

@@ -55,7 +55,7 @@ object PresenceManager {
         }
     }
 
-    fun updateStatus(context: Context, isOnline: Boolean, isBackground: Boolean? = null) {
+    fun updateStatus(context: Context, isOnline: Boolean, isBackground: Boolean? = null, phone: String? = null) {
         val user = auth.currentUser ?: return
         val email = user.email ?: return
         val status = if (isOnline) "available" else "offline"
@@ -99,6 +99,7 @@ object PresenceManager {
             )
         )
         isBackground?.let { driverUpdateData["is_background"] = it }
+        phone?.let { driverUpdateData["driver_phone"] = it }
 
         // 2. Update 'drivers' collection
         db.collection("drivers").whereEqualTo("driver_email", email).get()
@@ -111,7 +112,7 @@ object PresenceManager {
         Log.d("PresenceManager", "Status updated: $status [Real-time: ${if(isOnline) "online" else "offline"}] for $email")
     }
 
-    fun updateBackgroundStatus(context: Context, isBackground: Boolean) {
+    fun updateBackgroundStatus(context: Context, isBackground: Boolean, phone: String? = null) {
         val user = auth.currentUser ?: return
         val email = user.email ?: return
         
@@ -120,7 +121,7 @@ object PresenceManager {
         val charging = isCharging(context)
         val network = getNetworkType(context)
 
-        val updateData = mapOf(
+        val updateData = mutableMapOf<String, Any>(
             "is_background" to isBackground,
             "status" to "online",
             "lastSeen" to FieldValue.serverTimestamp(),
@@ -132,6 +133,7 @@ object PresenceManager {
                 "timestamp" to FieldValue.serverTimestamp()
             )
         )
+        phone?.let { updateData["driver_phone"] = it }
 
         db.collection("drivers").whereEqualTo("driver_email", email).get()
             .addOnSuccessListener { snapshot ->

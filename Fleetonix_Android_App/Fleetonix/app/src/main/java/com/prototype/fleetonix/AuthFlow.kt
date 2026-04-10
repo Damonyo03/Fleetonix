@@ -90,7 +90,8 @@ fun AuthFlow() {
             if (currentUser != null) {
                 when (event) {
                     Lifecycle.Event.ON_START -> {
-                        PresenceManager.updateStatus(context, true)
+                        val phone = (userData?.get("phone") as? String)
+                        PresenceManager.updateStatus(context, true, phone = phone)
                     }
                     else -> {}
                 }
@@ -107,7 +108,8 @@ fun AuthFlow() {
         auth.addAuthStateListener { firebaseAuth ->
             currentUser = firebaseAuth.currentUser
             if (firebaseAuth.currentUser != null) {
-                PresenceManager.updateStatus(context, true)
+                val phone = (userData?.get("phone") as? String)
+                PresenceManager.updateStatus(context, true, phone = phone)
             } else {
                 isDriverVerified = false
                 isPendingApproval = false
@@ -588,7 +590,8 @@ fun AuthFlow() {
                             showAssignments = true
                         },
                         onLogout = {
-                            PresenceManager.updateStatus(context, false)
+                            val phone = (userData?.get("phone") as? String)
+                            PresenceManager.updateStatus(context, false, phone = phone)
                             auth.signOut()
                             currentUser = null
                             isDriverVerified = false

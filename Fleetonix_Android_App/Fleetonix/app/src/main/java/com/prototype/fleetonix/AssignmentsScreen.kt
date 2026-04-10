@@ -88,6 +88,7 @@ private fun phaseColor(phase: String): Color = when (phase.lowercase()) {
 @Composable
 fun AssignmentCard(
     assignment: AssignmentModel,
+    hasActiveMission: Boolean,
     onAcceptJob: (AssignmentModel) -> Unit
 ) {
     val phase = assignment.tripPhase
@@ -569,6 +570,8 @@ fun AssignmentsScreen(onBack: () -> Unit) {
             }
 
             // Content
+            val hasActiveMission = assignments.any { it.tripPhase.lowercase() !in listOf("pending", "completed") }
+
             when {
                 isLoading -> {
                     Box(
@@ -687,6 +690,7 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                             items(pendingItems, key = { it.docId }) { a ->
                                 AssignmentCard(
                                     assignment = a,
+                                    hasActiveMission = hasActiveMission,
                                     onAcceptJob = { clickedItem ->
                                         selectedItemForAccept = clickedItem
                                         showOdometerDialog = true
@@ -702,7 +706,7 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                                 SectionHeader(title = "Completed", icon = Icons.Default.CheckCircle, color = Color(0xFF10B981))
                             }
                             items(completedItems, key = { it.docId }) { a ->
-                                AssignmentCard(assignment = a, onAcceptJob = {})
+                                AssignmentCard(assignment = a, hasActiveMission = hasActiveMission, onAcceptJob = {})
                             }
                         }
                     }

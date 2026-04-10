@@ -349,7 +349,16 @@ fun DriverDashboard(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val nextSchedule = feed?.schedules?.firstOrNull { it.is_published == true }
+    val nextSchedule = feed?.schedules?.filter { it.is_published == true }
+        ?.sortedByDescending { 
+            when (it.trip_phase?.lowercase()) {
+                "accepted", "en_route_pickup", "picked_up", "en_route_dropoff", "dropped_off" -> 100
+                "pending" -> 50
+                "completed" -> 0
+                else -> 10
+            }
+        }?.firstOrNull()
+
     val tripPhase = nextSchedule?.trip_phase ?: "pending"
     val returnRequired = nextSchedule?.return_to_pickup == true
 
@@ -409,6 +418,11 @@ fun DriverDashboard(
     }
     var tripActionError by remember { mutableStateOf<String?>(null) }
     var tripActionSuccess by remember { mutableStateOf<String?>(null) }
+
+    // Emergency Cancellation states
+    var showCancelDialog by remember { mutableStateOf(false) }
+    var cancelReason by remember { mutableStateOf("") }
+    var isCancelling by remember { mutableStateOf(false) }
 
     val returnToPickup = nextSchedule?.return_to_pickup == true
 
@@ -1916,102 +1930,8 @@ fun DriverDashboard(
                             )
                         }
 
-                        // Quick Actions simplified: Only sync remains here.
-                        // Trip buttons have been moved to the Road-Optimized footer.
-                        if (nextSchedule != null && tripPhase == "pending") {
-                            Button(
-                                onClick = {
-                                    val scheduleId = nextSchedule?.scheduleId ?: return@Button
-                                    val token = session.sessionToken ?: return@Button
-
-                                    scope.launch {
-                                        try {
-                                            isStartingTrip = true
-                                            tripActionError = null
-                                            tripActionSuccess = null
-                                            
-                                            // Reset tracking for new job
-                                            actualRoutePoints.clear()
-                                            totalDistanceMetres = 0f
-                                            
-                                            // Notify service to start accumulating NEW route
-                                            val startTripIntent = Intent(context, LocationService::class.java).apply {
-                                                action = LocationService.ACTION_START_TRIP
-                                                putExtra(LocationService.EXTRA_DRIVER_UID, auth.currentUser?.uid)
-                                                putExtra(LocationService.EXTRA_DRIVER_EMAIL, auth.currentUser?.email?.lowercase()?.trim() ?: "")
-                                                putExtra(LocationService.EXTRA_SCHEDULE_ID, nextSchedule?.docId ?: "")
-                                            }
-                                            context.startService(startTripIntent)
-
-                                            val docId = nextSchedule?.docId ?: throw Exception("Schedule ID missing")
-                                            db.collection("schedules").document(docId).update(
-                                                "status", "accepted",
-                                                "trip_phase", "accepted",
-                                                "accepted_at", FieldValue.serverTimestamp()
-                                            ).await()
-
-                                            acceptedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
-                                            
-                                            // Create initial real-time Trip Ticket
-                                            val initialTicketData = hashMapOf(
-                                                "schedule_id" to docId,
-                                                "driver_uid" to (auth.currentUser?.uid ?: ""),
-                                                "driver_email" to (auth.currentUser?.email?.lowercase()?.trim() ?: ""),
-                                                "driver_name" to liveDriverName,
-                                                "passenger_name" to (nextSchedule?.passenger_name ?: nextSchedule?.client_name ?: "Unknown"),
-                                                "client_name" to (nextSchedule?.client_name ?: "Jettsan"),
-                                                "vehicle_plate" to (session.driver?.plateNumber ?: ""),
-                                                "pickup_location" to (nextSchedule?.pickup_location?.address ?: nextSchedule?.pickup_location?.text ?: "Unknown"),
-                                                "dropoff_location" to (nextSchedule?.dropoff_location?.address ?: nextSchedule?.dropoff_location?.text ?: "Unknown"),
-                                                "time_of_departure" to (pickedUpAt ?: ""),
-                                                "time_of_arrival" to "",
-                                                "total_km" to 0.0,
-                                                "route_polyline" to "",
-                                                "status" to "in_progress",
-                                                "created_at" to FieldValue.serverTimestamp()
-                                            )
-                                            val ticketRef = db.collection("trip_tickets").add(initialTicketData).await()
-                                            activeTicketId = ticketRef.id
-                                            
-                                            // Sync to drivers collection for Admin visibility
-                                            val driverEmail = auth.currentUser?.email
-                                            if (driverEmail != null) {
-                                                val dSnap = db.collection("drivers")
-                                                    .whereEqualTo("driver_email", driverEmail.lowercase().trim())
-                                                    .get().await()
-                                                dSnap.documents.firstOrNull()?.reference?.update(
-                                                    "current_status", "on_schedule",
-                                                    "current_trip_id", docId,
-                                                    "current_trip_phase", "accepted",
-                                                    "active_ticket_id", activeTicketId
-                                                )
-                                            }
-
-                                            // Manual DTR transition: Automated Time-In removed.
-                                            // Handled by explicit buttons now.
-
-                                            tripActionSuccess = "Booking accepted! Use the Start Trip button when ready to move."
-                                        } catch (e: Exception) {
-                                            tripActionError = "Failed to accept: ${e.message}"
-                                        } finally {
-                                            isStartingTrip = false
-                                        }
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                enabled = !isAnyActionLoading && nextSchedule != null
-                            ) {
-                                if (isStartingTrip) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(20.dp),
-                                        color = Color.White,
-                                        strokeWidth = 2.dp
-                                    )
-                                } else {
-                                    Text("Accept Booking")
-                                }
-                            }
-                        }
+                        // Legacy Accept button removed from main scroll to prevent confusion.
+                        // Acceptance handled in AssignmentsScreen or via New Task Overlay.
                     }
                 }
                     
@@ -2055,6 +1975,22 @@ fun DriverDashboard(
                                         color = TextSecondary,
                                         style = MaterialTheme.typography.bodySmall
                                     )
+                                }
+                                
+                                // EMERGENCY CANCEL (Only for accepted/active trips)
+                                if (phase != "pending" && phase != "completed") {
+                                    OutlinedButton(
+                                        onClick = { showCancelDialog = true },
+                                        contentPadding = PaddingValues(horizontal = 12.dp),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF6B6B)),
+                                        border = BorderStroke(1.dp, Color(0xFFFF6B6B).copy(alpha = 0.5f)),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.height(36.dp)
+                                    ) {
+                                        Icon(Icons.Default.Cancel, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("CANCEL", style = MaterialTheme.typography.labelSmall)
+                                    }
                                 }
                             }
 
@@ -2597,6 +2533,61 @@ fun DriverDashboard(
             )
         }
 
+        if (showCancelDialog) {
+            EmergencyCancellationDialog(
+                onConfirm = { reason ->
+                    scope.launch {
+                        try {
+                            isCancelling = true
+                            val dId = nextSchedule?.docId ?: throw Exception("Trip ID missing")
+                            
+                            // 1. Update Schedule
+                            db.collection("schedules").document(dId).update(
+                                "status", "cancelled",
+                                "trip_phase", "completed",
+                                "cancellation_reason", reason,
+                                "cancelled_at", FieldValue.serverTimestamp()
+                            ).await()
+
+                            // 2. Update Trip Ticket if exists
+                            activeTicketId?.let { tId ->
+                                db.collection("trip_tickets").document(tId).update(
+                                    "status", "cancelled",
+                                    "cancellation_reason", reason,
+                                    "cancelled_at", FieldValue.serverTimestamp()
+                                ).await()
+                            }
+
+                            // 3. Update Driver Status
+                            val email = auth.currentUser?.email
+                            if (email != null) {
+                                val dSnap = db.collection("drivers")
+                                    .whereEqualTo("driver_email", email.lowercase().trim())
+                                    .get().await()
+                                dSnap.documents.firstOrNull()?.reference?.update(
+                                    "current_status", "available",
+                                    "current_trip_id", "",
+                                    "current_trip_phase", "completed",
+                                    "active_ticket_id", "",
+                                    "last_updated", FieldValue.serverTimestamp()
+                                )?.await()
+                            }
+
+                            showCancelDialog = false
+                            tripActionSuccess = "Trip cancelled and reported."
+                            activeTicketId = null
+                            actualRoutePoints.clear()
+                        } catch (e: Exception) {
+                            tripActionError = "Cancellation Failed: ${e.message}"
+                        } finally {
+                            isCancelling = false
+                        }
+                    }
+                },
+                onDismiss = { showCancelDialog = false }
+            )
+        }
+
     // Navigation Overlays
     if (showProfile) {
             BackHandler { showProfile = false }
@@ -2754,6 +2745,96 @@ fun OdometerDialog(
                     colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
                 ) {
                     Text("CONFIRM", fontWeight = FontWeight.Bold, color = Midnight)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EmergencyCancellationDialog(
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var reason by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = CardBlue,
+            modifier = androidx.compose.ui.Modifier.padding(16.dp)
+        ) {
+            Column(
+                modifier = androidx.compose.ui.Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Icon(
+                    Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = Color(0xFFFF6B6B),
+                    modifier = androidx.compose.ui.Modifier.size(48.dp)
+                )
+
+                Text(
+                    "EMERGENCY CANCELLATION",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    textAlign = TextAlign.Center
+                )
+                
+                Text(
+                    "Please provide a valid reason for canceling this trip. This will be reviewed by the administration.",
+                    color = TextSecondary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center
+                )
+
+                OutlinedTextField(
+                    value = reason,
+                    onValueChange = { reason = it; if(it.isNotBlank()) error = null },
+                    label = { Text("Reason for Cancellation") },
+                    placeholder = { Text("e.g., Vehicle breakdown, Medical emergency") },
+                    modifier = androidx.compose.ui.Modifier.fillMaxWidth().height(120.dp),
+                    maxLines = 5,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color(0xFFFF6B6B),
+                        cursorColor = Color(0xFFFF6B6B)
+                    )
+                )
+
+                if (error != null) {
+                    Text(error!!, color = Color(0xFFFF6B6B), style = MaterialTheme.typography.bodySmall)
+                }
+
+                Row(
+                    modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = androidx.compose.ui.Modifier.weight(1f).height(56.dp)
+                    ) {
+                        Text("GO BACK", color = TextSecondary)
+                    }
+
+                    Button(
+                        onClick = {
+                            if (reason.trim().length < 5) {
+                                error = "Please provide a more detailed reason (min 5 chars)"
+                            } else {
+                                onConfirm(reason.trim())
+                            }
+                        },
+                        modifier = androidx.compose.ui.Modifier.weight(1f).height(56.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6B6B))
+                    ) {
+                        Text("CANCEL TRIP", fontWeight = FontWeight.Bold, color = Color.White)
+                    }
                 }
             }
         }
