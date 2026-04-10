@@ -77,7 +77,10 @@ function loadTickets() {
                 picked_up_at: data.picked_up_at || '—',
                 time_of_arrival: data.time_of_arrival || '—',
                 total_km_travelled: data.total_km || data.total_km_travelled || 0,
-                route_polyline: data.route_polyline || '',
+                route_polyline: data.recommended_route_polyline || data.route_polyline || '',
+                actual_route_polyline: data.actual_route_polyline || '',
+                odometer_start: data.odometer_start || 0,
+                odometer_end: data.odometer_end || 0,
                 completed_at: data.created_at,
                 schedule_date: data.schedule_date || '',
                 schedule_time: data.schedule_time || '',
@@ -247,10 +250,14 @@ function renderTickets(tickets) {
                     ${ticket.schedule_date ? `· <i class="fas fa-calendar"></i> ${ticket.schedule_date} ${ticket.schedule_time || ''}` : ''}
                 </div>
 
-                ${ticket.route_polyline ? `
-                    <button class="btn-view-route" onclick="viewTripRoute('${ticket.id}', '${ticket.route_polyline}', '${ticket.driver_name}')" style="width: 100%; margin-top: 15px; background: rgba(20, 184, 166, 0.1); border: 1px solid rgba(20, 184, 166, 0.3); color: var(--accent-teal); padding: 10px; border-radius: 6px; cursor: pointer; transition: all 0.3s ease;">
-                        <i class="fas fa-map-marked-alt"></i> View Full Traveled Route Map
+                ${(ticket.route_polyline || ticket.actual_route_polyline) ? `
+                    <button class="btn-view-route" onclick="viewTripRoute('${ticket.id}', '${ticket.route_polyline}', '${ticket.actual_route_polyline}', '${ticket.driver_name}')" style="width: 100%; margin-top: 15px; background: rgba(20, 184, 166, 0.1); border: 1px solid rgba(20, 184, 166, 0.3); color: var(--accent-teal); padding: 10px; border-radius: 6px; cursor: pointer; transition: all 0.3s ease;">
+                        <i class="fas fa-map-marked-alt"></i> View Trip Transparency Map
                     </button>
+                    <div style="display: flex; justify-content: space-between; margin-top: 5px; font-size: 0.7rem; color: var(--text-muted); padding: 0 4px;">
+                        <span><i class="fas fa-tachometer-alt"></i> Odo Start: ${ticket.odometer_start}</span>
+                        <span>Odo End: ${ticket.odometer_end} <i class="fas fa-flag-checkered"></i></span>
+                    </div>
                 ` : ''}
 
                 ${(!ticket.isValidated && (userRole === 'admin' || userRole === 'super_admin' || userRole === 'company_admin')) ? `
@@ -284,9 +291,9 @@ function formatTimestamp(ts) {
     if (!ts) return '—';
     try {
         const d = ts.toDate ? ts.toDate() : new Date(ts);
-        return d.toLocaleString('en-PH', {
+        return d.toLocaleString('en-US', {
             year: 'numeric', month: 'short', day: 'numeric',
-            hour: '2-digit', minute: '2-digit'
+            hour: '2-digit', minute: '2-digit', hour12: true
         });
     } catch {
         return '—';
@@ -400,7 +407,7 @@ window.exportTripTickets = function () {
 let routeMap = null;
 let currentPolyline = null;
 
-window.viewTripRoute = function (id, polyline, driverName) {
+window.viewTripRoute = function (id, recommendedPolyline, actualPolyline, driverName) {
     const modal = document.getElementById('routeModal');
     if (!modal) return;
 
@@ -410,7 +417,7 @@ window.viewTripRoute = function (id, polyline, driverName) {
     if (!routeMap) {
         routeMap = new google.maps.Map(document.getElementById('routeMap'), {
             zoom: 13,
-            center: { lat: 0, lng: 0 },
+            center: { lat: 14.5995, lng: 120.9842 },
             styles: [
                 { "elementType": "geometry", "stylers": [{ "color": "#242f3e" }] },
                 { "elementType": "labels.text.stroke", "stylers": [{ "color": "#242f3e" }] },
@@ -432,29 +439,39 @@ window.viewTripRoute = function (id, polyline, driverName) {
         });
     }
 
-    // Clear existing polyline
-    if (currentPolyline) {
-        currentPolyline.setMap(null);
+    // Clear existing polylines
+    if (window._recommendedPath) window._recommendedPath.setMap(null);
+    if (window._actualPath) window._actualPath.setMap(null);
+
+    const bounds = new google.maps.LatLngBounds();
+
+    if (recommendedPolyline && recommendedPolyline !== 'undefined') {
+        const path = google.maps.geometry.encoding.decodePath(recommendedPolyline);
+        window._recommendedPath = new google.maps.Polyline({
+            path: path,
+            strokeColor: '#64748b',
+            strokeOpacity: 0.6,
+            strokeWeight: 4,
+            map: routeMap,
+            icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 2 }, offset: '0', repeat: '10px' }]
+        });
+        path.forEach(p => bounds.extend(p));
     }
 
-    try {
-        const decodedPath = google.maps.geometry.encoding.decodePath(polyline);
-
-        currentPolyline = new google.maps.Polyline({
-            path: decodedPath,
-            geodesic: true,
-            strokeColor: '#14b8a6',
+    if (actualPolyline && actualPolyline !== 'undefined') {
+        const path = google.maps.geometry.encoding.decodePath(actualPolyline);
+        window._actualPath = new google.maps.Polyline({
+            path: path,
+            strokeColor: '#00d4ff',
             strokeOpacity: 1.0,
-            strokeWeight: 5,
+            strokeWeight: 6,
             map: routeMap
         });
+        path.forEach(p => bounds.extend(p));
+    }
 
-        // Fit bounds
-        const bounds = new google.maps.LatLngBounds();
-        decodedPath.forEach(p => bounds.extend(p));
+    if (!bounds.isEmpty()) {
         routeMap.fitBounds(bounds);
-    } catch (e) {
-        console.error("Error decoding polyline:", e);
     }
 };
 

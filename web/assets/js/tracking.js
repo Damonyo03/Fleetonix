@@ -64,6 +64,10 @@ async function initTracking() {
     }
 }
 
+let recommendedPath = null;
+let actualPathLine = null;
+let actualPathPoints = [];
+
 function initMap(tripData) {
     const defaultPos = { lat: 14.5995, lng: 120.9842 }; // Manila
     
@@ -92,7 +96,7 @@ function initMap(tripData) {
             icon: {
                 path: google.maps.SymbolPath.CIRCLE,
                 scale: 10,
-                fillColor: "#00d4ff",
+                fillColor: "#00ff88",
                 fillOpacity: 1,
                 strokeWeight: 2,
                 strokeColor: "#ffffff",
@@ -100,41 +104,74 @@ function initMap(tripData) {
             title: "Destination"
         });
     }
+
+    // Recommended Route (Dashed)
+    const poly = tripData.recommended_route_polyline || tripData.route_polyline;
+    if (poly) {
+        try {
+            const decodedPath = google.maps.geometry.encoding.decodePath(poly);
+            recommendedPath = new google.maps.Polyline({
+                path: decodedPath,
+                strokeColor: "#64748b",
+                strokeOpacity: 0.6,
+                strokeWeight: 4,
+                map: googleMap,
+                icons: [{
+                    icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 2 },
+                    offset: '0',
+                    repeat: '10px'
+                }]
+            });
+        } catch (e) {
+            console.error("Error decoding recommended path:", e);
+        }
+    }
+
+    // Initialize Actual Route Line
+    actualPathLine = new google.maps.Polyline({
+        path: [],
+        strokeColor: "#00d4ff",
+        strokeOpacity: 1.0,
+        strokeWeight: 6,
+        map: googleMap
+    });
 }
 
 function updateDriverLocation(loc) {
-    // Read the exact keys pushed by the Android app
     const pos = { 
         lat: loc.current_latitude || loc.latitude, 
         lng: loc.current_longitude || loc.longitude 
     };
 
-    // Safety check: skip if coordinates are missing to prevent marker crash
     if (!pos.lat || !pos.lng) return;
+
+    // Update actual path
+    actualPathPoints.push(pos);
+    actualPathLine.setPath(actualPathPoints);
 
     if (!driverMarker) {
         driverMarker = new google.maps.Marker({
             position: pos,
             map: googleMap,
             icon: {
-                url: 'img/car-marker.png', // Custom car icon
+                url: 'img/car-marker.png',
                 scaledSize: new google.maps.Size(40, 40),
                 anchor: new google.maps.Point(20, 20)
             }
         });
         googleMap.setCenter(pos);
     } else {
-        // Smoothly move marker
         animateMarker(driverMarker, pos);
     }
 
-    // Adjust bounds to show both driver and destination
-    if (destinationMarker) {
-        const bounds = new google.maps.LatLngBounds();
-        bounds.extend(driverMarker.getPosition());
-        bounds.extend(destinationMarker.getPosition());
-        googleMap.fitBounds(bounds, 100);
+    // Adjust bounds
+    const bounds = new google.maps.LatLngBounds();
+    bounds.extend(pos);
+    if (destinationMarker) bounds.extend(destinationMarker.getPosition());
+    if (actualPathPoints.length > 1) {
+        actualPathPoints.forEach(p => bounds.extend(p));
     }
+    googleMap.fitBounds(bounds, 100);
 }
 
 function animateMarker(marker, newPos) {

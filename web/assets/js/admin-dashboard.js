@@ -273,10 +273,26 @@ function createDotIcon(d, isMoving) {
         statusClass = 'accident';
     } else if (isStale) {
         statusClass = 'stale';
-    } else if (status === 'on_trip' || status === 'busy') {
-        statusClass = 'on_trip';
-    } else if (status === 'on_schedule' || isMoving) {
-        statusClass = 'pickup';
+    } else {
+        const tripPhase = d.current_trip_phase || 'none';
+        switch(tripPhase) {
+            case 'accepted': 
+            case 'on_schedule':
+                statusClass = 'on_schedule'; break;
+            case 'en_route_pickup':
+            case 'pickup':
+                statusClass = 'pickup'; break;
+            case 'picked_up':
+            case 'en_route_dropoff':
+                statusClass = 'dropoff'; break;
+            case 'completed':
+            case 'dropped_off':
+                statusClass = 'completed'; break;
+            default:
+                if (status === 'busy' || status === 'on_trip') statusClass = 'dropoff';
+                else if (isMoving) statusClass = 'pickup';
+                else statusClass = 'available';
+        }
     }
 
     const pulseHtml = isMoving || statusClass === 'accident' ? '<div class="dot-pulse"></div>' : '';
@@ -425,15 +441,12 @@ function showQuickInfoPanel(id, d) {
                 <div class="qip-item-value">${d.vehicle_assigned || '---'} • ${d.plate_number || '---'}</div>
             </div>
             <div>
-                <div class="qip-item-label">Velocity</div>
-                <div class="qip-item-value text-accent-green">${speedKmh} km/h</div>
+                <div class="qip-item-label">Contact Number</div>
+                <div class="qip-item-value text-accent-blue">${d.mobile_number || d.driver_phone || '---'}</div>
             </div>
             <div>
-                <div class="qip-item-label">Battery Level</div>
-                <div class="qip-item-value flex items-center gap-1.5">
-                    <i class="fas fa-battery-three-quarters text-[10px] text-slate-400"></i>
-                    ${battery}%
-                </div>
+                <div class="qip-item-label">Velocity</div>
+                <div class="qip-item-value text-accent-green">${speedKmh} km/h</div>
             </div>
             <div>
                 <div class="qip-item-label">Current City</div>

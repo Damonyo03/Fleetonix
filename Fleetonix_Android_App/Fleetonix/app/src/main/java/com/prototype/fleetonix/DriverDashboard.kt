@@ -2561,7 +2561,7 @@ fun DriverDashboard(
                             
                             // 2. Update Schedule with Odometer
                             if (isStarting) {
-                                val timestampStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+                                val timestampStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("hh:mm a"))
                                 val updateData = mapOf(
                                     "odometer_start" to mileage,
                                     "trip_phase" to "picked_up",
@@ -2616,6 +2616,7 @@ fun DriverDashboard(
                                 "odometer_end", endOdometerValue,
                                 "trip_phase", "completed",
                                 "status", "completed",
+                                "actual_route_polyline" to GoogleMapsService.encodePolyline(actualRoutePoints),
                                 "completed_at", FieldValue.serverTimestamp()
                             ).await()
                             
@@ -2985,5 +2986,5 @@ fun EmergencyCancellationDialog(
 
 @RequiresApi(Build.VERSION_CODES.O)
 fun formatCurrentTime(): String {
-    return java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+    return java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("hh:mm a"))
 }

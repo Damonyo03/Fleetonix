@@ -24,6 +24,8 @@
     --accent-error: #ff4d4d;
     --accent-warning: #ffcc00; /* Bright Gold */
     --accent-orange: #ff9f43;  /* Safety Orange */
+    --accent-teal-bright: #1dd1a1; /* Teal for Drop-off */
+    --accent-emerald: #10b981;  /* Emerald for Completed */
     --accent-stale: #4a5568;   /* Deep Slate */
     
     /* Gradients */
@@ -544,9 +546,10 @@ body {
     box-shadow: 0 0 10px currentcolor;
 }
 .driver-status.available { color: var(--accent-blue); background: currentcolor; box-shadow: 0 0 12px var(--accent-blue); }
-.driver-status.on_schedule { color: var(--accent-green); background: currentcolor; box-shadow: 0 0 12px var(--accent-green); }
-.driver-status.pickup, .driver-status.in_progress { color: var(--accent-green); background: currentcolor; box-shadow: 0 0 12px var(--accent-green); }
-.driver-status.dropoff { color: var(--accent-green); background: currentcolor; box-shadow: 0 0 12px var(--accent-green); }
+.driver-status.on_schedule, .driver-status.accepted { color: var(--accent-blue); background: currentcolor; box-shadow: 0 0 12px var(--accent-blue); }
+.driver-status.pickup, .driver-status.en_route_pickup { color: var(--accent-orange); background: currentcolor; box-shadow: 0 0 12px var(--accent-orange); }
+.driver-status.dropoff, .driver-status.picked_up, .driver-status.en_route_dropoff { color: var(--accent-teal-bright); background: currentcolor; box-shadow: 0 0 12px var(--accent-teal-bright); }
+.driver-status.completed, .driver-status.dropped_off { color: var(--accent-emerald); background: currentcolor; box-shadow: 0 0 12px var(--accent-emerald); }
 .driver-status.offline { color: var(--accent-stale); background: currentcolor; opacity: 0.5; }
 
 /* Pulse Animation for Live Updates */
@@ -831,9 +834,10 @@ body {
 /* Status Dot Mapping Enhancements */
 .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 8px; }
 .status-dot.available { background-color: var(--accent-blue); box-shadow: 0 0 8px var(--accent-blue); }
-.status-dot.on_schedule, .status-dot.accepted { background-color: var(--accent-green); }
-.status-dot.pickup, .status-dot.in_progress { background-color: var(--accent-green); }
-.status-dot.dropoff { background-color: var(--accent-green); }
+.status-dot.on_schedule, .status-dot.accepted { background-color: var(--accent-blue); box-shadow: 0 0 8px var(--accent-blue); }
+.status-dot.pickup, .status-dot.en_route_pickup { background-color: var(--accent-orange); box-shadow: 0 0 8px var(--accent-orange); }
+.status-dot.dropoff, .status-dot.picked_up, .status-dot.en_route_dropoff { background-color: var(--accent-teal-bright); box-shadow: 0 0 8px var(--accent-teal-bright); }
+.status-dot.completed, .status-dot.dropped_off { background-color: var(--accent-emerald); box-shadow: 0 0 8px var(--accent-emerald); }
 .status-dot.offline { background-color: var(--accent-stale); }
 
 /* DTR Specific Pills */

@@ -1,6 +1,7 @@
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, updateDoc, deleteDoc, setDoc, addDoc, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { initLayout, showModal, hideModal } from "./modules/ui.js";
 
@@ -8,6 +9,7 @@ import { initLayout, showModal, hideModal } from "./modules/ui.js";
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
+const storage = getStorage(app);
 
 // Secondary app for creating users without logging out
 const secondaryApp = getApps().find(a => a.name === "Secondary") || initializeApp(firebaseConfig, "Secondary");
@@ -317,16 +319,28 @@ window.editDriver = async (id) => {
             current_mileage: parseFloat(document.getElementById('modal_mileage').value) || 0,
             updated_at: serverTimestamp()
         };
-        if (croppedImg) updateData.profile_image_url = croppedImg;
+        if (croppedImg) {
+            try {
+                const storageRef = ref(storage, `profile_photos/${id}.jpg`);
+                await uploadString(storageRef, croppedImg, 'data_url');
+                updateData.profile_image_url = await getDownloadURL(storageRef);
+            } catch (e) {
+                console.error("Image upload failed:", e);
+                alert("Image upload failed, but other details will be saved.");
+            }
+        }
 
         await updateDoc(doc(db, "drivers", id), updateData);
         
         // SYNC: Update users collection as well
-        await updateDoc(doc(db, "users", id), {
+        const userUpdate = {
             full_name: updateData.driver_name,
             phone: updateData.driver_phone,
             updated_at: serverTimestamp()
-        }).catch(err => console.warn("Sync to users failed:", err));
+        };
+        if (updateData.profile_image_url) userUpdate.profile_image_url = updateData.profile_image_url;
+
+        await updateDoc(doc(db, "users", id), userUpdate).catch(err => console.warn("Sync to users failed:", err));
 
         alert("Profile updated successfully!");
     });
@@ -349,7 +363,16 @@ if (addDriverBtn) {
             try {
                 const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
                 const uid = userCredential.user.uid;
-                const croppedImg = document.getElementById('cropped_image_base64').value;
+                let finalImageUrl = "";
+                if (croppedImg) {
+                    try {
+                        const storageRef = ref(storage, `profile_photos/${uid}.jpg`);
+                        await uploadString(storageRef, croppedImg, 'data_url');
+                        finalImageUrl = await getDownloadURL(storageRef);
+                    } catch (e) {
+                        console.error("Image upload failed:", e);
+                    }
+                }
 
                 await setDoc(doc(db, "drivers", uid), {
                     driver_name: name,
@@ -360,7 +383,7 @@ if (addDriverBtn) {
                     vehicle_assigned: document.getElementById('modal_vehicle').value,
                     car_details: document.getElementById('modal_type').value,
                     license_number: document.getElementById('modal_license').value,
-                    profile_image_url: croppedImg || "",
+                    profile_image_url: finalImageUrl,
                     current_status: "offline",
                     isFirstLogin: true,
                     created_at: serverTimestamp()
@@ -373,6 +396,7 @@ if (addDriverBtn) {
                     user_type: "driver",
                     role: "driver",
                     status: "pending_approval",
+                    profile_image_url: finalImageUrl,
                     isFirstLogin: true,
                     created_at: serverTimestamp()
                 });
