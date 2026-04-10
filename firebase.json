@@ -13,12 +13,7 @@
       "**/.*",
       "**/node_modules/**"
     ],
-    "rewrites": [
-      {
-        "source": "/api/address_search",
-        "function": "addressSearch"
-      }
-    ],
+    "rewrites": [],
     "headers": [
       {
         "source": "**/*.@(eot|otf|ttf|ttc|woff|woff2|font.css)",
