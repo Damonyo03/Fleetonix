@@ -142,17 +142,25 @@ fun AuthFlow() {
                     val status = snapshot.getString("status") ?: "active"
                     val isFirstTime = (snapshot.getBoolean("isFirstLogin") ?: false)
                     
-                    isPendingApproval = (status == "pending_approval" || status == "pending")
-                    
-                    if (isFirstTime) {
-                        isFirstLoginMode = true
-                        // Only force verification if not already verified in this session
-                    } else {
+                    if (status == "active") {
+                        // Admin has activated the account - bypass all gates
+                        isPendingApproval = false
                         isFirstLoginMode = false
                         isDriverVerified = true
+                        Log.d("AuthFlow", "Account is ACTIVE. Overriding all gates for $uid")
+                    } else {
+                        isPendingApproval = (status == "pending_approval" || status == "pending")
+                        
+                        if (isFirstTime) {
+                            isFirstLoginMode = true
+                            // Don't reset isDriverVerified if it was set explicitly in this session
+                        } else {
+                            isFirstLoginMode = false
+                            isDriverVerified = true 
+                        }
                     }
                     
-                    Log.d("AuthFlow", "Status Update: $status, Pending: $isPendingApproval, Verified: $isDriverVerified")
+                    Log.d("AuthFlow", "Status Update: $status, Pending: $isPendingApproval, Verified: $isDriverVerified, FirstMode: $isFirstLoginMode")
                 }
             } else if (email != null) {
                 // Fallback for document structure migration if UID doc is missing
@@ -163,12 +171,20 @@ fun AuthFlow() {
                             .get()
                             .await()
                         if (!query.isEmpty) {
-                            val docData = query.documents[0].data
-                            userData = docData
-                            userRole = query.documents[0].getString("user_type") ?: "driver"
-                            val status = query.documents[0].getString("status") ?: "active"
-                            isPendingApproval = (status == "pending_approval")
-                            isDriverVerified = (status == "active")
+                            val doc = query.documents[0]
+                            val data = doc.data
+                            userData = data
+                            userRole = doc.getString("user_type") ?: "driver"
+                            val status = doc.getString("status") ?: "active"
+                            
+                            if (status == "active") {
+                                isPendingApproval = false
+                                isFirstLoginMode = false
+                                isDriverVerified = true
+                            } else {
+                                isPendingApproval = (status == "pending_approval")
+                                isDriverVerified = (snapshot?.getBoolean("isFirstLogin") == false)
+                            }
                         }
                     } catch (e: Exception) {
                         Log.e("AuthFlow", "Fallback lookup failed", e)
