@@ -230,10 +230,30 @@ function getDriverFormContent(driver = {}) {
 
         <div class="form-group">
             <label>Operating Status</label>
-            <div class="alert alert-info" style="font-size: 0.8rem; background: rgba(0, 212, 255, 0.05); border: 1px dashed var(--accent-blue); padding: 10px;">
-                <i class="fas fa-sync"></i> Current Status: <strong style="color: var(--accent-blue); text-transform: uppercase;">${(driver.current_status || 'Offline').replace('_',' ')}</strong>
-                <p style="margin: 4px 0 0; font-size: 0.7rem; color: var(--text-muted);">This status is strictly synchronized with the Driver's Android application activity and cannot be modified manually.</p>
+            <div class="alert" id="status-alert-box" style="font-size: 0.8rem; padding: 10px; border-radius: 8px; border: 1px dashed">
+                <i class="fas fa-sync"></i> Current Status: <strong id="status-text-val" style="text-transform: uppercase;">${(driver.current_status || 'Offline').replace('_',' ')}</strong>
+                <p style="margin: 4px 0 0; font-size: 0.7rem; color: var(--text-muted);">This status is synchronized with the Driver's Android application activity.</p>
             </div>
+            <script>
+                (function() {
+                    const status = "${driver.current_status || 'offline'}".toLowerCase();
+                    const box = document.getElementById('status-alert-box');
+                    const text = document.getElementById('status-text-val');
+                    let color = 'var(--accent-blue)';
+                    if (status === 'available' || status === 'online') color = 'var(--accent-green)';
+                    else if (status.includes('pickup')) color = 'var(--accent-orange)';
+                    else if (status.includes('dropoff') || status === 'busy') color = 'var(--accent-teal-bright)';
+                    else if (status.includes('completed')) color = 'var(--accent-emerald)';
+                    else if (status === 'offline') color = 'var(--accent-stale)';
+                    
+                    box.style.borderColor = color;
+                    box.style.background = color.replace('var(', 'rgba(').replace(')', ', 0.05)');
+                    if (box.style.background.startsWith('var')) { // Fallback for raw var replacement if not simple
+                         box.style.backgroundColor = 'rgba(255,255,255,0.02)';
+                    }
+                    text.style.color = color;
+                })();
+            </script>
         </div>
         <input type="hidden" id="cropped_image_base64">
     `;

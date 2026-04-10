@@ -295,7 +295,7 @@ function createDotIcon(d, isMoving) {
         }
     }
 
-    const pulseHtml = isMoving || statusClass === 'accident' ? '<div class="dot-pulse"></div>' : '';
+    const pulseHtml = isMoving || statusClass === 'accident' || statusClass === 'available' ? '<div class="dot-pulse"></div>' : '';
     
     return L.divIcon({
         className: 'custom-driver-marker',

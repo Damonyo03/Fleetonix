@@ -545,7 +545,12 @@ body {
     border-radius: 50%;
     box-shadow: 0 0 10px currentcolor;
 }
-.driver-status.available { color: var(--accent-blue); background: currentcolor; box-shadow: 0 0 12px var(--accent-blue); }
+.driver-status.available { 
+    color: var(--accent-green); 
+    background: currentcolor; 
+    box-shadow: 0 0 15px var(--accent-green); 
+    animation: availablePulse 2.5s infinite ease-in-out;
+}
 .driver-status.on_schedule, .driver-status.accepted { color: var(--accent-blue); background: currentcolor; box-shadow: 0 0 12px var(--accent-blue); }
 .driver-status.pickup, .driver-status.en_route_pickup { color: var(--accent-orange); background: currentcolor; box-shadow: 0 0 12px var(--accent-orange); }
 .driver-status.dropoff, .driver-status.picked_up, .driver-status.en_route_dropoff { color: var(--accent-teal-bright); background: currentcolor; box-shadow: 0 0 12px var(--accent-teal-bright); }
@@ -833,12 +838,22 @@ body {
 
 /* Status Dot Mapping Enhancements */
 .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 8px; }
-.status-dot.available { background-color: var(--accent-blue); box-shadow: 0 0 8px var(--accent-blue); }
+.status-dot.available { 
+    background-color: var(--accent-green); 
+    box-shadow: 0 0 10px var(--accent-green); 
+    animation: availablePulse 2s infinite ease-in-out; 
+}
 .status-dot.on_schedule, .status-dot.accepted { background-color: var(--accent-blue); box-shadow: 0 0 8px var(--accent-blue); }
 .status-dot.pickup, .status-dot.en_route_pickup { background-color: var(--accent-orange); box-shadow: 0 0 8px var(--accent-orange); }
 .status-dot.dropoff, .status-dot.picked_up, .status-dot.en_route_dropoff { background-color: var(--accent-teal-bright); box-shadow: 0 0 8px var(--accent-teal-bright); }
 .status-dot.completed, .status-dot.dropped_off { background-color: var(--accent-emerald); box-shadow: 0 0 8px var(--accent-emerald); }
 .status-dot.offline { background-color: var(--accent-stale); }
+
+@keyframes availablePulse {
+    0% { transform: scale(1); box-shadow: 0 0 5px var(--accent-green); }
+    50% { transform: scale(1.2); box-shadow: 0 0 15px var(--accent-green); }
+    100% { transform: scale(1); box-shadow: 0 0 5px var(--accent-green); }
+}
 
 /* DTR Specific Pills */
 .status-pill {
