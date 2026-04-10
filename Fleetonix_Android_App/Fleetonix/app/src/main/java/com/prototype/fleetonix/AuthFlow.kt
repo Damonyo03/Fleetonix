@@ -491,8 +491,9 @@ fun AuthFlow() {
                 OTPVerifyScreen(
                     userId = currentUser?.uid ?: "",
                     userEmail = currentUser?.email ?: "",
-                    onVerified = {
+                    onVerified = { data, otp ->
                         isDriverVerified = true
+                        verifiedOtpCode = otp
                         if (isFirstLoginMode) {
                             needsPasswordReset = true
                         }

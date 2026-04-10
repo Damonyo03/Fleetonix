@@ -50,7 +50,7 @@ import retrofit2.HttpException
 fun OTPVerifyScreen(
     userId: String,
     userEmail: String,
-    onVerified: (DriverLoginData) -> Unit,
+    onVerified: (DriverLoginData, String) -> Unit,
     onBack: () -> Unit
 ) {
     var otpCode by rememberSaveable { mutableStateOf("") }
@@ -87,28 +87,37 @@ fun OTPVerifyScreen(
                 errorMessage = null
 
                 if (BuildConfig.DEBUG) {
-                    android.util.Log.d("OTPVerifyScreen", "Verifying OTP via Firestore for userId=$userId, otpCode=$trimmedOtp")
+                    android.util.Log.d("OTPVerifyScreen", "Verifying OTP via Firestore for $userEmail")
                 }
 
-                val otpDoc = db.collection("otps").document(userId).get().await()
+                var otpDoc = db.collection("otps").document(userId).get().await()
+                var sourceCollection = "otps"
                 
+                // FALLBACK: Check registration_otps for new driver activation
+                if (!otpDoc.exists()) {
+                    otpDoc = db.collection("registration_otps").document(userEmail.lowercase().trim()).get().await()
+                    sourceCollection = "registration_otps"
+                }
+
                 if (!otpDoc.exists()) {
                     errorMessage = "OTP not found. Please click resend to get a new code."
+                    isLoading = false
                     return@launch
                 }
 
-                val storedOtp = otpDoc.getString("otp")
+                // Check for 'otp' field (otps col) or 'code' field (registration_otps col)
+                val storedOtp = otpDoc.getString("otp") ?: otpDoc.getString("code")
                 val expiresAt = otpDoc.getTimestamp("expires_at")
                 
                 if (storedOtp == trimmedOtp) {
                     if (expiresAt != null && expiresAt.toDate().after(java.util.Date())) {
                         // Success!
                         if (BuildConfig.DEBUG) {
-                            android.util.Log.d("OTPVerifyScreen", "OTP verified successfully via Firestore")
+                            android.util.Log.d("OTPVerifyScreen", "OTP verified successfully via $sourceCollection")
                         }
                         
                         // Delete OTP after success
-                        db.collection("otps").document(userId).delete()
+                        db.collection(sourceCollection).document(otpDoc.id).delete()
                         
                         // Prepare DriverLoginData
                         val userDoc = db.collection("users").document(userId).get().await()
@@ -140,7 +149,7 @@ fun OTPVerifyScreen(
                                 currentStatus = driverData?.get("current_status") as? String ?: "available"
                             )
                         )
-                        onVerified(loginData)
+                        onVerified(loginData, trimmedOtp)
                     } else {
                         errorMessage = "OTP has expired. Please login again."
                     }
