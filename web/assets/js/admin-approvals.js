@@ -43,12 +43,19 @@ function initPendingApprovals() {
 
     const q = query(
         collection(db, "users"), 
-        where("status", "==", "pending_approval"),
-        orderBy("created_at", "desc")
+        where("status", "==", "pending_approval")
     );
 
     onSnapshot(q, (snapshot) => {
-        const users = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        let users = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        
+        // Sort in-memory to avoid composite index requirement
+        users.sort((a, b) => {
+            const timeA = a.created_at?.toMillis ? a.created_at.toMillis() : 0;
+            const timeB = b.created_at?.toMillis ? b.created_at.toMillis() : 0;
+            return timeB - timeA;
+        });
+
         pendingUsersCount = users.length;
         
         if (badge) {
