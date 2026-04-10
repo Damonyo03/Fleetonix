@@ -99,8 +99,7 @@ fun ResetPasswordScreen(
         scope.launch {
             try {
                 isLoading = true
-                val isFirstLogin = otpCode == "FIRST_LOGIN"
-                val cleanedOtp = if (isFirstLogin) otpCode else otpCode.replace(Regex("[^0-9]"), "").trim()
+                val cleanedOtp = otpCode.replace(Regex("[^0-9]"), "").trim()
                 val cleanedUserId = userId.trim()
 
                 if (cleanedOtp.isEmpty() || cleanedUserId.isEmpty()) {
@@ -109,35 +108,23 @@ fun ResetPasswordScreen(
                     return@launch
                 }
 
-                Log.d("ResetPasswordScreen", "Request Check - Mode: ${if (isFirstLogin) "First Login" else "Standard Reset"}, UID: $cleanedUserId")
+                Log.d("ResetPasswordScreen", "Request - UID: $cleanedUserId, OTP: $cleanedOtp")
 
-                if (isFirstLogin) {
-                    // Direct Auth Update for First Login (already authenticated)
-                    val user = FirebaseAuth.getInstance().currentUser
-                    if (user != null) {
-                        user.updatePassword(password).await()
-                        Toast.makeText(context, "Welcome! Password saved successfully.", Toast.LENGTH_LONG).show()
-                        onPasswordReset()
-                    } else {
-                        errorMessage = "Session expired. Please login again."
-                    }
+                // Always use the Backend Reset flow for security (OTP validation)
+                val requestBody = mapOf(
+                    "userId" to cleanedUserId,
+                    "otp" to cleanedOtp,
+                    "password" to password,
+                    "newPassword" to password
+                )
+
+                val response = FleetonixApi.driverService.resetPassword(requestBody)
+
+                if (response.success) {
+                    Toast.makeText(context, "Password Updated Successfully!", Toast.LENGTH_LONG).show()
+                    onPasswordReset()
                 } else {
-                    // Standard Forgot Password flow via Backend
-                    val requestBody = mapOf(
-                        "userId" to cleanedUserId,
-                        "otp" to cleanedOtp,
-                        "password" to password,
-                        "newPassword" to password
-                    )
-
-                    val response = FleetonixApi.driverService.resetPassword(requestBody)
-
-                    if (response.success) {
-                        Toast.makeText(context, "Password Updated Successfully!", Toast.LENGTH_LONG).show()
-                        onPasswordReset()
-                    } else {
-                        errorMessage = response.message.ifBlank { "Update rejected by server." }
-                    }
+                    errorMessage = response.message.ifBlank { "Update rejected by server." }
                 }
             } catch (ex: HttpException) {
                 val errorBody = ex.response()?.errorBody()?.string() ?: ""

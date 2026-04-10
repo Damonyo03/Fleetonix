@@ -1,0 +1,165 @@
+﻿> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:processDebugGoogleServices UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+
+> Task :app:compileDebugKotlin FAILED
+./gradlew : e: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com
+/prototype/fleetonix/DriverDashboard.kt:516:31 Unresolved reference 'current_segment_index'.
+At line:1 char:1
++ ./gradlew :app:compileDebugKotlin > build_output.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (e: file:///C:/U...segment_index'.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+e: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/f
+leetonix/DriverDashboard.kt:957:40 Unresolved reference 'pickup_points'.
+e: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/f
+leetonix/DriverDashboard.kt:957:70 Unresolved reference 'latitude'.
+e: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/f
+leetonix/DriverDashboard.kt:958:40 Unresolved reference 'pickup_points'.
+e: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/f
+leetonix/DriverDashboard.kt:958:70 Unresolved reference 'longitude'.
+e: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/f
+leetonix/DriverDashboard.kt:962:32 None of the following candidates is applicable:
+fun putExtra(p0: String!, p1: Boolean): Intent
+fun putExtra(p0: String!, p1: Byte): Intent
+fun putExtra(p0: String!, p1: Char): Intent
+fun putExtra(p0: String!, p1: Short): Intent
+fun putExtra(p0: String!, p1: Int): Intent
+fun putExtra(p0: String!, p1: Long): Intent
+fun putExtra(p0: String!, p1: Float): Intent
+fun putExtra(p0: String!, p1: Double): Intent
+fun putExtra(p0: String!, p1: String?): Intent
+fun putExtra(p0: String!, p1: CharSequence?): Intent
+fun putExtra(p0: String!, p1: Parcelable?): Intent
+fun putExtra(p0: String!, p1: (Array<Parcelable!>?..Array<out Parcelable!>?)): Intent
+fun putExtra(p0: String!, p1: Serializable?): Intent
+fun putExtra(p0: String!, p1: BooleanArray?): Intent
+fun putExtra(p0: String!, p1: ByteArray?): Intent
+fun putExtra(p0: String!, p1: ShortArray?): Intent
+fun putExtra(p0: String!, p1: CharArray?): Intent
+fun putExtra(p0: String!, p1: IntArray?): Intent
+fun putExtra(p0: String!, p1: LongArray?): Intent
+fun putExtra(p0: String!, p1: FloatArray?): Intent
+fun putExtra(p0: String!, p1: DoubleArray?): Intent
+fun putExtra(p0: String!, p1: (Array<String!>?..Array<out String!>?)): Intent
+fun putExtra(p0: String!, p1: (Array<CharSequence!>?..Array<out CharSequence!>?)): Intent
+fun putExtra(p0: String!, p1: Bundle?): Intent
+e: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/f
+leetonix/DriverDashboard.kt:963:32 None of the following candidates is applicable:
+fun putExtra(p0: String!, p1: Boolean): Intent
+fun putExtra(p0: String!, p1: Byte): Intent
+fun putExtra(p0: String!, p1: Char): Intent
+fun putExtra(p0: String!, p1: Short): Intent
+fun putExtra(p0: String!, p1: Int): Intent
+fun putExtra(p0: String!, p1: Long): Intent
+fun putExtra(p0: String!, p1: Float): Intent
+fun putExtra(p0: String!, p1: Double): Intent
+fun putExtra(p0: String!, p1: String?): Intent
+fun putExtra(p0: String!, p1: CharSequence?): Intent
+fun putExtra(p0: String!, p1: Parcelable?): Intent
+fun putExtra(p0: String!, p1: (Array<Parcelable!>?..Array<out Parcelable!>?)): Intent
+fun putExtra(p0: String!, p1: Serializable?): Intent
+fun putExtra(p0: String!, p1: BooleanArray?): Intent
+fun putExtra(p0: String!, p1: ByteArray?): Intent
+fun putExtra(p0: String!, p1: ShortArray?): Intent
+fun putExtra(p0: String!, p1: CharArray?): Intent
+fun putExtra(p0: String!, p1: IntArray?): Intent
+fun putExtra(p0: String!, p1: LongArray?): Intent
+fun putExtra(p0: String!, p1: FloatArray?): Intent
+fun putExtra(p0: String!, p1: DoubleArray?): Intent
+fun putExtra(p0: String!, p1: (Array<String!>?..Array<out String!>?)): Intent
+fun putExtra(p0: String!, p1: (Array<CharSequence!>?..Array<out CharSequence!>?)): Intent
+fun putExtra(p0: String!, p1: Bundle?): Intent
+e: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/f
+leetonix/DriverDashboard.kt:969:40 Unresolved reference 'pickup_points'.
+e: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/f
+leetonix/DriverDashboard.kt:969:69 Unresolved reference 'latitude'.
+e: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/f
+leetonix/DriverDashboard.kt:970:40 Unresolved reference 'pickup_points'.
+e: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/f
+leetonix/DriverDashboard.kt:970:69 Unresolved reference 'longitude'.
+e: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/f
+leetonix/DriverDashboard.kt:974:32 None of the following candidates is applicable:
+fun putExtra(p0: String!, p1: Boolean): Intent
+fun putExtra(p0: String!, p1: Byte): Intent
+fun putExtra(p0: String!, p1: Char): Intent
+fun putExtra(p0: String!, p1: Short): Intent
+fun putExtra(p0: String!, p1: Int): Intent
+fun putExtra(p0: String!, p1: Long): Intent
+fun putExtra(p0: String!, p1: Float): Intent
+fun putExtra(p0: String!, p1: Double): Intent
+fun putExtra(p0: String!, p1: String?): Intent
+fun putExtra(p0: String!, p1: CharSequence?): Intent
+fun putExtra(p0: String!, p1: Parcelable?): Intent
+fun putExtra(p0: String!, p1: (Array<Parcelable!>?..Array<out Parcelable!>?)): Intent
+fun putExtra(p0: String!, p1: Serializable?): Intent
+fun putExtra(p0: String!, p1: BooleanArray?): Intent
+fun putExtra(p0: String!, p1: ByteArray?): Intent
+fun putExtra(p0: String!, p1: ShortArray?): Intent
+fun putExtra(p0: String!, p1: CharArray?): Intent
+fun putExtra(p0: String!, p1: IntArray?): Intent
+fun putExtra(p0: String!, p1: LongArray?): Intent
+fun putExtra(p0: String!, p1: FloatArray?): Intent
+fun putExtra(p0: String!, p1: DoubleArray?): Intent
+fun putExtra(p0: String!, p1: (Array<String!>?..Array<out String!>?)): Intent
+fun putExtra(p0: String!, p1: (Array<CharSequence!>?..Array<out CharSequence!>?)): Intent
+fun putExtra(p0: String!, p1: Bundle?): Intent
+e: file:///C:/Users/user/Downloads/Projects/Fleetonix/Fleetonix_Android_App/Fleetonix/app/src/main/java/com/prototype/f
+leetonix/DriverDashboard.kt:975:32 None of the following candidates is applicable:
+fun putExtra(p0: String!, p1: Boolean): Intent
+fun putExtra(p0: String!, p1: Byte): Intent
+fun putExtra(p0: String!, p1: Char): Intent
+fun putExtra(p0: String!, p1: Short): Intent
+fun putExtra(p0: String!, p1: Int): Intent
+fun putExtra(p0: String!, p1: Long): Intent
+fun putExtra(p0: String!, p1: Float): Intent
+fun putExtra(p0: String!, p1: Double): Intent
+fun putExtra(p0: String!, p1: String?): Intent
+fun putExtra(p0: String!, p1: CharSequence?): Intent
+fun putExtra(p0: String!, p1: Parcelable?): Intent
+fun putExtra(p0: String!, p1: (Array<Parcelable!>?..Array<out Parcelable!>?)): Intent
+fun putExtra(p0: String!, p1: Serializable?): Intent
+fun putExtra(p0: String!, p1: BooleanArray?): Intent
+fun putExtra(p0: String!, p1: ByteArray?): Intent
+fun putExtra(p0: String!, p1: ShortArray?): Intent
+fun putExtra(p0: String!, p1: CharArray?): Intent
+fun putExtra(p0: String!, p1: IntArray?): Intent
+fun putExtra(p0: String!, p1: LongArray?): Intent
+fun putExtra(p0: String!, p1: FloatArray?): Intent
+fun putExtra(p0: String!, p1: DoubleArray?): Intent
+fun putExtra(p0: String!, p1: (Array<String!>?..Array<out String!>?)): Intent
+fun putExtra(p0: String!, p1: (Array<CharSequence!>?..Array<out CharSequence!>?)): Intent
+fun putExtra(p0: String!, p1: Bundle?): Intent
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugKotlin'.
+> A failure occurred while executing 
+org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 7s
+16 actionable tasks: 1 executed, 15 up-to-date

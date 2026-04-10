@@ -9,9 +9,9 @@
  * See a full list of supported triggers at https://firebase.google.com/docs/functions
  */
 
-const {setGlobalOptions} = require("firebase-functions");
-const {onRequest} = require("firebase-functions/v2/https");
-const {onDocumentUpdated, onDocumentCreated, onDocumentDeleted} = require("firebase-functions/v2/firestore");
+const { setGlobalOptions } = require("firebase-functions");
+const { onRequest } = require("firebase-functions/v2/https");
+const { onDocumentUpdated, onDocumentCreated, onDocumentDeleted } = require("firebase-functions/v2/firestore");
 // const {onSchedule} = require("firebase-functions/v2/scheduler");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
@@ -30,7 +30,7 @@ const getMailTransport = () => nodemailer.createTransport({
   service: "gmail",
   auth: {
     user: "fleetonix.noreply@gmail.com",
-    pass: GMAIL_APP_PASSWORD.value(), 
+    pass: GMAIL_APP_PASSWORD.value(),
   },
 });
 
@@ -66,10 +66,10 @@ async function requireRole(req, res, allowedRoles = ["super_admin"]) {
  */
 function getOTPHtmlTemplate(otp, email, isRegistration = false) {
   const title = isRegistration ? "Create Your Fleetonix Account" : "Password Reset Request";
-  const subtitle = isRegistration ? 
+  const subtitle = isRegistration ?
     "Welcome to Fleetonix! Use the verification code below to complete your registration." :
     "We received a request to reset your password. Use the verification code below to proceed.";
-  
+
   return `
     <!DOCTYPE html>
     <html>
@@ -152,7 +152,7 @@ function getWelcomeHtmlTemplate(fullName, email) {
   `;
 }
 
-setGlobalOptions({maxInstances: 10});
+setGlobalOptions({ maxInstances: 10 });
 
 /// [LOCATION_SEARCH_PROXY_REMOVED]
 // We now use Google Places API directly on the client (web/mobile) via address-autocomplete.js
@@ -167,9 +167,9 @@ exports.sendPasswordResetOTP = onRequest({ cors: true }, async (req, res) => {
     return;
   }
 
-  const {email} = req.body;
+  const { email } = req.body;
   if (!email) {
-    res.status(400).json({success: false, message: "Email is required"});
+    res.status(400).json({ success: false, message: "Email is required" });
     return;
   }
 
@@ -192,16 +192,16 @@ exports.sendPasswordResetOTP = onRequest({ cors: true }, async (req, res) => {
       subject: "Verification Code: " + otp,
       html: getOTPHtmlTemplate(otp, email),
     };
-    
+
     const transporter = getMailTransport();
     await transporter.sendMail(mailOptions);
 
     logger.info(`Generated password reset OTP for ${email}`);
-    res.json({success: true, message: "OTP sent successfully", data: {userId: userRecord.uid, email: email}});
+    res.json({ success: true, message: "OTP sent successfully", data: { userId: userRecord.uid, email: email } });
   } catch (error) {
     logger.error("Error sending reset OTP", error);
     // Security: don't reveal if user exists unless explicitly needed
-    res.json({success: true, message: "If an account exists, an OTP has been sent."});
+    res.json({ success: true, message: "If an account exists, an OTP has been sent." });
   }
 });
 
@@ -214,31 +214,31 @@ exports.resetPasswordWithOTP = onRequest({ cors: true }, async (req, res) => {
     return;
   }
 
-  const {userId, otp, newPassword, password} = req.body || {};
+  const { userId, otp, newPassword, password } = req.body || {};
   const targetPassword = newPassword || password;
-  
+
   if (!userId || !otp || !targetPassword) {
-    res.status(400).json({success: false, message: "Missing required fields"});
+    res.status(400).json({ success: false, message: "Missing required fields" });
     return;
   }
 
   try {
     const otpDoc = await admin.firestore().collection("otps").doc(userId).get();
     if (!otpDoc.exists) {
-      res.status(404).json({success: false, message: "OTP not found or already used."});
+      res.status(404).json({ success: false, message: "OTP not found or already used." });
       return;
     }
 
     const data = otpDoc.data();
     const incomingHash = crypto.createHash("sha256").update(otp).digest("hex");
-    
+
     if (data.hash !== incomingHash) {
-      res.status(401).json({success: false, message: "Invalid OTP code."});
+      res.status(401).json({ success: false, message: "Invalid OTP code." });
       return;
     }
 
     if (data.expires_at.toDate() < new Date()) {
-      res.status(401).json({success: false, message: "OTP has expired."});
+      res.status(401).json({ success: false, message: "OTP has expired." });
       return;
     }
 
@@ -250,10 +250,10 @@ exports.resetPasswordWithOTP = onRequest({ cors: true }, async (req, res) => {
     // Delete OTP document (safety)
     await admin.firestore().collection("otps").doc(userId).delete();
 
-    res.json({success: true, message: "Password updated successfully! Please login with your new password."});
+    res.json({ success: true, message: "Password updated successfully! Please login with your new password." });
   } catch (error) {
     logger.error("Error resetting password", error);
-    res.status(500).json({success: false, message: "Failed to reset password: " + error.message});
+    res.status(500).json({ success: false, message: "Failed to reset password: " + error.message });
   }
 });
 
@@ -266,11 +266,11 @@ exports.verifyOTP = onRequest({ cors: true }, async (req, res) => {
     return;
   }
 
-  const {userId, otpCode} = req.body || {};
-  
+  const { userId, otpCode } = req.body || {};
+
   if (!userId || !otpCode) {
     logger.warn(`VerifyOTP called with missing fields: userId=${userId}, otpCode=${otpCode}`);
-    res.status(200).json({success: false, message: "Missing userId or otpCode"});
+    res.status(200).json({ success: false, message: "Missing userId or otpCode" });
     return;
   }
 
@@ -280,20 +280,20 @@ exports.verifyOTP = onRequest({ cors: true }, async (req, res) => {
       res.json({ success: false, message: "Token expired or not found" });
       return;
     }
-    
+
     // Hash incoming OTP for comparison
     const incomingHash = crypto.createHash("sha256").update(otpCode).digest("hex");
-    
+
     if (doc.data().hash === incomingHash) {
       logger.info(`OTP successfully verified for user: ${userId}`);
-      res.json({success: true, message: "OTP verified"});
+      res.json({ success: true, message: "OTP verified" });
     } else {
       logger.warn(`Invalid OTP attempt for user: ${userId}`);
-      res.json({success: false, message: "Invalid OTP"});
+      res.json({ success: false, message: "Invalid OTP" });
     }
   } catch (e) {
     logger.error(`Error in verifyOTP for user ${userId}:`, e);
-    res.status(500).json({success: false, message: "Internal Server Error: " + e.message});
+    res.status(500).json({ success: false, message: "Internal Server Error: " + e.message });
   }
 });
 
@@ -304,10 +304,10 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
   const caller = await requireRole(req, res, ["super_admin", "admin"]);
   if (!caller) return;
 
-  const {email, password, fullName, role, companyName} = req.body;
+  const { email, password, fullName, role, companyName } = req.body;
 
   if (!email || !password || !fullName || !role) {
-    res.status(400).json({success: false, message: "Missing required fields: email, password, fullName, and role are required."});
+    res.status(400).json({ success: false, message: "Missing required fields: email, password, fullName, and role are required." });
     return;
   }
 
@@ -315,7 +315,7 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
   // 1. Only Super Admin can create other admins or super admins
   // 2. Regular Admins can ONLY create drivers
   if (caller.role !== "super_admin" && role !== "driver") {
-    res.status(403).json({success: false, message: `Forbidden: As an ${caller.role}, you can only create Driver accounts.`});
+    res.status(403).json({ success: false, message: `Forbidden: As an ${caller.role}, you can only create Driver accounts.` });
     return;
   }
 
@@ -323,7 +323,7 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
     // Check if user already exists
     try {
       await admin.auth().getUserByEmail(email);
-      res.status(400).json({success: false, message: "User with this email already exists."});
+      res.status(400).json({ success: false, message: "User with this email already exists." });
       return;
     } catch (authError) {
       // User doesn't exist, proceed
@@ -364,7 +364,7 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
     // 4. Generate and Send Activation OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
-    
+
     await admin.firestore().collection("registration_otps").doc(email.toLowerCase().trim()).set({
       hash: otpHash,
       email: email.toLowerCase().trim(),
@@ -382,10 +382,10 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
     await getMailTransport().sendMail(mailOptions);
 
     logger.info(`Admin created new ${role}: ${email}. OTP sent for verification.`);
-    res.json({success: true, message: `New ${role} created. Activation OTP sent to ${email}.`, uid: userRecord.uid});
+    res.json({ success: true, message: `New ${role} created. Activation OTP sent to ${email}.`, uid: userRecord.uid });
   } catch (error) {
     logger.error("Error creating user", error);
-    res.status(500).json({success: false, message: error.message});
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
@@ -424,8 +424,8 @@ exports.verifyAndActivateAccount = onRequest({ cors: true }, async (req, res) =>
     // Use email to find user UID
     let uid = storedData.uid;
     if (!uid) {
-        const userRec = await admin.auth().getUserByEmail(emailLower);
-        uid = userRec.uid;
+      const userRec = await admin.auth().getUserByEmail(emailLower);
+      uid = userRec.uid;
     }
 
     // 1. Update Password in Auth
@@ -441,9 +441,9 @@ exports.verifyAndActivateAccount = onRequest({ cors: true }, async (req, res) =>
     // 3. Update Drivers collection if applicable
     const driverSnap = await admin.firestore().collection("drivers").doc(uid).get();
     if (driverSnap.exists) {
-        await admin.firestore().collection("drivers").doc(uid).update({
-            status: "pending_approval"
-        });
+      await admin.firestore().collection("drivers").doc(uid).update({
+        status: "pending_approval"
+      });
     }
 
     // 4. Cleanup OTP
@@ -464,10 +464,10 @@ exports.adminDeleteUser = onRequest({ cors: true }, async (req, res) => {
   const caller = await requireRole(req, res, ["super_admin"]);
   if (!caller) return;
 
-  const {uid, email} = req.body;
+  const { uid, email } = req.body;
 
   if (!uid) {
-    res.status(400).json({success: false, message: "User UID is required."});
+    res.status(400).json({ success: false, message: "User UID is required." });
     return;
   }
 
@@ -517,10 +517,10 @@ exports.adminDeleteUser = onRequest({ cors: true }, async (req, res) => {
     });
 
     logger.info(`Admin successfully archived user: ${uid}`);
-    res.json({success: true, message: "User account archived to vault for 30 days."});
+    res.json({ success: true, message: "User account archived to vault for 30 days." });
   } catch (error) {
     logger.error("Error archiving user", error);
-    res.status(500).json({success: false, message: error.message});
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
@@ -585,11 +585,11 @@ exports.adminClearData = onRequest({ cors: true }, async (req, res) => {
   try {
     const db = admin.firestore();
     const auth = admin.auth();
-    
+
     // 1. Define ALL collections to wipe
     const allCollections = [
-      "users", "drivers", "bookings", "schedules", "activity", "accidents", 
-      "vehicle_issues", "registration_otps", "otps", 
+      "users", "drivers", "bookings", "schedules", "activity", "accidents",
+      "vehicle_issues", "registration_otps", "otps",
       "dtr_logs", "vehicle_logs", "driver_locations", "trip_tickets", "otp_codes"
     ];
     // NOTE: accredited_companies is PRESERVED so registration works.
@@ -598,7 +598,7 @@ exports.adminClearData = onRequest({ cors: true }, async (req, res) => {
     for (const col of allCollections) {
       const snap = await db.collection(col).get();
       const docs = snap.docs;
-      
+
       // Delete in chunks of 500
       for (let i = 0; i < docs.length; i += 500) {
         const batch = db.batch();
@@ -625,7 +625,7 @@ exports.adminClearData = onRequest({ cors: true }, async (req, res) => {
     // 4. Create the requested Super Admin Account
     const adminEmail = "perezralph15@gmail.com";
     const adminPassword = "admin123";
-    
+
     const userRecord = await auth.createUser({
       email: adminEmail,
       password: adminPassword,
@@ -650,7 +650,7 @@ exports.adminClearData = onRequest({ cors: true }, async (req, res) => {
     });
   } catch (error) {
     logger.error("Clear data error", error);
-    res.status(500).json({success: false, message: error.message});
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
@@ -659,7 +659,7 @@ exports.adminClearData = onRequest({ cors: true }, async (req, res) => {
  */
 exports.sendRegistrationOTP = onRequest({ cors: true }, async (req, res) => {
   logger.info("sendRegistrationOTP called with Nodemailer config v2");
-  
+
   if (req.method === "OPTIONS") {
     res.status(204).send("");
     return;
@@ -722,14 +722,14 @@ exports.sendRegistrationOTP = onRequest({ cors: true }, async (req, res) => {
  */
 exports.completeRegistration = onRequest({ cors: true }, async (req, res) => {
   logger.info("completeRegistration called with Nodemailer config v2");
-  
+
   if (req.method === "OPTIONS") {
     res.status(204).send("");
     return;
   }
 
   const { email, phone, otp, userData } = req.body || {};
-  
+
   if ((!email && !phone) || !otp || !userData) {
     logger.warn(`completeRegistration missing fields: email=${email}, otp=${otp}, userData=${!!userData}`);
     res.status(400).json({ success: false, message: "Missing required fields: email/phone, otp, and userData are required." });
@@ -754,7 +754,7 @@ exports.completeRegistration = onRequest({ cors: true }, async (req, res) => {
 
     const storedData = otpDoc.data();
     const incomingHash = crypto.createHash("sha256").update(otp).digest("hex");
-    
+
     if (storedData.hash !== incomingHash) {
       res.status(400).json({ success: false, message: "Invalid verification code." });
       return;
@@ -790,16 +790,16 @@ exports.completeRegistration = onRequest({ cors: true }, async (req, res) => {
     });
     logger.info(`Firestore user doc created for: ${userRecord.uid}`);
 
-      if (role === "driver") {
-        await admin.firestore().collection("drivers").doc(userRecord.uid).set({
-          driver_name: userData.full_name,
-          driver_email: email.toLowerCase().trim(),
-          current_status: "offline",
-          status: "pending_approval",
-          created_at: admin.firestore.FieldValue.serverTimestamp(),
-          updated_at: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      }
+    if (role === "driver") {
+      await admin.firestore().collection("drivers").doc(userRecord.uid).set({
+        driver_name: userData.full_name,
+        driver_email: email.toLowerCase().trim(),
+        current_status: "offline",
+        status: "pending_approval",
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
 
     await admin.firestore().collection("registration_otps").doc(target).delete();
     res.json({ success: true, message: "Account created successfully!", uid: userRecord.uid });
@@ -825,7 +825,7 @@ exports.handleUserVerificationSuccess = onDocumentUpdated("users/{uid}", async (
         subject: "Account Verified - Welcome to Fleetonix",
         html: getWelcomeHtmlTemplate(after.full_name || "User", after.email),
       };
-      
+
       const transporter = getMailTransport();
       await transporter.sendMail(mailOptions);
       logger.info(`Welcome email successfully sent to ${after.email}`);

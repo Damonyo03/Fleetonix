@@ -214,9 +214,15 @@ function getDriverFormContent(driver = {}) {
             <input type="email" class="form-input" value="${driver.driver_email}" readonly style="opacity: 0.6; cursor: not-allowed;">
         </div>
         ` : `
-        <div class="form-group">
-            <label>Driver Email (Account login)</label>
-            <input type="email" id="modal_email" class="form-input" required placeholder="driver@fleetonix.com">
+        <div class="form-grid-2">
+            <div class="form-group">
+                <label>Driver Email (Account login)</label>
+                <input type="email" id="modal_email" class="form-input" required placeholder="driver@fleetonix.com">
+            </div>
+            <div class="form-group">
+                <label>Set Temporary Password</label>
+                <input type="text" id="modal_password" class="form-input" required placeholder="Minimum 6 chars">
+            </div>
         </div>
         `}
 
@@ -324,8 +330,13 @@ if (addDriverBtn) {
     addDriverBtn.onclick = () => {
         showModal('add-driver-modal', 'Onboard New Driver', getDriverFormContent(), async () => {
             const email = document.getElementById('modal_email').value.toLowerCase().trim();
-            const password = "driver123";
+            const password = document.getElementById('modal_password').value.trim();
             const name = document.getElementById('modal_name').value;
+
+            if (password.length < 6) {
+                alert("Password must be at least 6 characters.");
+                return;
+            }
 
             try {
                 const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
@@ -352,13 +363,13 @@ if (addDriverBtn) {
                     email: email,
                     user_type: "driver",
                     role: "driver",
-                    status: "active",
+                    status: "pending_approval",
                     isFirstLogin: true,
                     created_at: serverTimestamp()
                 });
 
                 await signOut(secondaryAuth);
-                alert("Driver onboarded! Temporary password is: driver123");
+                alert(`Driver onboarded! Please provide the driver with their temporary password: ${password}`);
                 location.reload();
             } catch (err) {
                 alert("Onboarding failed: " + err.message);

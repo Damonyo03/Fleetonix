@@ -137,17 +137,29 @@ fun AuthFlow() {
                             
                             if (userRole == "driver") {
                                 val status = doc.getString("status") ?: "active"
-                                if (status == "pending") {
-                                    isPendingApproval = true
-                                    isDriverVerified = false
-                                } else if (isFirstTime) {
+                                val isFirstTime = (doc.getBoolean("isFirstLogin") ?: false)
+                                
+                                isPendingApproval = (status == "pending_approval" || status == "pending")
+                                
+                                if (isFirstTime) {
                                     isFirstLoginMode = true
                                     isDriverVerified = false
-                                    Log.d("AuthFlow", "First login detected for driver. Enforcing security flow.")
+                                    Log.d("AuthFlow", "First login detected for driver. Triggering OTP.")
+                                    
+                                    // Auto-trigger OTP send
+                                    scope.launch {
+                                        try {
+                                            FleetonixApi.driverService.forgotPassword(
+                                                ForgotPasswordRequest(email ?: "")
+                                            )
+                                            Log.d("AuthFlow", "First login OTP sent to $email")
+                                        } catch (e: Exception) {
+                                            Log.e("AuthFlow", "Failed to auto-send first login OTP", e)
+                                        }
+                                    }
                                 } else {
                                     isFirstLoginMode = false
-                                    isPendingApproval = false
-                                    isDriverVerified = true 
+                                    isDriverVerified = (status == "active")
                                 }
                             }
                         } else {
@@ -325,9 +337,9 @@ fun AuthFlow() {
         }
         userRole == null -> "loading_role"
         userRole != "driver" -> "unauthorized"
-        userRole == "driver" && isPendingApproval -> "pending_approval"
         userRole == "driver" && !isDriverVerified -> "verify_otp"
         isFirstLoginMode && needsPasswordReset -> "force_reset"
+        userRole == "driver" && isPendingApproval -> "pending_approval"
         showHistory -> "history"
         showAssignments -> "assignments"
         else -> "dashboard"
@@ -403,7 +415,11 @@ fun AuthFlow() {
                                 auth.signOut()
                                 currentUser = null
                                 userRole = null
+                                userData = null
                                 isPendingApproval = false
+                                isDriverVerified = false
+                                isFirstLoginMode = false
+                                needsPasswordReset = false
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = com.prototype.fleetonix.ui.theme.AccentTeal)
                         ) {
@@ -488,7 +504,7 @@ fun AuthFlow() {
             "force_reset" -> {
                 ResetPasswordScreen(
                     userId = currentUser?.uid ?: "",
-                    otpCode = "FIRST_LOGIN", // Flag to indicate forced reset
+                    otpCode = verifiedOtpCode, // Use the real verified OTP code
                     userEmail = currentUser?.email ?: "",
                     onPasswordReset = {
                         scope.launch {
