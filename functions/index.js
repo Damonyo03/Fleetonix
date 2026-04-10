@@ -187,21 +187,40 @@ exports.resetPasswordWithOTP = onRequest({ cors: true }, async (req, res) => {
   if (!userId || !otp || !targetPassword) return res.status(400).json({ success: false, message: "Missing required fields" });
 
   try {
-    const otpDoc = await admin.firestore().collection("otps").doc(userId).get();
-    if (!otpDoc.exists) return res.status(404).json({ success: false, message: "OTP not found or already used." });
+    const db = admin.firestore();
+    let otpDoc = await db.collection("otps").doc(userId).get();
+    let sourceCollection = "otps";
+
+    // FALLBACK: If not found in 'otps', check 'registration_otps' (Admin-sent activation codes)
+    if (!otpDoc.exists) {
+        const userAuth = await admin.auth().getUser(userId);
+        const email = userAuth.email.toLowerCase().trim();
+        otpDoc = await db.collection("registration_otps").doc(email).get();
+        sourceCollection = "registration_otps";
+    }
+
+    if (!otpDoc.exists) return res.status(404).json({ success: false, message: "Verification session not found. Please request a new code." });
 
     const data = otpDoc.data();
     const incomingHash = crypto.createHash("sha256").update(otp).digest("hex");
 
-    if (data.hash !== incomingHash) return res.status(401).json({ success: false, message: "Invalid OTP code." });
-    if (data.expires_at.toDate() < new Date()) return res.status(401).json({ success: false, message: "OTP has expired." });
+    // Support both 'hash' field and 'code' field for flexibility
+    const isValid = (data.hash === incomingHash) || (data.code === otp) || (data.otp === otp);
+
+    if (!isValid) return res.status(401).json({ success: false, message: "Invalid OTP code." });
+    
+    // Check expiration (Registration OTPs might use 'expires_at', otps uses 'expires_at')
+    const expiry = data.expires_at?.toDate ? data.expires_at.toDate() : new Date(Date.now() + 1000000); // Default to safe far-future if missing
+    if (expiry < new Date()) return res.status(401).json({ success: false, message: "The verification code has expired." });
 
     await admin.auth().updateUser(userId, { password: targetPassword });
-    await admin.firestore().collection("otps").doc(userId).delete();
+    
+    // Clean up the used OTP
+    await db.collection(sourceCollection).doc(otpDoc.id).delete();
 
     res.json({ success: true, message: "Password updated successfully!" });
   } catch (error) {
-    res.status(500).json({ success: false, message: "Failed: " + error.message });
+    res.status(500).json({ success: false, message: "Verification failed: " + error.message });
   }
 });
 
