@@ -384,7 +384,9 @@ async function showCreateBookingModal(clients) {
 
         alert("Booking created successfully! " + (autoDispatch ? "It has been sent to dispatch." : "It is now pending approval."));
     });
-
+    
+    // ── Populate Drivers List for the newly opened Modal ─────────
+    setTimeout(async () => {
         const driverSelect = document.getElementById('modal_driver');
         if (driverSelect) {
             try {

@@ -105,7 +105,7 @@ function getOTPHtmlTemplate(otp, email, isRegistration = false) {
 }
 
 // RESTORED: Password Reset Flows
-exports.sendPasswordResetOTP = onRequest({ cors: true }, async (req, res) => {
+exports.sendPasswordResetOTP = onRequest({ cors: true, secrets: ["GMAIL_APP_PASSWORD"] }, async (req, res) => {
   if (req.method === "OPTIONS") { res.status(204).send(""); return; }
   const { email } = req.body;
   if (!email) return res.status(400).json({ success: false, message: "Email is required" });
@@ -184,7 +184,7 @@ exports.verifyOTP = onRequest({ cors: true }, async (req, res) => {
 });
 
 // MODERNIZED: Admin/Driver Registration & Activation
-exports.sendRegistrationOTP = onRequest({ cors: true }, async (req, res) => {
+exports.sendRegistrationOTP = onRequest({ cors: true, secrets: ["GMAIL_APP_PASSWORD"] }, async (req, res) => {
   if (req.method === "OPTIONS") { res.status(204).send(""); return; }
   const { email } = req.body;
   if (!email) return res.status(400).json({ success: false, message: "Email required" });
@@ -214,7 +214,7 @@ exports.sendRegistrationOTP = onRequest({ cors: true }, async (req, res) => {
   }
 });
 
-exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
+exports.adminCreateUser = onRequest({ cors: true, secrets: ["GMAIL_APP_PASSWORD"] }, async (req, res) => {
   const caller = await requireRole(req, res, ["super_admin", "admin"]);
   if (!caller) return;
 

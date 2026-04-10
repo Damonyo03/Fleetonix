@@ -180,16 +180,16 @@ fun OTPVerifyScreen(
         }
     }
 
-    // Automatically send OTP removed to prevent triple-sending
-    /*
+    // Safe auto-trigger: Send OTP only if not already sent this session
     var hasSentInitialOTP by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         if (!hasSentInitialOTP) {
             hasSentInitialOTP = true
+            // Small delay to allow Firestore/Email propagation from Admin Dashboard
+            delay(2000)
             resendOTP()
         }
     }
-    */
 
     Column(
         modifier = Modifier
