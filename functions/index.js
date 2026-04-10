@@ -109,6 +109,44 @@ function getOTPHtmlTemplate(otp, email, isRegistration = false) {
   `;
 }
 
+function getApprovalEmailTemplate(name) {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        .email-body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px; }
+        .header { background: #00d4ff; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+        .content { padding: 30px; background: #fff; }
+        .button { display: inline-block; padding: 12px 24px; background-color: #00d4ff; color: #ffffff; text-decoration: none; border-radius: 5px; font-weight: bold; margin-top: 20px; }
+        .footer { text-align: center; padding: 20px; color: #888; font-size: 12px; }
+      </style>
+    </head>
+    <body style="background-color: #f4f7f6; padding: 20px;">
+      <div class="email-body">
+        <div class="header">
+          <h1 style="margin:0;">Account Approved!</h1>
+        </div>
+        <div class="content">
+          <p>Hello <strong>${name}</strong>,</p>
+          <p>Great news! Your driver enrollment for <strong>Fleetonix</strong> has been officially approved and activated by the Super Admin.</p>
+          <p>You now have full access to your driver dashboard. You can start accepting assignments and tracking your DTR immediately.</p>
+          <div style="text-align: center;">
+            <a href="#" class="button">Open Fleetonix App</a>
+          </div>
+          <p>If you have any questions, please contact your fleet supervisor.</p>
+          <p>Welcome to the team!</p>
+          <p>Best regards,<br>The Fleetonix Team</p>
+        </div>
+        <div class="footer">
+          &copy; 2026 Fleetonix Logistics Systems. All rights reserved.
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
 // RESTORED: Password Reset Flows
 exports.sendPasswordResetOTP = onRequest({ cors: true }, async (req, res) => {
   if (req.method === "OPTIONS") { res.status(204).send(""); return; }
@@ -415,5 +453,42 @@ exports.adminClearData = onRequest({ cors: true }, async (req, res) => {
     res.json({ success: true, message: "System cleared." });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * AUTOMATED FLOW: Notify User on Approval
+ */
+exports.onUserStatusUpdated = onDocumentUpdated({
+  document: "users/{uid}",
+  secrets: ["GMAIL_APP_PASSWORD"]
+}, async (event) => {
+  const before = event.data.before.data();
+  const after = event.data.after.data();
+
+  // Detect transition from 'pending_approval' to 'active'
+  if (before.status !== "active" && after.status === "active") {
+    logger.log(`User ${event.params.uid} activated. Sending approval email.`);
+    
+    try {
+      const name = after.full_name || "Driver";
+      const email = after.email;
+
+      if (!email) {
+        logger.error("No email found for user activation notification");
+        return;
+      }
+
+      await getMailTransport().sendMail({
+        from: '"Fleetonix System" <fleetonix.noreply@gmail.com>',
+        to: email,
+        subject: "Congratulations! Your Fleetonix Account is Active",
+        html: getApprovalEmailTemplate(name)
+      });
+      
+      logger.log(`Approval email successfully sent to ${email}`);
+    } catch (error) {
+      logger.error("Failed to send approval email:", error);
+    }
   }
 });

@@ -515,9 +515,18 @@ fun AuthFlow() {
                                 val uid = currentUser?.uid
                                 if (uid != null) {
                                     db.collection("users").document(uid).update("isFirstLogin", false).await()
+                                    
+                                    // RE-FETCH: Refresh status to transition to "Pending Approval" screen
+                                    val updatedDoc = db.collection("users").document(uid).get().await()
+                                    if (updatedDoc.exists()) {
+                                        val status = updatedDoc.getString("status") ?: "active"
+                                        isPendingApproval = (status == "pending_approval" || status == "pending")
+                                        userData = updatedDoc.data
+                                    }
+                                    
                                     isFirstLoginMode = false
                                     needsPasswordReset = false
-                                    Log.d("AuthFlow", "First login onboarding complete. Transitioning to dashboard.")
+                                    Log.d("AuthFlow", "First login reset complete. Transitioning (Pending: $isPendingApproval)")
                                 }
                             } catch (e: Exception) {
                                 Log.e("AuthFlow", "Failed to update isFirstLogin status", e)
