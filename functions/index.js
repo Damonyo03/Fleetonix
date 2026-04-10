@@ -15,7 +15,8 @@ const crypto = require("crypto");
 const { defineSecret } = require("firebase-functions/params");
 
 // D2: Secret Definitions
-const GMAIL_APP_PASSWORD = defineSecret("GMAIL_APP_PASSWORD");
+// D2: Secret Definitions removed in favor of ENV bypass for CI/CD stability
+// GMAIL_APP_PASSWORD is now handled via process.env.GMAIL_APP_PASSWORD
 
 admin.initializeApp();
 
@@ -26,7 +27,7 @@ const getMailTransport = () => nodemailer.createTransport({
   service: "gmail",
   auth: {
     user: "fleetonix.noreply@gmail.com",
-    pass: GMAIL_APP_PASSWORD.value(),
+    pass: process.env.GMAIL_APP_PASSWORD || "",
   },
 });
 
@@ -104,7 +105,7 @@ function getOTPHtmlTemplate(otp, email, isRegistration = false) {
 }
 
 // RESTORED: Password Reset Flows
-exports.sendPasswordResetOTP = onRequest({ cors: true, secrets: [GMAIL_APP_PASSWORD] }, async (req, res) => {
+exports.sendPasswordResetOTP = onRequest({ cors: true }, async (req, res) => {
   if (req.method === "OPTIONS") { res.status(204).send(""); return; }
   const { email } = req.body;
   if (!email) return res.status(400).json({ success: false, message: "Email is required" });
@@ -134,7 +135,7 @@ exports.sendPasswordResetOTP = onRequest({ cors: true, secrets: [GMAIL_APP_PASSW
   }
 });
 
-exports.resetPasswordWithOTP = onRequest({ cors: true, secrets: [GMAIL_APP_PASSWORD] }, async (req, res) => {
+exports.resetPasswordWithOTP = onRequest({ cors: true }, async (req, res) => {
   if (req.method === "OPTIONS") { res.status(204).send(""); return; }
   const { userId, otp, newPassword, password } = req.body || {};
   const targetPassword = newPassword || password;
@@ -161,7 +162,7 @@ exports.resetPasswordWithOTP = onRequest({ cors: true, secrets: [GMAIL_APP_PASSW
 });
 
 // RESTORED: General Verify OTP (Used by legacy app versions)
-exports.verifyOTP = onRequest({ cors: true, secrets: [GMAIL_APP_PASSWORD] }, async (req, res) => {
+exports.verifyOTP = onRequest({ cors: true }, async (req, res) => {
   if (req.method === "OPTIONS") { res.status(204).send(""); return; }
   const { userId, otpCode } = req.body || {};
   if (!userId || !otpCode) return res.status(200).json({ success: false, message: "Missing fields" });
@@ -182,7 +183,7 @@ exports.verifyOTP = onRequest({ cors: true, secrets: [GMAIL_APP_PASSWORD] }, asy
 });
 
 // MODERNIZED: Admin/Driver Registration & Activation
-exports.sendRegistrationOTP = onRequest({ cors: true, secrets: [GMAIL_APP_PASSWORD] }, async (req, res) => {
+exports.sendRegistrationOTP = onRequest({ cors: true }, async (req, res) => {
   if (req.method === "OPTIONS") { res.status(204).send(""); return; }
   const { email } = req.body;
   if (!email) return res.status(400).json({ success: false, message: "Email required" });
@@ -212,7 +213,7 @@ exports.sendRegistrationOTP = onRequest({ cors: true, secrets: [GMAIL_APP_PASSWO
   }
 });
 
-exports.adminCreateUser = onRequest({ cors: true, secrets: [GMAIL_APP_PASSWORD] }, async (req, res) => {
+exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
   const caller = await requireRole(req, res, ["super_admin", "admin"]);
   if (!caller) return;
 
@@ -270,7 +271,7 @@ exports.adminCreateUser = onRequest({ cors: true, secrets: [GMAIL_APP_PASSWORD] 
   }
 });
 
-exports.verifyAndActivateAccount = onRequest({ cors: true, secrets: [GMAIL_APP_PASSWORD] }, async (req, res) => {
+exports.verifyAndActivateAccount = onRequest({ cors: true }, async (req, res) => {
     if (req.method === "OPTIONS") { res.status(204).send(""); return; }
     const { email, otp, newPassword } = req.body;
     const emailLower = email.toLowerCase().trim();
