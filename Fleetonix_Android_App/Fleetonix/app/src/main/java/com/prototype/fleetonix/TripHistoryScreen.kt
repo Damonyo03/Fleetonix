@@ -180,6 +180,8 @@ fun TripHistoryScreen(
             timeOfDeparture = ticket.departureTime,
             timeOfArrival = ticket.arrivalTime,
             totalKm = ticket.totalKm,
+            odometerStart = ticket.odometerStart,
+            odometerEnd = ticket.odometerEnd,
             pickupLocation = ticket.pickup,
             dropoffLocation = ticket.dropoff,
             routePoints = routePoints,
@@ -264,7 +266,9 @@ data class TripHistoryItem(
     val status: String,
     val polyline: String,
     val date: LocalDateTime,
-    val plate: String
+    val plate: String,
+    val odometerStart: Double,
+    val odometerEnd: Double
 )
 
 @RequiresApi(Build.VERSION_CODES.O)
@@ -290,7 +294,9 @@ fun buildTripItem(doc: com.google.firebase.firestore.DocumentSnapshot): TripHist
             status = data["status"] as? String ?: "Completed",
             polyline = data["route_polyline"] as? String ?: "",
             date = ldt,
-            plate = data["vehicle_plate"] as? String ?: data["plate_number"] as? String ?: "N/A"
+            plate = data["vehicle_plate"] as? String ?: data["plate_number"] as? String ?: "N/A",
+            odometerStart = (data["odometer_start"] as? Number)?.toDouble() ?: 0.0,
+            odometerEnd = (data["odometer_end"] as? Number)?.toDouble() ?: 0.0
         )
     } catch (e: Exception) {
         null

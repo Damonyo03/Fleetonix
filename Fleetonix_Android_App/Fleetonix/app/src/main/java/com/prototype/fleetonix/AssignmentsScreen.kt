@@ -49,11 +49,10 @@ data class AssignmentModel(
     val passengerPhone: String?,
     val pickupAddress: String?,
     val dropoffAddress: String?,
-    val returnToPickup: Boolean,
-    val returnPickupTime: String?,
     val specialInstructions: String?,
     val totalKm: Double?,
-    val isOfficial: Boolean
+    val isOfficial: Boolean,
+    val odometerStart: Double? = null
 )
 
 
@@ -62,22 +61,24 @@ data class AssignmentModel(
 // Color helpers for phases
 // ─────────────────────────────────────────────────────────────
 private fun phaseLabel(phase: String): String = when (phase.lowercase()) {
-    "pending" -> "Pending"
+    "pending" -> "Scheduled"
     "accepted" -> "Accepted"
-    "pickup" -> "On the Way"
-    "dropoff" -> "Dropping Off"
-    "return_pickup" -> "Return Pickup"
-    "ready_to_complete" -> "Finishing Up"
+    "en_route_pickup" -> "En Route to Pickup"
+    "picked_up" -> "Passenger Picked Up"
+    "en_route_dropoff" -> "En Route to Drop-off"
+    "dropped_off" -> "Passenger Dropped Off"
     "completed" -> "Completed"
-    else -> phase.replaceFirstChar { it.uppercase() }
+    else -> phase.replace("_", " ").replaceFirstChar { it.uppercase() }
 }
 
 private fun phaseColor(phase: String): Color = when (phase.lowercase()) {
-    "pending" -> Color(0xFFFFB347)       // Orange
-    "accepted" -> Color(0xFF00D4FF)      // Blue
-    "pickup", "dropoff" -> Color(0xFF14B8A6)  // Teal
-    "return_pickup", "ready_to_complete" -> Color(0xFFA78BFA) // Purple
-    "completed" -> Color(0xFF10B981)     // Green
+    "pending" -> Color(0xFFFFB347)           // Orange
+    "accepted" -> Color(0xFF00D4FF)          // Sky Blue
+    "en_route_pickup" -> Color(0xFF3B82F6)    // Professional Blue
+    "picked_up" -> Color(0xFF14B8A6)         // Teal
+    "en_route_dropoff" -> Color(0xFF3B82F6)   // Professional Blue
+    "dropped_off" -> Color(0xFFF59E0B)       // Amber/Orange
+    "completed" -> Color(0xFF10B981)         // Green
     else -> Color(0xFF6B7280)
 }
 
@@ -234,31 +235,6 @@ fun AssignmentCard(
                 )
             }
 
-            // ── Return to Pickup ────────────────────────────────────
-            if (assignment.returnToPickup) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFFA78BFA).copy(alpha = 0.1f), RoundedCornerShape(8.dp))
-                        .padding(10.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Replay,
-                        contentDescription = null,
-                        tint = Color(0xFFA78BFA),
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Text(
-                        text = "Return to pickup" +
-                            (assignment.returnPickupTime?.let { "  ·  ${formatScheduleTime(it)}" } ?: ""),
-                        color = Color(0xFFA78BFA),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
 
             // ── Special Instructions ────────────────────────────────
             if (!assignment.specialInstructions.isNullOrBlank()) {
@@ -510,29 +486,27 @@ fun AssignmentsScreen(onBack: () -> Unit) {
 
                                 AssignmentModel(
                                     docId = doc.id,
-                                    scheduleId = (data["schedule_id"] as? Number)?.toString() ?: doc.id.take(8).uppercase(),
+                                    scheduleId = (data["schedule_id"] as? Number)?.toInt()?.toString() ?: doc.id.take(8).uppercase(),
                                     tripPhase = phase,
                                     scheduleDate = data["schedule_date"] as? String,
-                                    scheduleTime = data["schedule_time"] as? String,
+                                    scheduleTime = data["schedule_time"] as? String ?: data["scheduled_time"] as? String,
                                     clientName = data["client_name"] as? String,
                                     passengerName = data["passenger_name"] as? String,
                                     passengerPhone = data["passenger_phone"] as? String,
                                     pickupAddress = pickupAddress,
                                     dropoffAddress = dropoffAddress,
-                                    returnToPickup = data["return_to_pickup"] as? Boolean ?: false,
-                                    returnPickupTime = data["return_pickup_time"] as? String,
                                     specialInstructions = data["special_instructions"] as? String,
                                     totalKm = (data["total_km_travelled"] as? Number)?.toDouble(),
-                                    isOfficial = data["isOfficial"] as? Boolean ?: false
+                                    isOfficial = data["isOfficial"] as? Boolean ?: false,
+                                    odometerStart = (data["odometer_start"] as? Number)?.toDouble()
                                 )
                             }.sortedWith(
                                 compareBy<AssignmentModel> {
                                     when (it.tripPhase) {
-                                        "pickup", "dropoff", "return_pickup", "ready_to_complete" -> 0
-                                        "accepted" -> 1
-                                        "pending" -> 2
-                                        "completed" -> 3
-                                        else -> 4
+                                        "accepted", "en_route_pickup", "picked_up", "en_route_dropoff", "dropped_off" -> 0
+                                        "pending" -> 1
+                                        "completed" -> 2
+                                        else -> 3
                                     }
                                 }.thenByDescending { it.scheduleDate }
                             )
@@ -682,6 +656,10 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                 }
 
                 else -> {
+                    var showOdometerDialog by remember { mutableStateOf(false) }
+                    var selectedItemForAccept by remember { mutableStateOf<AssignmentModel?>(null) }
+                    var odometerValue by remember { mutableStateOf("") }
+
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp),
@@ -689,7 +667,7 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                     ) {
                         // Active / In-Progress section
                         val activeItems = assignments.filter {
-                            it.tripPhase in listOf("pickup", "dropoff", "return_pickup", "ready_to_complete", "accepted")
+                            it.tripPhase in listOf("accepted", "en_route_pickup", "picked_up", "en_route_dropoff", "dropped_off")
                         }
                         if (activeItems.isNotEmpty()) {
                             item {
@@ -710,17 +688,8 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                                 AssignmentCard(
                                     assignment = a,
                                     onAcceptJob = { clickedItem ->
-                                        isLoading = true
-                                        db.collection("schedules").document(clickedItem.docId).update(
-                                            "status", "accepted",
-                                            "trip_phase", "accepted",
-                                            "accepted_at", com.google.firebase.firestore.FieldValue.serverTimestamp()
-                                        ).addOnSuccessListener {
-                                            onBack()
-                                        }.addOnFailureListener { e ->
-                                            errorMsg = "Failed to accept job: ${e.message}"
-                                            isLoading = false
-                                        }
+                                        selectedItemForAccept = clickedItem
+                                        showOdometerDialog = true
                                     }
                                 )
                             }
@@ -736,6 +705,70 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                                 AssignmentCard(assignment = a, onAcceptJob = {})
                             }
                         }
+                    }
+
+                    if (showOdometerDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showOdometerDialog = false },
+                            title = { Text("Enter Current Odometer", fontWeight = FontWeight.Bold, color = TextPrimary) },
+                            text = {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("Please record your current vehicle mileage to start the trip.", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                                    OutlinedTextField(
+                                        value = odometerValue,
+                                        onValueChange = { if (it.all { char -> char.isDigit() || char == '.' }) odometerValue = it },
+                                        label = { Text("Odometer Reading (KM)") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedBorderColor = AccentTeal,
+                                            unfocusedBorderColor = TextSecondary.copy(alpha = 0.3f),
+                                            focusedTextColor = TextPrimary,
+                                            unfocusedTextColor = TextPrimary
+                                        ),
+                                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                                        )
+                                    )
+                                }
+                            },
+                            confirmButton = {
+                                Button(
+                                    onClick = {
+                                        val odo = odometerValue.toDoubleOrNull()
+                                        if (odo != null && selectedItemForAccept != null) {
+                                            val item = selectedItemForAccept!!
+                                            showOdometerDialog = false
+                                            isLoading = true
+                                            
+                                            scope.launch {
+                                                try {
+                                                    db.collection("schedules").document(item.docId).update(
+                                                        "status", "accepted",
+                                                        "trip_phase", "accepted",
+                                                        "odometer_start", odo,
+                                                        "accepted_at", com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                                    ).await()
+                                                    onBack()
+                                                } catch (e: Exception) {
+                                                    errorMsg = "Failed to accept job: ${e.message}"
+                                                    isLoading = false
+                                                }
+                                            }
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
+                                ) {
+                                    Text("CONFIRM ACTION", color = Midnight, fontWeight = FontWeight.Bold)
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showOdometerDialog = false }) {
+                                    Text("CANCEL", color = TextSecondary)
+                                }
+                            },
+                            containerColor = CardBlue
+                        )
                     }
                 }
             }
