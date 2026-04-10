@@ -24,6 +24,7 @@ let driverDTRStatus = {}; // email -> { action: 'time_in'|'time_out', timestamp:
 
 // Live Map Assets
 let accidentOverlays = {};        // driverId -> AccidentOverlay
+let pulseOverlays = {};           // driverId -> PulseOverlay
 let activeSchedulesData = {};      // driverId -> { stops:[], final:{}, tripId:"" }
 let driverPaths = {};              // driverId -> [{lat, lng, speedKmh}]
 let driverPolylineSegments = {};   // driverId -> [google.maps.Polyline] (colored segments)
@@ -490,11 +491,6 @@ function initStats() {
             const driverId = data.driver_id;
             if (!driverId) return;
 
-            if (change.type === "removed") {
-                delete activeSchedulesData[driverId];
-                if (allDriversData[driverId]) delete allDriversData[driverId].odometer_start;
-            } else {
-                const stops = [];
                 if (data.pickup_latitude && data.pickup_longitude) {
                     stops.push({ latitude: data.pickup_latitude, longitude: data.pickup_longitude, label: 'P' });
                 }
@@ -503,10 +499,13 @@ function initStats() {
                     stops: stops,
                     final: { 
                         latitude: data.dropoff_latitude, 
-                        longitude: data.dropoff_longitude 
+                        longitude: data.dropoff_longitude,
+                        address: data.dropoff_location?.text || data.dropoff_location || "Destination"
                     },
                     tripId: change.doc.id,
-                    status: data.status
+                    status: data.status,
+                    passenger_name: data.passenger_name || data.client_name || "Guest",
+                    client_id: data.client_id
                 };
                 if (allDriversData[driverId]) {
                     allDriversData[driverId].odometer_start = data.odometer_start;
@@ -743,6 +742,10 @@ function startRealtimeDriverTracking() {
                     driverMarkers[id].setMap(null);
                     delete driverMarkers[id];
                 }
+                if (pulseOverlays[id]) {
+                    pulseOverlays[id].setMap(null);
+                    delete pulseOverlays[id];
+                }
             }
         });
     }, 5 * 60 * 1000);
@@ -822,7 +825,8 @@ function refreshMarker(id) {
     if (speedKmh < 10) trafficColor = '#ef4444';
     else if (speedKmh < 40) trafficColor = '#f59e0b';
 
-    const markerIcon = getMarkerIcon(status, trafficColor);
+    const markerIcon = getMarkerIcon(status, d.car_details || d.vehicle_assigned);
+    markerIcon.rotation = d.heading || 0;
 
     const now = Date.now();
     const lastActive = d.last_updated
@@ -853,6 +857,8 @@ function refreshMarker(id) {
         }
         if (driverPaths[id]) delete driverPaths[id];
         if (accidentOverlays[id]) { accidentOverlays[id].setMap(null); delete accidentOverlays[id]; }
+        if (pulseOverlays[id]) { pulseOverlays[id].setMap(null); delete pulseOverlays[id]; }
+        delete lastMarkerPos[id];
         if (driverStopMarkers[id]) {
             driverStopMarkers[id].forEach(m => m.setMap(null));
             delete driverStopMarkers[id];
@@ -882,6 +888,24 @@ function refreshMarker(id) {
         } else if (accidentOverlays[id]) {
             accidentOverlays[id].setMap(null);
             delete accidentOverlays[id];
+        }
+        
+        // --- Pulsing Status Ring ---
+        const isOnJob = ['on_schedule', 'accepted', 'pickup', 'dropoff', 'in_progress', 'moving_to_pickup', 'moving_to_dropoff', 'picked_up'].includes(status);
+        const isPulseActive = status === 'available' || isOnJob;
+        
+        if (isPulseActive && !isAccident && !isCompleted) {
+            const ringClass = status === 'available' ? 'marker-pulse-ring' : 'marker-pulse-ring on_job';
+            if (!pulseOverlays[id]) {
+                pulseOverlays[id] = new MapOverlay(pos, '', ringClass);
+                pulseOverlays[id].setMap(driversMap);
+            } else {
+                pulseOverlays[id].setPosition(pos);
+                if (pulseOverlays[id].div) pulseOverlays[id].div.className = ringClass;
+            }
+        } else if (pulseOverlays[id]) {
+            pulseOverlays[id].setMap(null);
+            delete pulseOverlays[id];
         }
 
         // --- Route Tracking ---
@@ -959,14 +983,10 @@ function refreshMarker(id) {
 
         driverMarkers[id].driverData = d;
     } else {
-        const marker = new google.maps.Marker({
-            position: pos,
-            map: driversMap,
-            title: d.driver_name || 'Driver',
             icon: markerIcon,
-            opacity: status === 'offline' ? 0.6 : 1.0,
-            visible: isOnline,
-            animation: isAccident ? google.maps.Animation.BOUNCE : google.maps.Animation.DROP
+            opacity: isOnline ? 1.0 : 0.5,
+            visible: !isAccident && !isCompleted,
+            animation: google.maps.Animation.DROP
         });
 
         marker.isBlinking = isAccident;
@@ -1102,30 +1122,57 @@ function updateOnlineDriversList() {
         const phase = driver.current_trip_phase || (status === 'on_schedule' ? 'accepted' : '');
         const displayStatus = phase ? phase : status;
         const statusLabel = displayStatus.replace(/_/g, ' ');
-        const lastUpdateMs = driver.last_updated ? (driver.last_updated.seconds * 1000) : 0;
+        const isLive = (now - (driver.last_location_push || 0)) < liveThreshold;
         const isBackground = driver.is_background === true;
-        const vehicleInfo = driver.vehicle_assigned ? `${driver.vehicle_assigned}${driver.car_color ? ' (' + driver.car_color + ')' : ''}${driver.plate_number ? ' · ' + driver.plate_number : ''}` : '';
+        
+        const vehicleInfo = driver.vehicle_assigned ? `${driver.vehicle_assigned}${driver.plate_number ? ' · ' + driver.plate_number : ''}` : '';
         const email = driver.driver_email?.toLowerCase()?.trim();
 
         const displayName = (driver.driver_name && !['Loading...', 'Fleet Driver', 'Loading Driver...'].includes(driver.driver_name)) 
             ? driver.driver_name 
             : (driverDTRStatus[email]?.name || driver.driver_email || 'Fleet Driver');
 
+        const mission = activeSchedulesData[driver.id];
+        const isOnJob = ['on_schedule', 'accepted', 'pickup', 'dropoff', 'in_progress', 'moving_to_pickup', 'moving_to_dropoff', 'picked_up'].includes(displayStatus);
+
         return `
-            <div class="driver-item ${status === 'offline' ? 'offline' : ''} ${isLive ? 'pulse' : ''}" onclick="focusDriver('${driver.id}')" title="${vehicleInfo}">
-                <div class="status-dot ${displayStatus}"></div>
-                <div class="driver-info">
-                    <div class="driver-name" style="font-weight: 700; color: var(--text-primary);">${displayName}</div>
-                    <div class="driver-status-text ${displayStatus}" style="display: flex; align-items: center; gap: 6px;">
-                        ${statusLabel}
-                        ${isBackground ? '<span class="bg-indicator active" title="App Running in Background"></span>' : ''}
+            <div class="driver-item ${status === 'offline' ? 'offline' : ''} ${isLive ? 'pulse' : ''}" onclick="focusDriver('${driver.id}')">
+                <div class="driver-item-header">
+                    <div class="status-dot ${displayStatus}"></div>
+                    <div class="driver-name">${displayName}</div>
+                    <div class="driver-badge-area">
+                        ${displayStatus === 'available' ? `<span class="status-badge available ${isLive ? 'premium' : ''}">Available</span>` : ''}
+                        ${isOnJob ? `<span class="status-badge on_job">${statusLabel}</span>` : ''}
                     </div>
-                    ${vehicleInfo ? `<div style="font-size:0.75em; color:var(--text-secondary); margin-top:3px; line-height: 1.2;"><i class="fas fa-truck-pickup" style="font-size:0.85em; color: var(--accent-blue);"></i> ${vehicleInfo}</div>` : ''}
                 </div>
-                <div class="driver-badge-area">
-                    ${status === 'available' ? `<span class="status-badge available ${isLive ? 'premium' : ''}" style="font-size: 0.65rem; padding: 2px 6px;">Available</span>` : ''}
-                    ${['on_schedule', 'accepted', 'pickup', 'dropoff', 'in_progress'].includes(displayStatus) ? `<span class="status-badge ${displayStatus}" style="font-size: 0.65rem; padding: 2px 6px;">${statusLabel}</span>` : ''}
+
+                <div class="driver-details-grid">
+                    <div class="detail-item">
+                        <i class="fas fa-car-side"></i>
+                        <span>${vehicleInfo || 'No Vehicle'}</span>
+                    </div>
+                    <div class="detail-item">
+                        <i class="fas fa-tachometer-alt"></i>
+                        <span>${((driver.current_speed || 0) * 3.6).toFixed(1)} km/h</span>
+                    </div>
+                    
+                    ${isOnJob && mission ? `
+                        <div class="detail-item booking-info" style="grid-column: 1 / -1; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 8px; margin-top: 4px;">
+                            <div style="display: flex; justify-content: space-between; width: 100%;">
+                                <span style="color: var(--accent-blue);"><i class="fas fa-user"></i> ${mission.passenger_name}</span>
+                                <span style="font-size: 0.8em; color: var(--text-muted);">${(now - (driver.last_location_push || 0)) / 1000 < 60 ? 'LIVE' : Math.round((now - (driver.last_location_push || 0)) / 60000) + 'm'}</span>
+                            </div>
+                            <div style="font-size: 0.85em; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;">
+                                <i class="fas fa-map-marker-alt"></i> To: ${mission.final?.address || 'Destination'}
+                            </div>
+                        </div>
+                    ` : `
+                        <div class="detail-item" style="grid-column: 1 / -1; opacity: 0.6; font-size: 0.8em;">
+                            <i class="fas fa-clock"></i> Last Pulse: ${Math.round((now - (driver.last_location_push || 0)) / 60000)}m ago
+                        </div>
+                    `}
                 </div>
+                ${isBackground ? '<div class="bg-pulse-label">BG ACTIVE</div>' : ''}
             </div>
         `;
     }).join('') : '<div style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 0.85em;">No online drivers found.</div>';
@@ -1373,15 +1420,30 @@ function closeQuickInfoPanel() {
 window.closeQuickInfoPanel = closeQuickInfoPanel;
 
 
-function getMarkerIcon(status) {
-    const color = getStatusColor(status).substring(1); 
+function getMarkerIcon(status, vehicleDetails) {
+    // 1. Resolve Color based on status
+    const color = getStatusColor(status);
+    
+    // 2. Resolve Vehicle Type Icon Path
+    const isVan = (vehicleDetails || '').toLowerCase().includes('6-seater') || 
+                  (vehicleDetails || '').toLowerCase().includes('van') || 
+                  (vehicleDetails || '').toLowerCase().includes('mpv') ||
+                  (vehicleDetails || '').toLowerCase().includes('hiace');
+    
+    // Sedan SVG Path (Simplified top-down view)
+    const sedanPath = "M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z";
+    // Van SVG Path (Boxier)
+    const vanPath = "M20 8h-3V4H4c-1.1 0-2 .9-2 2v11h2c0 1.66 1.34 3 3 3s3-1.34 3-3h6c0 1.66 1.34 3 3 3s3-1.34 3-3h2v-5l-3-4zM7 18.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm13-1.2h-2c0 1.66-1.34 3-3 3s-3-1.34-3-3h-6c0 1.66-1.34 3-3 3s-3-1.34-3-3H4v-11h13v7h3v4.2zm-3-2.7c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z";
+
     return {
-        path: google.maps.SymbolPath.CIRCLE,
-        fillColor: `#${color}`,
+        path: isVan ? vanPath : sedanPath,
+        fillColor: color,
         fillOpacity: 1,
         strokeWeight: 2,
         strokeColor: '#FFFFFF',
-        scale: 10
+        scale: 1.5,
+        anchor: new google.maps.Point(12, 12),
+        labelOrigin: new google.maps.Point(12, 35)
     };
 }
 

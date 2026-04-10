@@ -846,3 +846,99 @@ body {
 .timeline-address { color: var(--text-primary); font-weight: 500; }
 .timeline-time { font-size: 0.75rem; color: var(--accent-blue); font-weight: 600; margin-left: 8px; }
 
+/* ── Enriched Online Drivers List ────────────────────────────────────────── */
+
+.driver-item-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.driver-name {
+    font-weight: 700;
+    color: var(--text-primary);
+    flex: 1;
+    font-size: 0.95rem;
+}
+
+.driver-badge-area {
+    display: flex;
+    gap: 6px;
+}
+
+.driver-details-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.detail-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.detail-item i {
+    width: 14px;
+    color: var(--accent-blue);
+    font-size: 0.85rem;
+    text-align: center;
+}
+
+.booking-info {
+    animation: slideInUp 0.3s ease-out;
+}
+
+@keyframes slideInUp {
+    from { transform: translateY(5px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.bg-pulse-label {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    font-size: 0.6rem;
+    font-weight: 900;
+    color: var(--accent-green);
+    letter-spacing: 0.05em;
+    opacity: 0.7;
+    animation: blink 1.5s infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.8; }
+}
+
+/* ── Live Map Pulsing Ring ────────────────────────────────────────────────── */
+
+@keyframes marker-pulse {
+    0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+    100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; }
+}
+
+.marker-pulse-ring {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    background: transparent;
+    border: 3px solid var(--accent-green);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 1;
+    animation: marker-pulse 2s infinite cubic-bezier(0.25, 0, 0.25, 1);
+}
+
+.marker-pulse-ring.on_job {
+    border-color: var(--accent-blue);
+}
+
