@@ -32,6 +32,8 @@ import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.FieldValue
 import com.prototype.fleetonix.ui.theme.*
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 // ─────────────────────────────────────────────────────────────
 // Data model for a single assignment (parsed from Firestore)
@@ -435,6 +437,7 @@ private fun TimelineRow(
 fun AssignmentsScreen(onBack: () -> Unit) {
     val auth = remember { FirebaseAuth.getInstance() }
     val db = remember { FirebaseFirestore.getInstance() }
+    val scope = rememberCoroutineScope()
 
     var assignments by remember { mutableStateOf<List<AssignmentModel>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
