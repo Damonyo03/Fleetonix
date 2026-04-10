@@ -2368,7 +2368,7 @@ fun DriverDashboard(
                                      }
                                 }
 
-                                // Step 6: COMPLETE (Odometer & Signature required)
+                                // Step 6: COMPLETE (Odometer required)
                                 phase == "dropped_off" || phase == "ready_to_complete" || phase == "return_pickup" -> {
                                     Button(
                                         onClick = {
