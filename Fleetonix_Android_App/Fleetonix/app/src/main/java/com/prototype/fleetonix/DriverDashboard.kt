@@ -78,6 +78,22 @@ fun TripTicketDialog(
     isSubmitting: Boolean = false,
     onConfirm: () -> Unit
 ) {
+    val cameraPositionState = rememberCameraPositionState()
+
+    // Auto-frame bounds to show the entire route
+    LaunchedEffect(routePoints) {
+        if (routePoints.isNotEmpty()) {
+            try {
+                val boundsBuilder = LatLngBounds.builder()
+                routePoints.forEach { boundsBuilder.include(it) }
+                val bounds = boundsBuilder.build()
+                cameraPositionState.move(CameraUpdateFactory.newLatLngBounds(bounds, 50))
+            } catch (e: Exception) {
+                Log.e("TripTicketDialog", "Error setting camera bounds", e)
+            }
+        }
+    }
+
     AlertDialog(
         onDismissRequest = { },
         title = {
@@ -95,6 +111,48 @@ fun TripTicketDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // Route Map Visualization
+                if (routePoints.isNotEmpty()) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp)
+                            .clip(RoundedCornerShape(12.dp)),
+                        border = BorderStroke(1.dp, AccentTeal.copy(alpha = 0.3f))
+                    ) {
+                        GoogleMap(
+                            modifier = Modifier.fillMaxSize(),
+                            cameraPositionState = cameraPositionState,
+                            uiSettings = MapUiSettings(
+                                zoomControlsEnabled = false,
+                                scrollGesturesEnabled = true,
+                                myLocationButtonEnabled = false
+                            )
+                        ) {
+                            Polyline(
+                                points = routePoints,
+                                color = AccentTeal,
+                                width = 10f,
+                                jointType = JointType.ROUND,
+                                startCap = RoundCap(),
+                                endCap = RoundCap()
+                            )
+                            
+                            // Markers for Start and End
+                            Marker(
+                                state = MarkerState(position = routePoints.first()),
+                                title = "Pickup",
+                                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)
+                            )
+                            Marker(
+                                state = MarkerState(position = routePoints.last()),
+                                title = "Dropoff",
+                                icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)
+                            )
+                        }
+                    }
+                }
+
                 // Main Info Card
                 Card(
                     colors = CardDefaults.cardColors(containerColor = Midnight),

@@ -54,13 +54,6 @@ interface DriverApi {
         @Body request: AccidentReportRequest
     ): AccidentReportResponse
 
-    @POST("reportVehicleIssue")
-    suspend fun reportVehicleIssue(
-        @Header("Authorization") authHeader: String? = null,
-        @Query("session_token") sessionToken: String? = null,
-        @Body request: VehicleIssueRequest
-    ): VehicleIssueResponse
-
     @POST("sendRegistrationOTP")
     suspend fun sendRegistrationOTP(@Body request: RegistrationOTPRequest): RegistrationOTPResponse
 

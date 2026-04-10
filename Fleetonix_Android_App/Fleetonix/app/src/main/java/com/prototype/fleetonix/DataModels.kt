@@ -208,27 +208,6 @@ data class AccidentReportData(
     @SerializedName("reported_at") val reportedAt: String? = null
 )
 
-data class VehicleIssueRequest(
-    @SerializedName("driver_email") val driverEmail: String,
-    @SerializedName("schedule_id") val scheduleId: Int? = null,
-    @SerializedName("firebase_schedule_id") val firebaseScheduleId: String? = null,
-    @SerializedName("issue_type") val issueType: String,
-    val description: String,
-    val latitude: Double,
-    val longitude: Double
-)
-
-data class VehicleIssueResponse(
-    val success: Boolean,
-    val message: String,
-    val data: VehicleIssueData? = null
-)
-
-data class VehicleIssueData(
-    @SerializedName("issue_id") val issueId: String? = null,
-    @SerializedName("driver_id") val driverId: String? = null,
-    @SerializedName("reported_at") val reportedAt: String? = null
-)
 // Registration Models
 data class RegistrationOTPRequest(val email: String)
 data class RegistrationOTPResponse(val success: Boolean, val message: String? = null)
