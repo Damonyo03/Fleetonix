@@ -16,6 +16,12 @@ const newAdminBookingBtn = document.getElementById('newAdminBookingBtn');
 
 let allBookings = [];
 
+// Phase 5: Geographic Sector Groups
+const SECTORS = {
+    NORTH: ['Baguio', 'Laoag', 'Vigan', 'Tuguegarao', 'Santiago', 'San Fernando'],
+    SOUTH: ['Batangas', 'Lucena', 'Naga', 'Legazpi', 'Calamba', 'Santa Rosa']
+};
+
 // Attach the button right away (don't wait for auth)
 if (newAdminBookingBtn) {
     newAdminBookingBtn.addEventListener('click', () => {
@@ -248,9 +254,16 @@ async function showCreateBookingModal(clients) {
         const autoDispatch = document.getElementById('modal_auto_dispatch').checked;
         const isOfficial = document.getElementById('modal_is_official').checked;
 
-        // Auto-Area Detection Logic
+        // Auto-Area Detection Logic (Phase 5 Alignment)
         const pickupEl = document.getElementById('modal_pickup');
-        const detectedArea = pickupEl.dataset.city || "NCR"; 
+        const cityName = pickupEl.dataset.city || "";
+        let detectedArea = "NCR"; // Default
+        
+        if (SECTORS.NORTH.some(c => cityName.includes(c))) {
+            detectedArea = "North";
+        } else if (SECTORS.SOUTH.some(c => cityName.includes(c))) {
+            detectedArea = "South";
+        }
 
         const data = sanitizeFirestoreData({
             booking_id: bookingId,
@@ -453,6 +466,7 @@ function initBookingList() {
     });
 
     if (statusFilter) statusFilter.addEventListener('change', applyFilters);
+    if (document.getElementById('areaFilter')) document.getElementById('areaFilter').addEventListener('change', applyFilters);
 }
 
 function applyFilters() {
@@ -462,7 +476,8 @@ function applyFilters() {
     const filtered = allBookings.filter(d => {
         const b = d.data();
         const matchStatus = status === 'all' || b.status === status;
-        return matchStatus;
+        const matchArea = area === 'all' || b.operating_area === area;
+        return matchStatus && matchArea;
     });
     renderBookings(filtered);
 }
@@ -479,9 +494,14 @@ function renderBookings(docs) {
         const id = d.id;
         const statusClass = booking.status || 'pending';
         const displayName = booking.passenger_name || booking.client_name || 'N/A';
+        const areaLabel = booking.operating_area === 'North' ? '<span class="badge badge-info"><i class="fas fa-arrow-up"></i> North</span>' : 
+                          booking.operating_area === 'South' ? '<span class="badge badge-warning"><i class="fas fa-arrow-down"></i> South</span>' : 
+                          '<span class="badge badge-secondary">NCR</span>';
+        
         return `
             <tr>
                 <td>${displayName}</td>
+                <td>${areaLabel}</td>
                 <td>${booking.pickup_location || 'N/A'}</td>
                 <td>${booking.dropoff_location || 'N/A'}</td>
                 <td>${booking.pickup_date || 'N/A'} ${booking.pickup_time || ''}</td>

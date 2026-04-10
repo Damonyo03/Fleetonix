@@ -104,7 +104,7 @@ function getOTPHtmlTemplate(otp, email, isRegistration = false) {
 }
 
 // RESTORED: Password Reset Flows
-exports.sendPasswordResetOTP = onRequest({ cors: true }, async (req, res) => {
+exports.sendPasswordResetOTP = onRequest({ cors: true, secrets: [GMAIL_APP_PASSWORD] }, async (req, res) => {
   if (req.method === "OPTIONS") { res.status(204).send(""); return; }
   const { email } = req.body;
   if (!email) return res.status(400).json({ success: false, message: "Email is required" });
@@ -134,7 +134,7 @@ exports.sendPasswordResetOTP = onRequest({ cors: true }, async (req, res) => {
   }
 });
 
-exports.resetPasswordWithOTP = onRequest({ cors: true }, async (req, res) => {
+exports.resetPasswordWithOTP = onRequest({ cors: true, secrets: [GMAIL_APP_PASSWORD] }, async (req, res) => {
   if (req.method === "OPTIONS") { res.status(204).send(""); return; }
   const { userId, otp, newPassword, password } = req.body || {};
   const targetPassword = newPassword || password;
@@ -161,7 +161,7 @@ exports.resetPasswordWithOTP = onRequest({ cors: true }, async (req, res) => {
 });
 
 // RESTORED: General Verify OTP (Used by legacy app versions)
-exports.verifyOTP = onRequest({ cors: true }, async (req, res) => {
+exports.verifyOTP = onRequest({ cors: true, secrets: [GMAIL_APP_PASSWORD] }, async (req, res) => {
   if (req.method === "OPTIONS") { res.status(204).send(""); return; }
   const { userId, otpCode } = req.body || {};
   if (!userId || !otpCode) return res.status(200).json({ success: false, message: "Missing fields" });
@@ -182,7 +182,7 @@ exports.verifyOTP = onRequest({ cors: true }, async (req, res) => {
 });
 
 // MODERNIZED: Admin/Driver Registration & Activation
-exports.sendRegistrationOTP = onRequest({ cors: true }, async (req, res) => {
+exports.sendRegistrationOTP = onRequest({ cors: true, secrets: [GMAIL_APP_PASSWORD] }, async (req, res) => {
   if (req.method === "OPTIONS") { res.status(204).send(""); return; }
   const { email } = req.body;
   if (!email) return res.status(400).json({ success: false, message: "Email required" });
@@ -212,7 +212,7 @@ exports.sendRegistrationOTP = onRequest({ cors: true }, async (req, res) => {
   }
 });
 
-exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
+exports.adminCreateUser = onRequest({ cors: true, secrets: [GMAIL_APP_PASSWORD] }, async (req, res) => {
   const caller = await requireRole(req, res, ["super_admin", "admin"]);
   if (!caller) return;
 
@@ -270,7 +270,7 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
   }
 });
 
-exports.verifyAndActivateAccount = onRequest({ cors: true }, async (req, res) => {
+exports.verifyAndActivateAccount = onRequest({ cors: true, secrets: [GMAIL_APP_PASSWORD] }, async (req, res) => {
     if (req.method === "OPTIONS") { res.status(204).send(""); return; }
     const { email, otp, newPassword } = req.body;
     const emailLower = email.toLowerCase().trim();
@@ -302,6 +302,17 @@ exports.verifyAndActivateAccount = onRequest({ cors: true }, async (req, res) =>
         }
 
         await admin.firestore().collection("registration_otps").doc(emailLower).delete();
+
+        // AUDIT: Notify Admin for Approval
+        await admin.firestore().collection("notifications").add({
+            title: "New Enrollment Approval",
+            message: `Driver ${emailLower} has verified their OTP and is waiting for account activation.`,
+            type: "enrollment",
+            created_at: admin.firestore.FieldValue.serverTimestamp(),
+            is_read: false,
+            role: "admin"
+        });
+
         res.json({ success: true, message: "Verification successful! Pending admin approval." });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

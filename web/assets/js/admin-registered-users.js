@@ -1,14 +1,16 @@
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import {
-    getFirestore, collection, query, onSnapshot, doc, getDoc, orderBy, addDoc, getDocs, where, serverTimestamp
+    getFirestore, collection, query, onSnapshot, doc, getDoc, orderBy, addDoc, getDocs, where, serverTimestamp, updateDoc
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { initLayout, showModal } from "./modules/ui.js";
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
+const storage = getStorage(app);
 
 let allUsers = [];
 let currentUserRole = null;
@@ -149,8 +151,70 @@ window.viewUser = async (id) => {
             <div><strong>Phone:</strong> ${u.phone || u.contact_number || '—'}</div>
             <div><strong>Contractor:</strong> Jettsan</div>
             <div><strong>Address:</strong> ${u.address || '—'}</div>
+            <div style="margin-top:20px; padding:15px; border:1px dashed var(--accent-blue); border-radius:12px; background:rgba(0,212,255,0.05);">
+                <label style="display:block; font-size:0.8em; font-weight:700; color:var(--accent-blue); margin-bottom:10px; text-transform:uppercase;">Update Profile Photo</label>
+                <input type="file" id="profileUpload" accept="image/*" class="form-input" style="font-size:0.8em; padding:8px;">
+                <div id="cropContainer" style="display:none; margin-top:15px;">
+                    <img id="cropImage" style="max-width:100%; display:block;">
+                    <button id="applyCropBtn" class="btn btn-primary" style="width:100%; margin-top:10px; height:34px; padding:0;">Apply Crop & Save</button>
+                </div>
+            </div>
         </div>
     `, async () => { /* read-only */ });
+
+    // --- Cropper.js Integration ---
+    setTimeout(() => {
+        const fileInput = document.getElementById('profileUpload');
+        const cropContainer = document.getElementById('cropContainer');
+        const cropImage = document.getElementById('cropImage');
+        const applyBtn = document.getElementById('applyCropBtn');
+        let cropper = null;
+
+        fileInput?.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    cropImage.src = event.target.result;
+                    cropContainer.style.display = 'block';
+                    if (cropper) cropper.destroy();
+                    cropper = new Cropper(cropImage, {
+                        aspectRatio: 1,
+                        viewMode: 1,
+                    });
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        applyBtn?.addEventListener('click', async () => {
+            if (!cropper) return;
+            applyBtn.disabled = true;
+            applyBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+            
+            try {
+                const canvas = cropper.getCroppedCanvas({ width: 400, height: 400 });
+                const base64 = canvas.toDataURL('image/jpeg', 0.8);
+                
+                const storageRef = ref(storage, `profiles/${u.id}.jpg`);
+                await uploadString(storageRef, base64, 'data_url');
+                const downloadURL = await getDownloadURL(storageRef);
+                
+                await updateDoc(doc(db, "users", u.id), { profile_image_url: downloadURL });
+                if (role === 'driver') {
+                    await updateDoc(doc(db, "drivers", u.id), { profile_image_url: downloadURL });
+                }
+                
+                alert("Profile photo updated successfully!");
+                location.reload();
+            } catch (err) {
+                console.error("Upload error:", err);
+                alert("Failed to upload image: " + err.message);
+                applyBtn.disabled = false;
+                applyBtn.innerText = 'Apply Crop & Save';
+            }
+        });
+    }, 200);
 
     try {
         await addDoc(collection(db, "activity"), {
@@ -275,6 +339,25 @@ window.deleteUser = async (id) => {
     }
 
     try {
+        // --- PHASE 6: JSON BACKUP PROTOCOL ---
+        const backupData = JSON.stringify({
+            user_metadata: user,
+            exported_at: new Date().toISOString(),
+            exported_by: auth.currentUser.email
+        }, null, 2);
+        
+        const blob = new Blob([backupData], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `backup_${user.id}_${Date.now()}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        console.log("[Backup] JSON snapshot downloaded for user:", id);
+
         const idToken = await auth.currentUser.getIdToken();
         const response = await fetch('https://us-central1-appfleetonix.cloudfunctions.net/adminDeleteUser', {
             method: 'POST',

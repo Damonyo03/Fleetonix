@@ -63,6 +63,9 @@ onAuthStateChanged(auth, async (user) => {
     initGlobalAdminListeners();
     initNewBookingFeature();
     initDispatchFeature();
+    
+    // Phase 2: Incident Listener
+    startIncidentMonitoring();
 });
 
 /**
@@ -133,10 +136,34 @@ function startRealtimeDriverTracking() {
         });
     });
 
-    // 3. Driver Extended Data (Vehicles)
+    // 3. Driver Extended Data (Vehicles + Incident Status)
     onSnapshot(collection(db, "drivers"), (snapshot) => {
         snapshot.docs.forEach(doc => {
             updateDriverState(doc.id, doc.data(), 'metadata');
+        });
+    });
+}
+
+/**
+ * ── Incident & Accident Monitoring ───────────────────────────
+ */
+function startIncidentMonitoring() {
+    console.log("[Dashboard] Monitoring incidents...");
+    onSnapshot(query(collection(db, "incidents"), where("status", "==", "reported"), limit(10)), (snapshot) => {
+        snapshot.docChanges().forEach(change => {
+            if (change.type === "added") {
+                const data = change.doc.data();
+                const driverId = data.driver_id;
+                
+                // Alert Action: Auto-focus and notify
+                if (driverMarkers[driverId]) {
+                    const marker = driverMarkers[driverId].marker;
+                    driversMap.setView(marker.getLatLng(), 18);
+                    
+                    // Trigger sound indicator or visual toast if needed
+                    console.warn(`[ACCIDENT] High Priority Incident for ${data.driver_email}`);
+                }
+            }
         });
     });
 }
@@ -173,10 +200,10 @@ function refreshMarker(id) {
     if (driverMarkers[id]) {
         const { marker } = driverMarkers[id];
         animateMarkerTo(marker, L.latLng(latlng));
-        marker.setIcon(createDotIcon(status, isMoving));
+        marker.setIcon(createDotIcon(d, isMoving));
     } else {
         const marker = L.marker(latlng, {
-            icon: createDotIcon(status, isMoving)
+            icon: createDotIcon(d, isMoving)
         }).addTo(driversMap);
         
         marker.on('click', () => {
@@ -203,15 +230,32 @@ function animateMarkerTo(marker, newLatLng, duration = 1500) {
     requestAnimationFrame(step);
 }
 
-function createDotIcon(status, isMoving) {
-    const statusClass = (status === 'available') ? 'available' : 'busy';
-    const pulseHtml = isMoving ? '<div class="dot-pulse"></div>' : '';
+function createDotIcon(d, isMoving) {
+    const status = d.current_status || 'offline';
+    const lastSeen = d.last_updated?.toDate ? d.last_updated.toDate() : new Date();
+    const isStale = (new Date() - lastSeen) > HEARTBEAT_EXPIRY_MS;
+    
+    let statusClass = 'marker-available'; // Default Blue
+    if (d.incident_active) {
+        statusClass = 'marker-accident'; // Blinking Red/Orange
+    } else if (isStale) {
+        statusClass = 'marker-stale'; // Grey
+    } else if (status === 'on_trip' || status === 'on_schedule' || status === 'busy') {
+        statusClass = 'marker-on-schedule'; // Green
+    }
+
+    const pulseHtml = isMoving || d.incident_active ? '<div class="dot-pulse"></div>' : '';
+    
     return L.divIcon({
         className: 'custom-driver-marker',
         html: `<div class="driver-dot ${statusClass}">${pulseHtml}</div>`,
-        iconSize: [14, 14],
-        iconAnchor: [7, 7]
+        iconSize: [StatusMarkerSize(d.incident_active)],
+        iconAnchor: [StatusMarkerSize(d.incident_active)/2, StatusMarkerSize(d.incident_active)/2]
     });
+}
+
+function StatusMarkerSize(isAccident) {
+    return isAccident ? 24 : 14;
 }
 
 function removeMarker(id) {

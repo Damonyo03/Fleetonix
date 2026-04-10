@@ -13,6 +13,10 @@ const dateFilter = document.getElementById('dateFilter');
 const rangeFilter = document.getElementById('rangeFilter');
 let currentUserData = null;
 
+// Cache for geocoded addresses to minimize API costs
+const addressCache = new Map();
+const GOOGLE_MAPS_API_KEY = firebaseConfig.apiKey;
+
 // Set default date to today
 const today = new Date().toISOString().split('T')[0];
 if (dateFilter) dateFilter.value = today;
@@ -89,6 +93,7 @@ function renderLogs(docs) {
 
     const htmlMap = docs.map(d => {
         const log = d.data();
+        const logId = d.id;
         const timestamp = log.timestamp ? log.timestamp.toDate() : new Date();
         const timeString = log.timestamp ? timestamp.toLocaleString() : 'N/A';
         const actionLabel = log.action === 'time_in' ? 'Time In' : 'Time Out';
@@ -99,8 +104,17 @@ function renderLogs(docs) {
         
         // Use human-readable GPS name if available, fallback to coordinates string
         let gpsText = log.location_name || log.address || 'Unknown Location';
-        if (gpsText === 'Unknown Location' && log.latitude && log.longitude) {
-            gpsText = `<a href="https://www.google.com/maps?q=${log.latitude},${log.longitude}" target="_blank" class="gps-link"><i class="fas fa-map-marker-alt"></i> ${Number(log.latitude).toFixed(4)}, ${Number(log.longitude).toFixed(4)}</a>`;
+        const rawCoords = (log.latitude && log.longitude) ? `${log.latitude},${log.longitude}` : null;
+
+        if (gpsText === 'Unknown Location' && rawCoords) {
+            gpsText = `<span id="addr-${logId}" class="address-placeholder" data-lat="${log.latitude}" data-lng="${log.longitude}">
+                <a href="https://www.google.com/maps?q=${log.latitude},${log.longitude}" target="_blank" class="gps-link">
+                    <i class="fas fa-map-marker-alt"></i> ${Number(log.latitude).toFixed(4)}, ${Number(log.longitude).toFixed(4)}
+                </a>
+            </span>`;
+            
+            // Trigger async geocode
+            resolveAddress(logId, log.latitude, log.longitude);
         }
 
         exportDataset.push({
@@ -141,3 +155,38 @@ function renderLogs(docs) {
 
 if (dateFilter) dateFilter.addEventListener('change', initDTRLogs);
 if (rangeFilter) rangeFilter.addEventListener('change', initDTRLogs);
+
+/**
+ * ── Reverse Geocoding Core ─────────────────────────────────────────────
+ */
+async function resolveAddress(logId, lat, lng) {
+    const coordsKey = `${lat},${lng}`;
+    
+    // 1. Check Cache
+    if (addressCache.has(coordsKey)) {
+        updateAddressUI(logId, addressCache.get(coordsKey));
+        return;
+    }
+
+    try {
+        const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${GOOGLE_MAPS_API_KEY}`);
+        const data = await response.json();
+        
+        if (data.status === 'OK' && data.results.length > 0) {
+            const address = data.results[0].formatted_address;
+            addressCache.set(coordsKey, address);
+            updateAddressUI(logId, address);
+        } else {
+            console.warn("Geocode status:", data.status);
+        }
+    } catch (error) {
+        console.error("Geocoding failed:", error);
+    }
+}
+
+function updateAddressUI(logId, address) {
+    const el = document.getElementById(`addr-${logId}`);
+    if (el) {
+        el.innerHTML = `<span title="${address}" style="cursor:help;">${address}</span>`;
+    }
+}
