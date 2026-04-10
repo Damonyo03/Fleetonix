@@ -8,149 +8,156 @@
     <link rel="stylesheet" href="../assets/css/style.css">
     <link rel="stylesheet" href="../assets/css/admin.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Maps JS: async loading with callback to prevent race conditions -->
-    <script>
-        // Global callback fired by Maps API once it is fully ready.
-        // admin-dashboard.js listens for this via window.__mapsReady.
-        window.__onMapsReady = function() {
-            window.__mapsReady = true;
-            document.dispatchEvent(new Event('maps-api-ready'));
-        };
-    </script>
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBWal4kXhImWNvJL2jV4LG0FvftdN2J9DQ&libraries=places,geometry&callback=__onMapsReady" async defer></script>
-    <style>
-        #drivers-map { width: 100%; height: 600px; border-radius: var(--radius-lg); background: var(--bg-accent); border: 1px solid var(--border-color); }
-        .driver-label { background: white; padding: 4px 8px; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-weight: 700; border: 1px solid #ddd; font-size: 11px; color: #111; position: relative; top: -45px; }
-        .map-section { display: grid; grid-template-columns: 1fr 320px; gap: 24px; }
-        .side-panel { display: flex; flex-direction: column; gap: 16px; height: 600px; }
-        .online-list { flex: 1; overflow-y: auto; padding-right: 4px; }
-        .secondary-stats { display: none; margin-top: 24px; animation: slideDown 0.3s ease; }
-        .secondary-stats.show { display: grid; }
-        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-        
-        /* Custom Scrollbar for side panel */
-        .online-list::-webkit-scrollbar { width: 4px; }
-        .online-list::-webkit-scrollbar-track { background: transparent; }
-        .online-list::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 10px; }
+    
+    <!-- Leaflet JS & CSS -->
+    <link rel="stylesheet" href="../assets/vendor/leaflet/leaflet.css">
+    <script src="../assets/vendor/leaflet/leaflet.js"></script>
 
-        @media (max-width: 1200px) {
-            .map-section { grid-template-columns: 1fr; }
-            .side-panel { height: 400px; }
+    <!-- Tailwind Play CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'dashboard-dark': '#0b1120',
+                        'accent-blue': '#00d4ff',
+                        'accent-green': '#10b981',
+                        'accent-red': '#ef4444',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        :root {
+            --bg-dashboard: #0b1120;
+            --bg-card-glass: rgba(15, 23, 42, 0.7);
         }
 
-        /* ── Quick Info Panel (marker click overlay) ─────────────── */
+        body { background-color: var(--bg-dashboard); color: #f1f5f9; }
+
+        #drivers-map { 
+            width: 100%; 
+            height: 600px; 
+            border-radius: 16px; 
+            background: #111827; 
+            border: 1px solid rgba(255,255,255,0.1); 
+            z-index: 1;
+        }
+
+        /* ── Circular Dot Markers (C1) ─────────────── */
+        .driver-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .driver-dot.available { background-color: #10b981; box-shadow: 0 0 15px rgba(16, 185, 129, 0.6); }
+        .driver-dot.busy { background-color: #ef4444; box-shadow: 0 0 15px rgba(239, 68, 68, 0.6); }
+        .driver-dot.on_trip { background-color: #ef4444; box-shadow: 0 0 15px rgba(239, 68, 68, 0.6); }
+        
+        /* ── Pulse Animation for Live Drivers ─────────────── */
+        .dot-pulse {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            animation: dotPulse 2s infinite;
+            opacity: 0;
+            z-index: -1;
+        }
+        @keyframes dotPulse {
+            0% { transform: scale(1); opacity: 0.5; }
+            100% { transform: scale(3.5); opacity: 0; }
+        }
+
+        .map-section { display: grid; grid-template-columns: 1fr 340px; gap: 24px; }
+        .side-panel { display: flex; flex-direction: column; gap: 16px; height: 600px; }
+        .online-list { flex: 1; overflow-y: auto; padding-right: 8px; }
+
+        /* ── Premium Sidebar Cards ─────────────── */
+        .driver-card {
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 14px;
+            padding: 14px;
+            margin-bottom: 12px;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .driver-card:hover {
+            background: rgba(51, 65, 85, 0.5);
+            border-color: rgba(0, 212, 255, 0.3);
+            transform: translateX(4px);
+        }
+        .driver-card.selected {
+            background: rgba(0, 212, 255, 0.1);
+            border-color: #00d4ff;
+        }
+
+        /* ── Quick Info Panel (Leaflet Adaptation) ─────────────── */
         #quickInfoPanel {
             display: none;
             position: absolute;
-            bottom: 16px;
-            left: 16px;
-            width: 300px;
-            background: rgba(15, 23, 42, 0.96);
-            border: 1px solid rgba(99, 179, 237, 0.25);
-            border-radius: 14px;
-            padding: 16px 18px;
-            z-index: 10;
-            backdrop-filter: blur(12px);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-            color: #e2e8f0;
-            font-family: 'Inter', sans-serif;
-            animation: slideUpPanel 0.22s ease;
-        }
-        #quickInfoPanel.active { display: block; }
-        @keyframes slideUpPanel {
-            from { opacity: 0; transform: translateY(12px); }
-            to   { opacity: 1; transform: translateY(0); }
-        }
-        .qip-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-        .qip-name { font-size: 15px; font-weight: 700; color: #f1f5f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 210px; }
-        .qip-close { background: none; border: none; color: #64748b; cursor: pointer; font-size: 18px; line-height: 1; padding: 0; }
-        .qip-close:hover { color: #f1f5f9; }
-        .qip-status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-        .qip-badge { font-size: 10px; font-weight: 800; padding: 3px 9px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.05em; }
-        .qip-badge.available { background: #10b98122; color: #10b981; border: 1px solid #10b981; }
-        .qip-badge.on_schedule, .qip-badge.accepted, .qip-badge.moving_to_pickup,
-        .qip-badge.picked_up, .qip-badge.moving_to_dropoff { background: #3b82f622; color: #3b82f6; border: 1px solid #3b82f6; }
-        .qip-badge.ready_to_complete, .qip-badge.return_pickup { background: #f59e0b22; color: #f59e0b; border: 1px solid #f59e0b; }
-        .qip-badge.completed { background: #10b98122; color: #10b981; border: 1px solid #10b981; }
-        .qip-badge.offline { background: #94a3b822; color: #94a3b8; border: 1px solid #94a3b8; }
-        .qip-badge.accident { background: #ef444422; color: #ef4444; border: 1px solid #ef4444; }
-        .qip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
-        .qip-cell { background: rgba(255,255,255,0.04); border-radius: 8px; padding: 8px 10px; }
-        .qip-cell-label { font-size: 9px; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 3px; }
-        .qip-cell-value { font-size: 14px; font-weight: 700; color: #f1f5f9; }
-        .qip-cell-value small { font-size: 10px; font-weight: 400; color: #94a3b8; }
-        .qip-cell.full { grid-column: 1 / span 2; }
-        .qip-traffic { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-top: 4px; }
-        .qip-traffic-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-        .qip-footer { font-size: 10px; color: #475569; display: flex; justify-content: space-between; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px; margin-top: 4px; }
-        .qip-focus-btn { background: none; border: 1px solid rgba(99,179,237,0.3); border-radius: 6px; color: #63b3ed; font-size: 10px; padding: 3px 8px; cursor: pointer; }
-        .qip-focus-btn:hover { background: rgba(99,179,237,0.1); }
-        
-        /* ── Emergency Marker Animation ─────────────── */
-        @keyframes blinkEmergency {
-            0% { background-color: rgba(239, 68, 68, 0.9); box-shadow: 0 0 10px 5px rgba(255, 0, 0, 0.6); transform: scale(1); }
-            50% { background-color: rgba(249, 115, 22, 0.9); box-shadow: 0 0 25px 12px rgba(249, 115, 22, 0.9); transform: scale(1.15); }
-            100% { background-color: rgba(239, 68, 68, 0.9); box-shadow: 0 0 10px 5px rgba(255, 0, 0, 0.6); transform: scale(1); }
-        }
-        .emergency-marker-container {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            border: 2px solid white;
-            animation: blinkEmergency 0.4s infinite alternate;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 14px;
-            text-align: center;
-        }
-        
-        /* ── Sidebar Active Driver Details ─────────────── */
-        #activeDriverDetails {
-            display: none;
-            background: rgba(15, 23, 42, 0.5);
+            bottom: 24px;
+            left: 24px;
+            width: 320px;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(16px);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: var(--radius-md);
-            padding: 16px;
-            margin-bottom: 16px;
+            border-radius: 16px;
+            padding: 20px;
+            z-index: 1000;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+            animation: slideUpFade 0.3s ease-out;
             color: #f1f5f9;
         }
-        #activeDriverDetails h4 { margin: 0 0 8px 0; font-size: 14px; color: #60a5fa; }
-        .s-detail-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
-        .s-detail-label { color: #94a3b8; }
-        .s-detail-value { font-weight: 600; }
+        @keyframes slideUpFade { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        /* Darken Leaflet Map Tiles */
+        .leaflet-container { background: #0b1120 !important; }
+        .leaflet-tile { filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7); }
+
+        .sidebar-nav .nav-item { transition: all 0.2s; }
+        .sidebar-nav .nav-item:hover { background: rgba(255,255,255,0.05); }
+        .sidebar-nav .nav-item.active { background: rgba(0, 212, 255, 0.1); color: #00d4ff; border-left: 3px solid #00d4ff; }
     </style>
 </head>
 <body>
     <div class="admin-layout">
         <!-- Unified Sidebar -->
-        <aside class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <img src="../img/logo.jpg" alt="Logo" class="sidebar-logo">
-                <span class="sidebar-title">Fleetonix</span>
+        <aside class="sidebar bg-slate-900 border-r border-slate-800" id="sidebar">
+            <div class="sidebar-header p-6">
+                <img src="../img/logo.jpg" alt="Logo" class="sidebar-logo w-10 h-10 rounded-lg">
+                <span class="sidebar-title text-xl font-bold ml-3 text-white">Fleetonix</span>
             </div>
-            <nav class="sidebar-nav">
-                <div class="nav-section">MONITORING</div>
-                <a href="dashboard.html" class="nav-item active"><i class="fas fa-chart-line"></i> Dashboard Map</a>
-                <a href="dtr-monitoring.html" class="nav-item"><i class="fas fa-clock"></i> DTR Monitoring</a>
-                <a href="drivers.html" class="nav-item"><i class="fas fa-id-card"></i> Drivers Details</a>
+            <nav class="sidebar-nav px-4">
+                <div class="nav-section text-[10px] uppercase text-slate-500 font-extrabold mb-3 mt-6 tracking-widest">MONITORING</div>
+                <a href="dashboard.html" class="nav-item active flex items-center p-3 rounded-xl text-slate-300 mb-1"><i class="fas fa-chart-line w-5"></i> <span class="ml-3">Dashboard Map</span></a>
+                <a href="dtr-monitoring.html" class="nav-item flex items-center p-3 rounded-xl text-slate-300 mb-1"><i class="fas fa-clock w-5"></i> <span class="ml-3">DTR Monitoring</span></a>
+                <a href="drivers.html" class="nav-item flex items-center p-3 rounded-xl text-slate-300 mb-1"><i class="fas fa-id-card w-5"></i> <span class="ml-3">Drivers Details</span></a>
 
-                <div class="nav-section">OPERATIONS</div>
-                <a href="bookings.html" class="nav-item"><i class="fas fa-calendar-check"></i> Bookings</a>
-                <a href="schedules.html" class="nav-item"><i class="fas fa-list-alt"></i> List of Trips</a>
-                <a href="trip-tickets.html" class="nav-item"><i class="fas fa-ticket-alt"></i> Trip Tickets</a>
+                <div class="nav-section text-[10px] uppercase text-slate-500 font-extrabold mb-3 mt-6 tracking-widest">OPERATIONS</div>
+                <a href="bookings.html" class="nav-item flex items-center p-3 rounded-xl text-slate-300 mb-1"><i class="fas fa-calendar-check w-5"></i> <span class="ml-3">Bookings</span></a>
+                <a href="schedules.html" class="nav-item flex items-center p-3 rounded-xl text-slate-300 mb-1"><i class="fas fa-list-alt w-5"></i> <span class="ml-3">List of Trips</span></a>
+                <a href="trip-tickets.html" class="nav-item flex items-center p-3 rounded-xl text-slate-300 mb-1"><i class="fas fa-ticket-alt w-5"></i> <span class="ml-3">Trip Tickets</span></a>
 
-                <div class="nav-section">SYSTEM</div>
-                <a href="approvals.html" class="nav-item"><i class="fas fa-user-check"></i> Enrollment Approvals <span class="badge badge-info approval-count" style="display:none;">0</span></a>
-                <a href="registered-users.html" class="nav-item"><i class="fas fa-users"></i> Registered Users</a>
-                <a href="settings.html" class="nav-item"><i class="fas fa-cog"></i> Settings</a>
+                <div class="nav-section text-[10px] uppercase text-slate-500 font-extrabold mb-3 mt-6 tracking-widest">SYSTEM</div>
+                <a href="approvals.html" class="nav-item flex items-center p-3 rounded-xl text-slate-300 mb-1"><i class="fas fa-user-check w-5"></i> <span class="ml-3">Enrollment Approvals</span></a>
+                <a href="registered-users.html" class="nav-item flex items-center p-3 rounded-xl text-slate-300 mb-1"><i class="fas fa-users w-5"></i> <span class="ml-3">Registered Users</span></a>
+                <a href="settings.html" class="nav-item flex items-center p-3 rounded-xl text-slate-300 mb-1"><i class="fas fa-cog w-5"></i> <span class="ml-3">Settings</span></a>
 
-                <div class="nav-section">NOTIFICATIONS</div>
-                <a href="notifications.html" class="nav-item"><i class="fas fa-bell"></i> Notifications <span class="badge badge-info notif-count" style="display:none;">0</span></a>
+                <div class="nav-section text-[10px] uppercase text-slate-500 font-extrabold mb-3 mt-6 tracking-widest">NOTIFICATIONS</div>
+                <a href="notifications.html" class="nav-item flex items-center p-3 rounded-xl text-slate-300 mb-1"><i class="fas fa-bell w-5"></i> <span class="ml-3">Notifications</span></a>
                 
-                <a href="#" id="logoutBtn" class="nav-item logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
+                <a href="#" id="logoutBtn" class="nav-item flex items-center p-3 rounded-xl text-red-400 mt-8"><i class="fas fa-sign-out-alt w-5"></i> <span class="ml-3">Logout</span></a>
             </nav>
         </aside>
 

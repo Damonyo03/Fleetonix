@@ -60,6 +60,14 @@ onAuthStateChanged(auth, async (user) => {
     if (window.location.pathname.includes('bookings.html')) {
         initLayout('Bookings', name);
         initBookingList();
+
+        // Handle dashboard triggers
+        const trigger = urlParams.get('trigger');
+        if (trigger === 'new-booking') {
+            setTimeout(() => {
+                showAdminBookingModal();
+            }, 500);
+        }
     }
 });
 
@@ -364,7 +372,6 @@ async function showCreateBookingModal(clients) {
         alert("Booking created successfully! " + (autoDispatch ? "It has been sent to dispatch." : "It is now pending approval."));
     });
 
-
         const driverSelect = document.getElementById('modal_driver');
         if (driverSelect) {
             try {
@@ -417,9 +424,9 @@ async function showCreateBookingModal(clients) {
                 driverSelect.innerHTML = '<option value="">Error loading drivers</option>';
             }
         }
-    }, 50);
+    }, 100);
 
-    // ── ALWAYS Initialize Autocompletes (outside of try/catch) ───────────────────
+    // ── ALWAYS Initialize Autocompletes ───────────────────
     setTimeout(() => {
         if (window.initAutocompleteForInput) {
             const pickupEl = document.getElementById('modal_pickup');
@@ -427,7 +434,7 @@ async function showCreateBookingModal(clients) {
             if (pickupEl) window.initAutocompleteForInput(pickupEl);
             if (dropoffEl) window.initAutocompleteForInput(dropoffEl);
         }
-    }, 100);
+    }, 200);
 }
 
 // --- Booking List ---
