@@ -102,83 +102,84 @@ fun AuthFlow() {
         }
     }
 
-    // Listen to Auth State
+    // Listen to Auth State (Identity only)
     LaunchedEffect(Unit) {
         auth.addAuthStateListener { firebaseAuth ->
             currentUser = firebaseAuth.currentUser
             if (firebaseAuth.currentUser != null) {
                 PresenceManager.updateStatus(context, true)
-                // Fetch user role
-                // Fetch user role - Fallback to email search if UID doc doesn't exist
-                scope.launch {
-                    try {
-                        val uid = firebaseAuth.currentUser!!.uid
-                        val email = firebaseAuth.currentUser!!.email
-                        
-                        var doc = db.collection("users").document(uid).get().await()
-                        if (!doc.exists() && email != null) {
-                            Log.d("AuthFlow", "UID doc missing, searching by email: $email")
-                            val query = db.collection("users")
-                                .whereEqualTo("email", email.lowercase().trim())
-                                .get()
-                                .await()
-                            if (!query.isEmpty) {
-                                doc = query.documents[0]
-                                Log.d("AuthFlow", "User found by email: ${doc.id}")
-                            }
-                        }
-                        
-                        if (doc.exists()) {
-                            userData = doc.data
-                            userRole = doc.getString("user_type")
-                            Log.d("AuthFlow", "User role identified: $userRole")
-                            
-                            val isFirstTime = (doc.getBoolean("isFirstLogin") ?: false)
-                            
-                            if (userRole == "driver") {
-                                val status = doc.getString("status") ?: "active"
-                                val isFirstTime = (doc.getBoolean("isFirstLogin") ?: false)
-                                
-                                isPendingApproval = (status == "pending_approval" || status == "pending")
-                                
-                                if (isFirstTime) {
-                                    isFirstLoginMode = true
-                                    isDriverVerified = false
-                                    Log.d("AuthFlow", "First login detected for driver. Triggering OTP.")
-                                    
-                                    // Triggering OTP removed to prevent double sending (Admin already sends it)
-                                    /*
-                                    scope.launch {
-                                        try {
-                                            FleetonixApi.driverService.forgotPassword(
-                                                ForgotPasswordRequest(email ?: "")
-                                            )
-                                            Log.d("AuthFlow", "First login OTP sent to $email")
-                                        } catch (e: Exception) {
-                                            Log.e("AuthFlow", "Failed to auto-send first login OTP", e)
-                                        }
-                                    }
-                                    */
-                                } else {
-                                    isFirstLoginMode = false
-                                    isDriverVerified = (status == "active")
-                                }
-                            }
-                        } else {
-                            Log.w("AuthFlow", "User record not found in Firestore for $email. Signing out.")
-                            auth.signOut()
-                            currentUser = null
-                        }
-                    } catch (e: Exception) {
-                        Log.e("AuthFlow", "Error fetching user role", e)
-                    }
-                }
             } else {
                 isDriverVerified = false
                 isPendingApproval = false
+                isFirstLoginMode = false
+                needsPasswordReset = false
                 userRole = null
                 userData = null
             }
+        }
+    }
+
+    // Real-time Reactive User Profile/Status Listener
+    DisposableEffect(currentUser) {
+        val user = currentUser ?: return@DisposableEffect onDispose {}
+        val uid = user.uid
+        val email = user.email
+
+        Log.d("AuthFlow", "Subscribing to real-time status updates for $uid")
+        
+        val listener = db.collection("users").document(uid).addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                Log.e("AuthFlow", "User profile listener failed", error)
+                return@addSnapshotListener
+            }
+
+            if (snapshot != null && snapshot.exists()) {
+                val data = snapshot.data
+                userData = data
+                userRole = snapshot.getString("user_type") ?: "driver"
+                
+                if (userRole == "driver") {
+                    val status = snapshot.getString("status") ?: "active"
+                    val isFirstTime = (snapshot.getBoolean("isFirstLogin") ?: false)
+                    
+                    isPendingApproval = (status == "pending_approval" || status == "pending")
+                    
+                    if (isFirstTime) {
+                        isFirstLoginMode = true
+                        isDriverVerified = false
+                    } else {
+                        isFirstLoginMode = false
+                        isDriverVerified = (status == "active")
+                    }
+                    
+                    Log.d("AuthFlow", "Status Update: $status, Pending: $isPendingApproval, Verified: $isDriverVerified")
+                }
+            } else if (email != null) {
+                // Fallback for document structure migration if UID doc is missing
+                scope.launch {
+                    try {
+                        val query = db.collection("users")
+                            .whereEqualTo("email", email.lowercase().trim())
+                            .get()
+                            .await()
+                        if (!query.isEmpty) {
+                            val docData = query.documents[0].data
+                            userData = docData
+                            userRole = query.documents[0].getString("user_type") ?: "driver"
+                            val status = query.documents[0].getString("status") ?: "active"
+                            isPendingApproval = (status == "pending_approval")
+                            isDriverVerified = (status == "active")
+                        }
+                    } catch (e: Exception) {
+                        Log.e("AuthFlow", "Fallback lookup failed", e)
+                    }
+                }
+            }
+        }
+
+        onDispose {
+            listener.remove()
+            Log.d("AuthFlow", "Cleaned up user status listener")
         }
     }
 
