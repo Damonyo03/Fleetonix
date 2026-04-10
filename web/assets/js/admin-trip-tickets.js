@@ -2,7 +2,7 @@ import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebase
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import {
     getFirestore, collection, query, where, onSnapshot, orderBy,
-    doc, getDoc, getDocs
+    doc, getDoc, getDocs, updateDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { initLayout } from "./modules/ui.js";
@@ -213,7 +213,11 @@ function renderTickets(tickets) {
                         <div class="ticket-vehicle" style="font-size: 0.8rem; color: var(--accent-blue); margin-top: 2px;"><i class="fas fa-car-side"></i> ${vehicleType} &nbsp;·&nbsp; <i class="fas fa-id-card"></i> ${plateNumber}</div>
                     </div>
                     <div style="text-align: right;">
-                        <span class="status-badge completed" style="background: rgba(16, 185, 129, 0.1); color: var(--accent-green); padding: 4px 10px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; border: 1px solid rgba(16, 185, 129, 0.2);">Completed</span>
+                        <span class="status-badge completed">Completed</span>
+                        ${ticket.isValidated ? 
+                            `<div class="status-badge verified"><i class="fas fa-check-double"></i> VERIFIED & LOCKED</div>` : 
+                            ''
+                        }
                         <div style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;">
                             <i class="fas fa-calendar-check"></i> ${completedAt}
                         </div>
@@ -247,10 +251,33 @@ function renderTickets(tickets) {
                         <i class="fas fa-map-marked-alt"></i> View Full Traveled Route Map
                     </button>
                 ` : ''}
+
+                ${(!ticket.isValidated && (currentUserData?.role === 'admin' || currentUserData?.role === 'super_admin')) ? `
+                    <button class="btn-verify-lock" onclick="verifyAndLockTrip('${ticket.id}', '${ticket._source}')" style="width: 100%; margin-top: 10px; background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--accent-blue); padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 700; transition: all 0.3s ease;">
+                        <i class="fas fa-lock"></i> Verify & Lock for Payroll
+                    </button>
+                ` : ''}
             </div>
         `;
     }).join('');
 }
+
+window.verifyAndLockTrip = async (id, source) => {
+    if (!confirm("Are you sure you want to verify and lock this trip? This will mark it as official for payroll audit and it cannot be reverted.")) return;
+    
+    try {
+        const docRef = doc(db, source === 'trip_tickets' ? 'trip_tickets' : 'schedules', id);
+        await updateDoc(docRef, {
+            isValidated: true,
+            verified_by: currentUserData.full_name || currentUserData.email,
+            verified_at: serverTimestamp()
+        });
+        alert("Trip verified and locked successfully.");
+    } catch (e) {
+        console.error("Verification error:", e);
+        alert("Verification failed: " + e.message);
+    }
+};
 
 function formatTimestamp(ts) {
     if (!ts) return '—';

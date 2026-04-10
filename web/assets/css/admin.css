@@ -542,10 +542,10 @@ body {
     border-radius: 50%;
     box-shadow: 0 0 10px currentColor;
 }
-.driver-status.available { color: var(--accent-green); background: currentColor; box-shadow: 0 0 12px var(--accent-green); }
-.driver-status.on_schedule { color: var(--accent-blue); background: currentColor; box-shadow: 0 0 12px var(--accent-blue); }
-.driver-status.pickup, .driver-status.in_progress { color: var(--accent-purple); background: currentColor; box-shadow: 0 0 12px var(--accent-purple); }
-.driver-status.dropoff { color: var(--accent-warning); background: currentColor; box-shadow: 0 0 12px var(--accent-warning); }
+.driver-status.available { color: var(--accent-blue); background: currentColor; box-shadow: 0 0 12px var(--accent-blue); }
+.driver-status.on_schedule { color: var(--accent-green); background: currentColor; box-shadow: 0 0 12px var(--accent-green); }
+.driver-status.pickup, .driver-status.in_progress { color: var(--accent-green); background: currentColor; box-shadow: 0 0 12px var(--accent-green); }
+.driver-status.dropoff { color: var(--accent-green); background: currentColor; box-shadow: 0 0 12px var(--accent-green); }
 .driver-status.offline { color: var(--accent-stale); background: currentColor; opacity: 0.5; }
 
 /* Pulse Animation for Live Updates */
@@ -638,10 +638,10 @@ body {
 
 /* Status Dot Mapping Enhancements */
 .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 8px; }
-.status-dot.available { background-color: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
-.status-dot.on_schedule, .status-dot.accepted { background-color: var(--accent-blue); }
-.status-dot.pickup, .status-dot.in_progress { background-color: var(--accent-purple); }
-.status-dot.dropoff { background-color: var(--accent-warning); }
+.status-dot.available { background-color: var(--accent-blue); box-shadow: 0 0 8px var(--accent-blue); }
+.status-dot.on_schedule, .status-dot.accepted { background-color: var(--accent-green); }
+.status-dot.pickup, .status-dot.in_progress { background-color: var(--accent-green); }
+.status-dot.dropoff { background-color: var(--accent-green); }
 .status-dot.offline { background-color: var(--accent-stale); }
 
 /* DTR Specific Pills */
@@ -669,7 +669,22 @@ body {
 .company-name { font-size: 1.1rem; font-weight: 700; margin-bottom: 2px; color: var(--text-primary); }
 .company-shorthand { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 12px; }
 .company-status { font-size: 0.7rem; font-weight: 800; text-transform: uppercase; padding: 2px 8px; border-radius: 4px; }
-.status-active { background: rgba(0, 255, 136, 0.1); color: var(--accent-green); border: 1px solid rgba(0, 255, 136, 0.2); }
+.status-badge.completed {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--accent-green);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.status-badge.verified {
+    background: rgba(0, 212, 255, 0.15);
+    color: var(--accent-blue);
+    border: 1px solid rgba(0, 212, 255, 0.4);
+    box-shadow: 0 0 12px rgba(0, 212, 255, 0.2);
+    font-size: 0.65rem;
+    font-weight: 800;
+    margin-top: 5px;
+    letter-spacing: 0.5px;
+}
 .status-inactive { background: rgba(255, 77, 77, 0.1); color: var(--accent-error); border: 1px solid rgba(255, 77, 77, 0.2); }
 
 /* ── Trip Ticket Ledger Specifics ────────────────────────────────────────── */
@@ -930,7 +945,7 @@ body {
     width: 24px;
     height: 24px;
     background: transparent;
-    border: 3px solid var(--accent-green);
+    border: 3px solid var(--accent-blue);
     border-radius: 50%;
     transform: translate(-50%, -50%);
     pointer-events: none;
@@ -939,6 +954,6 @@ body {
 }
 
 .marker-pulse-ring.on_job {
-    border-color: var(--accent-blue);
+    border-color: var(--accent-green);
 }
 
