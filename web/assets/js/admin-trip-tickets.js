@@ -191,6 +191,7 @@ function renderTickets(tickets) {
         const totalKm = parseFloat(ticket.total_km_travelled || ticket.totalKmTravelled || 0).toFixed(2);
         const vehicleType = ticket.vehicle_type || ticket.vehicle_assigned || '—';
         const plateNumber = ticket.plate_number || '—';
+        const userRole = currentUserData?.role || currentUserData?.user_type;
 
         let routeHtml = `
             <div class="ticket-route" style="display: flex; align-items: center; gap: 12px; color: var(--text-secondary); margin: 15px 0; font-size: 0.9rem;">
@@ -252,14 +253,11 @@ function renderTickets(tickets) {
                     </button>
                 ` : ''}
 
-                ${(() => {
-                    const role = currentUserData?.role || currentUserData?.user_type;
-                    return (!ticket.isValidated && (role === 'admin' || role === 'super_admin' || role === 'company_admin')) ? `
+                ${(!ticket.isValidated && (userRole === 'admin' || userRole === 'super_admin' || userRole === 'company_admin')) ? `
                     <button class="btn-verify-lock" onclick="verifyAndLockTrip('${ticket.id}', '${ticket._source}')" style="width: 100%; margin-top: 10px; background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.3); color: var(--accent-blue); padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 700; transition: all 0.3s ease;">
                         <i class="fas fa-lock"></i> Verify & Lock for Payroll
                     </button>
-                ` : '';
-                })()}
+                ` : ''}
             </div>
         `;
     }).join('');

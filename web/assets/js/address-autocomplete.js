@@ -65,6 +65,18 @@ class AddressAutocomplete {
             this.latInput.value = place.geometry.location.lat();
             this.lngInput.value = place.geometry.location.lng();
             
+            // Extract City/Area for multi-tenant segment filtering
+            let city = "";
+            if (place.address_components) {
+                const cityComp = place.address_components.find(c => 
+                    c.types.includes("locality") || 
+                    c.types.includes("administrative_area_level_2") ||
+                    c.types.includes("sublocality_level_1")
+                );
+                if (cityComp) city = cityComp.long_name;
+            }
+            this.input.dataset.city = city;
+
             // Trigger events
             this.input.dispatchEvent(new Event('change', { bubbles: true }));
             this.latInput.dispatchEvent(new Event('change', { bubbles: true }));

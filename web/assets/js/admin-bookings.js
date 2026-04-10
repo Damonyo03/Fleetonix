@@ -227,9 +227,22 @@ async function showCreateBookingModal(clients) {
         const bookingId = generateNumericId().toString();
         const date = document.getElementById('pickup_date').value;
         const time = document.getElementById('pickup_time').value;
+
+        // Past-Date Rules Fix: Prevent saving if date/time is in the past
+        if (date && time) {
+            const selectedDT = new Date(`${date}T${time}`);
+            if (selectedDT < new Date()) {
+                throw new Error("Invalid Schedule: You cannot book a trip in the past. Please select a future time.");
+            }
+        }
+
         const driverId = document.getElementById('modal_driver').value;
         const autoDispatch = document.getElementById('modal_auto_dispatch').checked;
         const isOfficial = document.getElementById('modal_is_official').checked;
+
+        // Auto-Area Detection Logic
+        const pickupEl = document.getElementById('modal_pickup');
+        const detectedArea = pickupEl.dataset.city || "NCR"; 
 
         const data = sanitizeFirestoreData({
             booking_id: bookingId,
@@ -239,6 +252,7 @@ async function showCreateBookingModal(clients) {
             client_email: clientEmail,
             client_phone: clientPhone,
             contractor: 'Jettsan',
+            operating_area: detectedArea,
             isOfficial: isOfficial,
             is_published: false, // Core Stability Refactor: Start as Draft
 
@@ -299,6 +313,7 @@ async function showCreateBookingModal(clients) {
                 passengers: parseInt(document.getElementById('passengers').value) || 1,
                 return_to_pickup: document.getElementById('return_to_pickup').checked,
                 special_instructions: document.getElementById('special_instructions').value || '',
+                operating_area: detectedArea,
                 isOfficial: isOfficial,
                 is_published: false, // Core Stability Refactor: Start as Draft
                 created_at: serverTimestamp(),
