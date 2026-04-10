@@ -146,10 +146,10 @@ fun AuthFlow() {
                     
                     if (isFirstTime) {
                         isFirstLoginMode = true
-                        isDriverVerified = false
+                        // Only force verification if not already verified in this session
                     } else {
                         isFirstLoginMode = false
-                        isDriverVerified = (status == "active")
+                        isDriverVerified = true
                     }
                     
                     Log.d("AuthFlow", "Status Update: $status, Pending: $isPendingApproval, Verified: $isDriverVerified")
