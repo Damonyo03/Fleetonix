@@ -88,7 +88,7 @@ private fun phaseColor(phase: String): Color = when (phase.lowercase()) {
 @Composable
 fun AssignmentCard(
     assignment: AssignmentModel,
-    hasActiveMission: Boolean,
+    isAnyMissionActive: Boolean,
     onAcceptJob: (AssignmentModel) -> Unit
 ) {
     val phase = assignment.tripPhase
@@ -570,7 +570,7 @@ fun AssignmentsScreen(onBack: () -> Unit) {
             }
 
             // Content
-            val hasActiveMission = assignments.any { it.tripPhase.lowercase() !in listOf("pending", "completed") }
+            val isAnyMissionActive = assignments.any { it.tripPhase.lowercase() !in listOf("pending", "completed") }
 
             when {
                 isLoading -> {
@@ -679,7 +679,7 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                             items(activeItems, key = { it.docId }) { a ->
                                 AssignmentCard(
                                     assignment = a, 
-                                    hasActiveMission = hasActiveMission,
+                                    isAnyMissionActive = isAnyMissionActive,
                                     onAcceptJob = {}
                                 )
                             }
@@ -694,7 +694,7 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                             items(pendingItems, key = { it.docId }) { a ->
                                 AssignmentCard(
                                     assignment = a,
-                                    hasActiveMission = hasActiveMission,
+                                    isAnyMissionActive = isAnyMissionActive,
                                     onAcceptJob = { clickedItem ->
                                         selectedItemForAccept = clickedItem
                                         showOdometerDialog = true
@@ -710,7 +710,11 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                                 SectionHeader(title = "Completed", icon = Icons.Default.CheckCircle, color = Color(0xFF10B981))
                             }
                             items(completedItems, key = { it.docId }) { a ->
-                                AssignmentCard(assignment = a, hasActiveMission = hasActiveMission, onAcceptJob = {})
+                                AssignmentCard(
+                                    assignment = a,
+                                    isAnyMissionActive = isAnyMissionActive,
+                                    onAcceptJob = {}
+                                )
                             }
                         }
                     }

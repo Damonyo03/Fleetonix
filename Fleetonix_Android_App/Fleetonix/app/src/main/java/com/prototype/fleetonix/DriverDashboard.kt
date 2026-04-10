@@ -278,12 +278,6 @@ fun DriverDashboard(
         }
     }
 
-    // Auto-trigger Active Trip Popup when phase becomes 'accepted'
-    LaunchedEffect(tripPhase) {
-        if (tripPhase == "accepted") {
-            showActiveTripPopup = true
-        }
-    }
 
     fun parseScheduleDateTime(dateString: String?, timeString: String?): LocalDateTime? {
         if (dateString.isNullOrBlank() || timeString.isNullOrBlank()) return null
@@ -359,7 +353,7 @@ fun DriverDashboard(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val nextSchedule = feed?.schedules?.filter { 
+    val nextSchedule = feed?.schedules?.filter {
         val status = it.trip_phase?.lowercase() ?: "pending"
         // 1. Relax is_published filter if already accepted/active
         val isExplicitlyAssigned = it.is_published == true || status != "pending"
@@ -395,6 +389,14 @@ fun DriverDashboard(
     }?.firstOrNull()
 
     val tripPhase = nextSchedule?.trip_phase ?: "pending"
+
+    // Auto-trigger Active Trip Popup when phase becomes 'accepted'
+    LaunchedEffect(tripPhase) {
+        if (tripPhase == "accepted") {
+            showActiveTripPopup = true
+        }
+    }
+
     val returnRequired = nextSchedule?.return_to_pickup == true
 
     // Determine which time to show in "Next Pickup" stat
@@ -658,38 +660,6 @@ fun DriverDashboard(
         Log.d("LocationTracking", "Location tracking stopped due to logout")
     }
 
-    // Shake detection for accident reporting
-    DisposableEffect(Unit) {
-        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
-        val accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-
-        val shakeDetector = ShakeDetector {
-            // Only show dialog if it's not already showing
-            if (!showAccidentDialog && !isReportingAccident) {
-                Log.d("ShakeDetector", "Accident dialog triggered by shake")
-                showAccidentDialog = true
-            } else {
-                Log.d("ShakeDetector", "Shake detected but dialog already showing or reporting in progress")
-            }
-        }
-
-        if (accelerometer != null) {
-            sensorManager.registerListener(
-                shakeDetector,
-                accelerometer,
-                SensorManager.SENSOR_DELAY_UI
-            )
-            Log.d("ShakeDetector", "Shake detection enabled")
-        } else {
-            Log.w("ShakeDetector", "Accelerometer not available")
-        }
-
-        onDispose {
-            sensorManager?.unregisterListener(shakeDetector)
-            Log.d("ShakeDetector", "Shake detection disabled")
-        }
-    }
-
     // Handle accident report
     val handleAccidentReport: () -> Unit = {
         scope.launch {
@@ -753,6 +723,38 @@ fun DriverDashboard(
             } finally {
                 isReportingAccident = false
             }
+        }
+    }
+
+    // Shake detection for accident reporting
+    DisposableEffect(Unit) {
+        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+        val accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+
+        val shakeDetector = ShakeDetector {
+            // Only show dialog if it's not already showing
+            if (!showAccidentDialog && !isReportingAccident) {
+                Log.d("ShakeDetector", "Accident dialog triggered by shake")
+                showAccidentDialog = true
+            } else {
+                Log.d("ShakeDetector", "Shake detected but dialog already showing or reporting in progress")
+            }
+        }
+
+        if (accelerometer != null) {
+            sensorManager.registerListener(
+                shakeDetector,
+                accelerometer,
+                SensorManager.SENSOR_DELAY_UI
+            )
+            Log.d("ShakeDetector", "Shake detection enabled")
+        } else {
+            Log.w("ShakeDetector", "Accelerometer not available")
+        }
+
+        onDispose {
+            sensorManager?.unregisterListener(shakeDetector)
+            Log.d("ShakeDetector", "Shake detection disabled")
         }
     }
 
@@ -1093,68 +1095,6 @@ fun DriverDashboard(
         }
 
         return // Don't render dashboard if GPS is blocked
-    }
-
-    // Handle vehicle issue report
-    val handleVehicleIssueReport: (String, String?) -> Unit = { issueType, description ->
-        scope.launch {
-            isReportingVehicleIssue = true
-            try {
-                // Check permission before accessing location
-                if (!hasLocationPermission(context)) {
-                    tripActionError = "Location permission is required to report vehicle issues"
-                    isReportingVehicleIssue = false
-                    return@launch
-                }
-
-                val locationClient = LocationServices.getFusedLocationProviderClient(context)
-                val locationRequest =
-                    LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10000)
-                        .setWaitForAccurateLocation(false)
-                        .build()
-
-                val cancellationTokenSource = CancellationTokenSource()
-                val location = try {
-                    val locationTask = locationClient.getCurrentLocation(
-                        locationRequest.priority,
-                        cancellationTokenSource.token
-                    )
-                    locationTask.await()
-                } catch (securityException: SecurityException) {
-                    Log.e("VehicleIssue", "Location permission denied: ${securityException.message}")
-                    tripActionError = "Location permission denied. Please grant location access."
-                    isReportingVehicleIssue = false
-                    return@launch
-                }
-
-                val lat = location?.latitude ?: 0.0
-                val lng = location?.longitude ?: 0.0
-
-                val user = auth.currentUser
-                val schedule = nextSchedule
-
-                val issueData = hashMapOf(
-                    "driver_email" to user?.email?.lowercase()?.trim(),
-                    "schedule_id" to (schedule?.scheduleId ?: 0),
-                    "firebase_schedule_id" to schedule?.docId,
-                    "issue_type" to issueType,
-                    "description" to (description ?: issueType),
-                    "latitude" to lat,
-                    "longitude" to lng,
-                    "reported_at" to FieldValue.serverTimestamp()
-                )
-
-                db.collection("vehicle_issues").add(issueData).await()
-                
-                tripActionSuccess = "Vehicle issue reported successfully. Support team has been notified."
-                showVehicleIssueDialog = false
-            } catch (e: Exception) {
-                Log.e("VehicleIssue", "Error reporting vehicle issue: ${e.message}", e)
-                tripActionError = "Failed to report vehicle issue: ${e.message}"
-            } finally {
-                isReportingVehicleIssue = false
-            }
-        }
     }
 
     // Wrap everything in a Box to allow emergency lights overlay on top
@@ -2049,8 +1989,8 @@ fun DriverDashboard(
                                 )
                             }
                             
-                             val isAnyLoading = isStartingTrip || isMarkingPickup || isMarkingDropoff || isMarkingReturnPickup || isCompletingTrip
                              val phase = tripPhase ?: "pending"
+                             val isAnyLoading = isStartingTrip || isMarkingPickup || isMarkingDropoff || isMarkingReturnPickup || isCompletingTrip
 
                              when {
                                  // Step 1: START PICKUP ROUTE
