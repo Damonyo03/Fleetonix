@@ -460,7 +460,7 @@ fun AssignmentsScreen(onBack: () -> Unit) {
 
                             val parsed = snapshot.documents.mapNotNull { doc ->
                                 val data = doc.data ?: return@mapNotNull null
-                                val phase = data["trip_phase"] as? String ?: "pending"
+                    val phase = data["trip_phase"] as? String ?: "pending"
                                 val status = data["status"] as? String ?: "pending"
                                 val docCreatedAt = doc.getTimestamp("created_at") ?: com.google.firebase.Timestamp(0, 0)
 
@@ -677,7 +677,11 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                                 SectionHeader(title = "Active", icon = Icons.Default.DirectionsCar, color = AccentTeal)
                             }
                             items(activeItems, key = { it.docId }) { a ->
-                                AssignmentCard(assignment = a, onAcceptJob = {})
+                                AssignmentCard(
+                                    assignment = a, 
+                                    hasActiveMission = hasActiveMission,
+                                    onAcceptJob = {}
+                                )
                             }
                         }
 

@@ -1978,7 +1978,7 @@ fun DriverDashboard(
                                 }
                                 
                                 // EMERGENCY CANCEL (Only for accepted/active trips)
-                                if (phase != "pending" && phase != "completed") {
+                                if (tripPhase != "pending" && tripPhase != "completed") {
                                     OutlinedButton(
                                         onClick = { showCancelDialog = true },
                                         contentPadding = PaddingValues(horizontal = 12.dp),
