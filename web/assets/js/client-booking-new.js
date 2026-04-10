@@ -100,6 +100,7 @@ if (bookingForm) {
                 return_to_pickup,
                 special_instructions,
                 status: 'pending',
+                is_published: false,
                 created_at: serverTimestamp(),
                 updated_at: serverTimestamp()
             });

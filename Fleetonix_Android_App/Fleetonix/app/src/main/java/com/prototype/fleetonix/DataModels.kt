@@ -76,27 +76,10 @@ data class DriverSchedule(
     @SerializedName("return_to_pickup") val return_to_pickup: Boolean = false,
     @SerializedName("return_pickup_time") val return_pickup_time: String? = null,
     @SerializedName("current_city") val current_city: String? = null,
-    @SerializedName("client") val client: DriverClientInfo? = null,
-    @SerializedName("current_segment_index") val current_segment_index: Int? = null,
-    @SerializedName("segments") val segments: List<DriverSegment>? = null,
-    @SerializedName("pickup_points") val pickup_points: List<PickupPoint>? = null
-)
-
-data class DriverSegment(
-    val pickup: String? = null,
-    val dropoff: String? = null,
-    val arrived_at: String? = null,
-    val dropped_off_at: String? = null
+    @SerializedName("client") val client: DriverClientInfo? = null
 )
 
 
-data class PickupPoint(
-    val name: String? = null,
-    val latitude: Double? = null,
-    val longitude: Double? = null,
-    val order: Int? = null,
-    val arrived_at: Any? = null
-)
 
 data class DriverScheduleLocation(
     val latitude: Double? = null,

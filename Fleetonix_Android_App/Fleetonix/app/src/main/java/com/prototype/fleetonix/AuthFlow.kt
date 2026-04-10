@@ -189,6 +189,7 @@ fun AuthFlow() {
         val listener = db.collection("schedules")
             .whereEqualTo("driver_email", email)
             .whereEqualTo("isOfficial", true)
+            .whereEqualTo("is_published", true)
             .addSnapshotListener { snapshot, error ->
                 feedLoading = false
                 if (error != null) {
@@ -205,41 +206,25 @@ fun AuthFlow() {
                                   ?: (data["numeric_booking_id"] as? Number)?.toInt()
                                   ?: doc.id.hashCode()
 
-                        // Parse segments
-                        @Suppress("UNCHECKED_CAST")
-                        val segmentsList = data["segments"] as? List<Map<String, Any?>>
-                        val segments = segmentsList?.mapNotNull { seg ->
-                            val p = seg["pickup"] as? String ?: return@mapNotNull null
-                            val d = seg["dropoff"] as? String ?: return@mapNotNull null
-                            DriverSegment(pickup = p, dropoff = d)
-                        } ?: emptyList()
 
-                        // Parse pickup locations (handling both String and Array/List of Maps)
+
+                        // Parse pickup location (handling String or Map)
                         val rawPickup = data["pickup_location"]
-                        val parsedPickups = mutableListOf<DriverScheduleLocation>()
-                        when (rawPickup) {
-                            is String -> {
-                                parsedPickups.add(DriverScheduleLocation(
-                                    address = rawPickup,
-                                    latitude = (data["pickup_latitude"] as? Number)?.toDouble(),
-                                    longitude = (data["pickup_longitude"] as? Number)?.toDouble()
-                                ))
-                            }
-                            is List<*> -> {
-                                rawPickup.forEach { item ->
-                                    val map = item as? Map<*, *>
-                                    if (map != null) {
-                                        parsedPickups.add(DriverScheduleLocation(
-                                            address = map["address"] as? String ?: map["text"] as? String,
-                                            latitude = (map["latitude"] as? Number)?.toDouble(),
-                                            longitude = (map["longitude"] as? Number)?.toDouble()
-                                        ))
-                                    }
-                                }
-                            }
+                        val parsedPickup = when (rawPickup) {
+                            is String -> DriverScheduleLocation(
+                                address = rawPickup,
+                                latitude = (data["pickup_latitude"] as? Number)?.toDouble(),
+                                longitude = (data["pickup_longitude"] as? Number)?.toDouble()
+                            )
+                            is Map<*, *> -> DriverScheduleLocation(
+                                address = rawPickup["address"] as? String ?: rawPickup["text"] as? String,
+                                latitude = (rawPickup["latitude"] as? Number)?.toDouble(),
+                                longitude = (rawPickup["longitude"] as? Number)?.toDouble()
+                            )
+                            else -> DriverScheduleLocation(address = rawPickup as? String)
                         }
 
-                        // Parse dropoff location (handling both String and Map)
+                        // Parse dropoff location (handling String or Map)
                         val rawDropoff = data["dropoff_location"]
                         val parsedDropoff = when (rawDropoff) {
                             is String -> DriverScheduleLocation(
@@ -252,11 +237,7 @@ fun AuthFlow() {
                                 latitude = (rawDropoff["latitude"] as? Number)?.toDouble(),
                                 longitude = (rawDropoff["longitude"] as? Number)?.toDouble()
                             )
-                            else -> DriverScheduleLocation(
-                                address = data["dropoff_location"] as? String,
-                                latitude = (data["dropoff_latitude"] as? Number)?.toDouble(),
-                                longitude = (data["dropoff_longitude"] as? Number)?.toDouble()
-                            )
+                            else -> DriverScheduleLocation(address = rawDropoff as? String)
                         }
 
                         DriverSchedule(
@@ -266,7 +247,7 @@ fun AuthFlow() {
                             status = data["status"] as? String,
                             schedule_date = data["schedule_date"] as? String,
                             scheduled_time = data["schedule_time"] as? String,
-                            pickup_location = parsedPickups.firstOrNull() ?: DriverScheduleLocation(address = rawPickup as? String),
+                            pickup_location = parsedPickup,
                             dropoff_location = parsedDropoff,
                             client = DriverClientInfo(
                                 company = data["company_name"] as? String,
@@ -279,7 +260,6 @@ fun AuthFlow() {
                             special_instructions = data["special_instructions"] as? String,
                             return_to_pickup = data["return_to_pickup"] as? Boolean ?: false,
                             return_pickup_time = data["return_pickup_time"] as? String,
-                            segments = segments,
                             isOfficial = data["isOfficial"] as? Boolean ?: false
                         )
 

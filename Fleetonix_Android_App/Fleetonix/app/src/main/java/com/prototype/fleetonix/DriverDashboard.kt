@@ -513,7 +513,6 @@ fun DriverDashboard(
         if (currentLatitude == 0.0 || currentLongitude == 0.0) return@LaunchedEffect
 
         val origin = "$currentLatitude,$currentLongitude"
-        val curIdx = schedule.current_segment_index ?: 0
 
         val destination = when (tripPhase) {
             "pending", "assigned", "accepted", "moving_to_pickup", "return_pickup" -> {
@@ -954,8 +953,8 @@ fun DriverDashboard(
 
             when (tripPhase) {
                 "pickup", "return_pickup" -> {
-                    val lat = schedule.pickup_points?.firstOrNull()?.latitude
-                    val lng = schedule.pickup_points?.firstOrNull()?.longitude
+                    val lat = schedule.pickup_location?.latitude
+                    val lng = schedule.pickup_location?.longitude
                     if (lat != null && lng != null && lat != 0.0 && lng != 0.0) {
                         intent.action = LocationService.ACTION_SET_GEOFENCE
                         intent.putExtra(LocationService.EXTRA_GEOFENCE_ID, docId)
@@ -966,8 +965,8 @@ fun DriverDashboard(
                     }
                 }
                 "dropoff" -> {
-                    val lat = schedule.pickup_points?.lastOrNull()?.latitude
-                    val lng = schedule.pickup_points?.lastOrNull()?.longitude
+                    val lat = schedule.dropoff_location?.latitude
+                    val lng = schedule.dropoff_location?.longitude
                     if (lat != null && lng != null && lat != 0.0 && lng != 0.0) {
                         intent.action = LocationService.ACTION_SET_GEOFENCE
                         intent.putExtra(LocationService.EXTRA_GEOFENCE_ID, docId)
@@ -1778,63 +1777,7 @@ fun DriverDashboard(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // Multi-point Segments List (Full Visibility)
-                if (!nextSchedule?.segments.isNullOrEmpty()) {
-                    Text("Trip Route Details", color = TextSecondary, modifier = Modifier.padding(top = 8.dp))
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = CardBlue),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            val curIdx = nextSchedule?.current_segment_index ?: 0
-                            nextSchedule?.segments?.take(curIdx + 1)?.forEachIndexed { index, segment ->
-                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Box(modifier = Modifier.size(8.dp).background(AccentBlue, androidx.compose.foundation.shape.CircleShape))
-                                        Spacer(Modifier.width(12.dp))
-                                        Text("Stop ${index + 1} Pickup:", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
-                                    }
-                                    Text(segment.pickup ?: "Included Stop", color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 20.dp))
-                                    
-                                    Spacer(Modifier.height(4.dp))
-                                    
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Box(modifier = Modifier.size(8.dp).background(AccentOrange, androidx.compose.foundation.shape.CircleShape))
-                                        Spacer(Modifier.width(12.dp))
-                                        Text("Stop ${index + 1} Drop-off:", color = TextSecondary, style = MaterialTheme.typography.labelSmall)
-                                    }
-                                    Text(segment.dropoff ?: "Destination", color = Color.White, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 20.dp))
-                                }
-                                if (index < (nextSchedule?.segments?.size ?: 0) - 1) {
-                                    Divider(color = DividerBlue, thickness = 0.5.dp, modifier = Modifier.padding(vertical = 4.dp))
-                                }
-                            }
-                        }
-                    }
-                } else if (!nextSchedule?.pickup_points.isNullOrEmpty()) {
-                    // Fallback to legacy pickup_points if segments is missing
-                    Text("Pickup Points", color = TextSecondary, modifier = Modifier.padding(top = 8.dp))
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = CardBlue),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            nextSchedule?.pickup_points?.sortedBy { it.order }?.forEach { point ->
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    Box(
-                                        modifier = Modifier.size(8.dp).background(if (point.arrived_at != null) AccentTeal else Color.Gray, androidx.compose.foundation.shape.CircleShape)
-                                    )
-                                    Column {
-                                        Text(point.name ?: "Unknown Stop", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                        if (point.arrived_at != null) {
-                                            Text("Arrived", color = AccentTeal, style = MaterialTheme.typography.labelSmall)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+
 
                 if (feedError != null) {
                     Text(
@@ -2250,26 +2193,7 @@ fun DriverDashboard(
                                 phase == "moving_to_pickup" -> {
                                     Button(
                                         onClick = {
-                                            val curIdx = nextSchedule?.current_segment_index ?: 0
-                                            if (curIdx == 0) {
-                                                showOdometerDialog = true
-                                            } else {
-                                                val docId = nextSchedule?.docId ?: return@Button
-                                                scope.launch {
-                                                    try {
-                                                        isMarkingPickup = true
-                                                        db.collection("schedules").document(docId).update(
-                                                            "trip_phase", "picked_up",
-                                                            "picked_up_at", LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
-                                                        ).await()
-                                                        tripActionSuccess = "Stop ${curIdx + 1} picked up! Proceeding."
-                                                    } catch (e: Exception) {
-                                                        tripActionError = "Failed: ${e.message}"
-                                                    } finally {
-                                                        isMarkingPickup = false
-                                                    }
-                                                }
-                                            }
+                                            showOdometerDialog = true
                                         },
                                         modifier = Modifier.fillMaxWidth().height(64.dp),
                                         colors = ButtonDefaults.buttonColors(containerColor = AccentTeal),

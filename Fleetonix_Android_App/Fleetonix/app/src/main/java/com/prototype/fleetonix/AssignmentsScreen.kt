@@ -40,7 +40,6 @@ data class AssignmentModel(
     val docId: String,
     val scheduleId: String,
     val tripPhase: String,
-    val currentSegmentIndex: Int,
     val scheduleDate: String?,
     val scheduleTime: String?,
     val clientName: String?,
@@ -48,7 +47,6 @@ data class AssignmentModel(
     val passengerPhone: String?,
     val pickupAddress: String?,
     val dropoffAddress: String?,
-    val segments: List<AssignmentSegment>,
     val returnToPickup: Boolean,
     val returnPickupTime: String?,
     val specialInstructions: String?,
@@ -56,10 +54,7 @@ data class AssignmentModel(
     val isOfficial: Boolean
 )
 
-data class AssignmentSegment(
-    val pickup: String,
-    val dropoff: String
-)
+
 
 // ─────────────────────────────────────────────────────────────
 // Color helpers for phases
@@ -210,70 +205,31 @@ fun AssignmentCard(
                 }
             }
 
-            // ── Route Timeline (Multi-Segment Stepper) ────────────────
-            if (assignment.segments.isNotEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            color = Color.White.copy(alpha = 0.03f),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                        .padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(0.dp)
-                ) {
-                    assignment.segments.forEachIndexed { index, segment ->
-                        val isCurrentSegment = index == assignment.currentSegmentIndex
-                        val isPastSegment = index < assignment.currentSegmentIndex
-                        
-                        // Pickup point
-                        TimelineRow(
-                            label = "Pickup ${index + 1}",
-                            address = segment.pickup,
-                            dotColor = if (isPastSegment || (isCurrentSegment && phase.lowercase() != "pickup")) Color(0xFF10B981) else Color(0xFF00D4FF),
-                            isFilled = isPastSegment || (isCurrentSegment && phase.lowercase() != "pickup"),
-                            isCurrent = isCurrentSegment && phase.lowercase() == "pickup",
-                            showLine = true
-                        )
-
-                        // Drop-off point
-                        TimelineRow(
-                            label = "Drop-off ${index + 1}",
-                            address = segment.dropoff,
-                            dotColor = if (isPastSegment) Color(0xFF10B981) else if (isCurrentSegment && phase.lowercase() == "dropoff") Color(0xFF00D4FF) else Color(0xFF6B7280),
-                            isFilled = isPastSegment,
-                            isCurrent = isCurrentSegment && phase.lowercase() == "dropoff",
-                            showLine = index < assignment.segments.lastIndex
-                        )
-                    }
-                }
-            } else {
-                // Fallback: single pickup → dropoff
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            color = Color.White.copy(alpha = 0.03f),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                        .padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(0.dp)
-                ) {
-                    TimelineRow(
-                        label = "Pickup",
-                        address = assignment.pickupAddress ?: "—",
-                        dotColor = AccentBlue,
-                        isFilled = true,
-                        showLine = true
+            // ── Route Timeline (Single Point) ────────────────
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        color = Color.White.copy(alpha = 0.03f),
+                        shape = RoundedCornerShape(12.dp)
                     )
-                    TimelineRow(
-                        label = "Drop-off",
-                        address = assignment.dropoffAddress ?: "—",
-                        dotColor = Color(0xFF10B981),
-                        isFilled = true,
-                        showLine = false
-                    )
-                }
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                TimelineRow(
+                    label = "Pickup",
+                    address = assignment.pickupAddress ?: "—",
+                    dotColor = AccentBlue,
+                    isFilled = true,
+                    showLine = true
+                )
+                TimelineRow(
+                    label = "Drop-off",
+                    address = assignment.dropoffAddress ?: "—",
+                    dotColor = Color(0xFF10B981),
+                    isFilled = true,
+                    showLine = false
+                )
             }
 
             // ── Return to Pickup ────────────────────────────────────
@@ -522,39 +478,28 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                         val data = doc.data ?: return@mapNotNull null
                         val phase = data["trip_phase"] as? String ?: "pending"
 
-                        // Parse segments (multi-segment support)
-                        @Suppress("UNCHECKED_CAST")
-                        val segmentsList = data["segments"] as? List<Map<String, Any?>>
-                        val segments = segmentsList?.mapNotNull { seg ->
-                            val pickup = seg["pickup"] as? String ?: return@mapNotNull null
-                            val dropoff = seg["dropoff"] as? String ?: return@mapNotNull null
-                            AssignmentSegment(pickup = pickup, dropoff = dropoff)
-                        } ?: emptyList()
 
-                        // Parse pickup locations (handling both String and Array)
+
+                        // Parse pickup location (handling String or simple Map)
                         val rawPickup = data["pickup_location"]
                         val pickupAddress = when (rawPickup) {
                             is String -> rawPickup
-                            is List<*> -> {
-                                val first = rawPickup.firstOrNull() as? Map<*, *>
-                                first?.get("address") as? String ?: first?.get("text") as? String ?: "Multi-point"
-                            }
-                            else -> data["pickup_location"] as? String
+                            is Map<*, *> -> rawPickup["address"] as? String ?: rawPickup["text"] as? String
+                            else -> "Unknown Location"
                         }
 
-                        // Parse dropoff location (handling both String and Map)
+                        // Parse dropoff location (handling String or simple Map)
                         val rawDropoff = data["dropoff_location"]
                         val dropoffAddress = when (rawDropoff) {
                             is String -> rawDropoff
                             is Map<*, *> -> rawDropoff["address"] as? String ?: rawDropoff["text"] as? String
-                            else -> data["dropoff_location"] as? String
+                            else -> "Unknown Location"
                         }
 
                         AssignmentModel(
                             docId = doc.id,
                             scheduleId = (data["schedule_id"] as? Number)?.toString() ?: doc.id.take(8).uppercase(),
                             tripPhase = phase,
-                            currentSegmentIndex = (data["current_segment_index"] as? Number)?.toInt() ?: 0,
                             scheduleDate = data["schedule_date"] as? String,
                             scheduleTime = data["schedule_time"] as? String,
                             clientName = data["client_name"] as? String,
@@ -562,7 +507,6 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                             passengerPhone = data["passenger_phone"] as? String,
                             pickupAddress = pickupAddress,
                             dropoffAddress = dropoffAddress,
-                            segments = segments,
                             returnToPickup = data["return_to_pickup"] as? Boolean ?: false,
                             returnPickupTime = data["return_pickup_time"] as? String,
                             specialInstructions = data["special_instructions"] as? String,

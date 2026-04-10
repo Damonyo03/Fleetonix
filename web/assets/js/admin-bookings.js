@@ -608,7 +608,7 @@ window.assignDriver = async (id) => {
             trip_phase: "pending",
             schedule_date: date,
             schedule_time: time,
-            segments: booking.segments || [],
+            schedule_time: time,
             current_segment_index: 0,
             pickup_location: booking.pickup_location,
             pickup_latitude: booking.pickup_latitude || 0,

@@ -5,7 +5,7 @@ import { initLayout, clearUserCache, showModal, hideModal } from "./modules/ui.j
 import { sanitizeFirestoreData, generateNumericId } from "./modules/data.js";
 
 // Map Configuration
-const HEARTBEAT_EXPIRY_MS = 15 * 60 * 1000; // 15 mins till "Stale"
+const HEARTBEAT_EXPIRY_MS = 5 * 60 * 1000; // 5 mins till "Offline" (Grey)
 const GHOST_EXPIRY_MS = 60 * 60 * 1000;     // 1 hour till marker removed
 
 let driversMap = null;
@@ -66,6 +66,40 @@ function flushRenderQueue() {
 function isInViewport(lat, lng) {
     const bounds = driversMap?.getBounds();
     return !bounds || bounds.contains(new google.maps.LatLng(lat, lng));
+}
+
+/**
+ * Automatically adjusts the map bounds to fit all "Online" (active) drivers.
+ */
+function autoCenterMap() {
+    if (!driversMap || !google.maps.LatLngBounds) return;
+    
+    const bounds = new google.maps.LatLngBounds();
+    let hasPoints = false;
+    const now = Date.now();
+
+    Object.values(allDriversData).forEach(d => {
+        if (!d.current_latitude || !d.current_longitude) return;
+        
+        const lastActive = d.last_updated
+            ? (d.last_updated.toMillis ? d.last_updated.toMillis() : (d.last_updated.seconds ? d.last_updated.seconds * 1000 : Number(d.last_updated)))
+            : 0;
+        
+        const lastActiveMs = Math.max(lastActive, d.last_location_push || 0);
+        if (now - lastActiveMs < HEARTBEAT_EXPIRY_MS) {
+            bounds.extend({ lat: d.current_latitude, lng: d.current_longitude });
+            hasPoints = true;
+        }
+    });
+
+    if (hasPoints) {
+        driversMap.fitBounds(bounds);
+        // Prevent excessive zooming if only one driver is online
+        const listener = google.maps.event.addListener(driversMap, "idle", () => {
+            if (driversMap.getZoom() > 15) driversMap.setZoom(15);
+            google.maps.event.removeListener(listener);
+        });
+    }
 }
 
 // Fix Issue 4: Properly declared module-level globals (avoids ReferenceError in strict mode)
@@ -682,23 +716,33 @@ function initMap() {
  * Can safely run before Google Maps is ready.
  */
 function startRealtimeDriverTracking() {
-    console.log("[Dashboard] Starting real-time driver tracking...");
+    console.log("[Dashboard] Starting real-time driver tracking (Source: driver_locations)...");
     
-    // Inclusive Query: Show ALL registered drivers who have reported a location
-    const onlineDriversQuery = query(collection(db, "drivers")); 
-
-    unsubscribeDrivers = onSnapshot(onlineDriversQuery, (snapshot) => {
+    // Core Stability Refactor: Source of Truth is now the driver_locations collection
+    unsubscribeDrivers = onSnapshot(collection(db, "driver_locations"), (snapshot) => {
         snapshot.docChanges().forEach(change => {
-            const id = change.doc.id;
+            const email = change.doc.id.toLowerCase().trim();
             const data = change.doc.data();
+            const id = emailToUidMap[email] || email; // Fallback to email if UID not mapped yet
             
             if (change.type === "added" || change.type === "modified") {
-                if (data.location) {
-                    data.current_latitude = data.location.latitude;
-                    data.current_longitude = data.location.longitude;
-                }
-                if (data.lastSeen) data.last_updated = data.lastSeen;
-                updateDriverState(id, data, 'realtime');
+                // Map multiple coordinate keys for platform compatibility
+                const lat = data.current_latitude !== undefined ? data.current_latitude : 
+                            (data.latitude !== undefined ? data.latitude : 0);
+                const lng = data.current_longitude !== undefined ? data.current_longitude : 
+                            (data.longitude !== undefined ? data.longitude : 0);
+                
+                if (lat === 0 && lng === 0) return;
+
+                const processedData = {
+                    ...data,
+                    current_latitude: lat,
+                    current_longitude: lng,
+                    last_updated: data.last_updated || data.timestamp || serverTimestamp(),
+                    driver_email: email
+                };
+
+                updateDriverState(id, processedData, 'realtime');
             } else if (change.type === "removed") {
                 if (driverMarkers[id]) {
                     driverMarkers[id].setMap(null);
@@ -709,9 +753,15 @@ function startRealtimeDriverTracking() {
                 updateOnlineDisplay();
             }
         });
+        
+        // Auto-Center logic: Only on initial load or if explicitly requested
+        if (!driversMap.hasInitialCentered) {
+            autoCenterMap();
+            driversMap.hasInitialCentered = true;
+        }
     });
 
-    // Metadata Listener
+    // Metadata Listener: Enrich marker data with names and photos from 'users' collection
     const unsubUsers = onSnapshot(query(collection(db, "users"), where("role", "==", "driver")), (snapshot) => {
         snapshot.docChanges().forEach(change => {
             if (change.type === "removed") return;
@@ -720,15 +770,31 @@ function startRealtimeDriverTracking() {
             const email = data.email?.toLowerCase()?.trim();
             if (email) emailToUidMap[email] = id;
             
-            if (!allDriversData[id]) {
-                updateDriverState(id, {
-                    driver_name: data.full_name || data.display_name || data.fullName,
-                    driver_email: email
-                }, 'metadata');
-            }
+            updateDriverState(id, {
+                driver_name: data.full_name || data.display_name,
+                driver_email: email,
+                profile_image_url: data.profile_image_url
+            }, 'metadata');
         });
     });
     unsubscribeStats.push(unsubUsers);
+    
+    // Optional: Also listen to 'drivers' collection for status updates (trip_phase, etc.)
+    const unsubDriversMeta = onSnapshot(collection(db, "drivers"), (snapshot) => {
+        snapshot.docChanges().forEach(change => {
+            const id = change.doc.id;
+            const data = change.doc.data();
+            updateDriverState(id, data, 'metadata');
+        });
+    });
+    unsubscribeStats.push(unsubDriversMeta);
+
+    // Refresh display periodically
+    setInterval(() => {
+        updateOnlineDriversList();
+        updateOnlineDisplay();
+        autoCenterMap(); // Periodically keep active drivers in view
+    }, 15000);
 
     // Refresh display periodically for heartbeat calculations
     // Refresh display periodically

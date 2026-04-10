@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="../assets/css/address-autocomplete-enhanced.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Maps JS -->
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBWal4kXhImWNvJL2jV4LG0FvftdN2J9DQ&libraries=places,geometry"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBWal4kXhImWNvJL2jV4LG0FvftdN2J9DQ&libraries=places,geometry" defer></script>
 </head>
 <body>
     <div class="admin-layout">
@@ -80,15 +80,6 @@
                         </select>
                     </div>
 
-                    <div style="display: flex; align-items: center; gap: 12px; color: var(--text-secondary); font-size: 0.875rem;">
-                        <i class="fas fa-map-marked-alt"></i>
-                        <span>Operating Area:</span>
-                        <select id="areaFilter" class="btn btn-secondary" style="width: auto; text-align: left; text-transform: none; height: 38px;">
-                            <option value="all">All Areas</option>
-                            <option value="Metro Manila">Metro Manila – unrestricted</option>
-                            <option value="South">South – up to Calamba / Banlic</option>
-                            <option value="North">North – up to Clark / Mabalacat</option>
-                        </select>
                     </div>
                 </div>
 
