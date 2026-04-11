@@ -176,7 +176,9 @@ fun TripHistoryScreen(
         
         TripTicketDialog(
             driverName = ticket.driverName,
-            vehicleDetails = ticket.plate,
+            vehicleUnit = ticket.unit,
+            vehiclePlate = ticket.plate,
+            vehicleColor = ticket.color,
             timeOfDeparture = ticket.departureTime,
             timeOfArrival = ticket.arrivalTime,
             totalKm = ticket.totalKm,
@@ -267,6 +269,8 @@ data class TripHistoryItem(
     val polyline: String,
     val date: LocalDateTime,
     val plate: String,
+    val unit: String,
+    val color: String,
     val odometerStart: Double,
     val odometerEnd: Double
 )
@@ -294,7 +298,9 @@ fun buildTripItem(doc: com.google.firebase.firestore.DocumentSnapshot): TripHist
             status = data["status"] as? String ?: "Completed",
             polyline = data["route_polyline"] as? String ?: "",
             date = ldt,
-            plate = data["vehicle_details"] as? String ?: data["vehicle_plate"] as? String ?: data["plate_number"] as? String ?: "N/A",
+            plate = data["vehicle_plate"] as? String ?: data["plate_number"] as? String ?: "N/A",
+            unit = data["vehicle_unit"] as? String ?: data["vehicle_details"] as? String ?: "N/A",
+            color = data["vehicle_color"] as? String ?: "N/A",
             odometerStart = (data["odometer_start"] as? Number)?.toDouble() ?: 0.0,
             odometerEnd = (data["odometer_end"] as? Number)?.toDouble() ?: 0.0
         )

@@ -65,7 +65,9 @@ fun StatCard(title: String, value: String, accentColor: Color, modifier: Modifie
 @Composable
 fun TripTicketDialog(
     driverName: String,
-    vehicleDetails: String,
+    vehicleUnit: String,
+    vehiclePlate: String,
+    vehicleColor: String,
     timeOfDeparture: String,
     timeOfArrival: String,
     totalKm: Double,
@@ -159,7 +161,9 @@ fun TripTicketDialog(
                 ) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         DetailRow("Driver", driverName)
-                        DetailRow("Vehicle", vehicleDetails)
+                        DetailRow("Vehicle Unit", vehicleUnit)
+                        DetailRow("Plate Number", vehiclePlate)
+                        DetailRow("Unit Color", vehicleColor)
                         Divider(color = Color.White.copy(alpha = 0.1f))
                         DetailRow("Departure", timeOfDeparture)
                         DetailRow("Arrival", timeOfArrival)
@@ -2680,7 +2684,9 @@ fun DriverDashboard(
             
             TripTicketDialog(
                 driverName = session.user?.name ?: "Driver",
-                vehicleDetails = vDetails,
+                vehicleUnit = session.driver?.vehicleAssigned ?: "Unknown",
+                vehiclePlate = session.driver?.plateNumber ?: "Unknown",
+                vehicleColor = session.driver?.carColor ?: "Unknown",
                 timeOfDeparture = nextSchedule?.scheduled_time ?: "--:--",
                 timeOfArrival = completedAt ?: formatCurrentTime(),
                 totalKm = (totalDistanceMetres / 1000.0),
@@ -2720,7 +2726,9 @@ fun DriverDashboard(
                                 "passenger_name" to (nextSchedule?.passenger_name ?: nextSchedule?.client_name ?: "Unknown"),
                                 "client_name" to (nextSchedule?.client_name ?: "Jettsan"),
                                 "vehicle_plate" to (session.driver?.plateNumber ?: ""),
-                                "vehicle_details" to vDetails,
+                                "vehicle_unit" to (session.driver?.vehicleAssigned ?: ""),
+                                "vehicle_color" to (session.driver?.carColor ?: ""),
+                                "vehicle_details" to vDetails, // Keep for legacy
                                 "pickup_location" to (nextSchedule?.pickup_location?.address ?: nextSchedule?.pickup_location?.text ?: "Unknown"),
                                 "dropoff_location" to (nextSchedule?.dropoff_location?.address ?: nextSchedule?.dropoff_location?.text ?: "Unknown"),
                                 "time_of_departure" to (pickedUpAt ?: ""),
