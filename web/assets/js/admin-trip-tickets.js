@@ -6,7 +6,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { initLayout } from "./modules/ui.js";
-import { exportToExcel, mapTicketsForExport } from "./modules/export_utils.js";
+import { exportGCRTripTicket, mapTicketsForExport } from "./modules/export_utils.js";
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
@@ -406,28 +406,24 @@ window.exportTripTickets = function () {
     const vehicle = firstTicket.vehicle_assigned || firstTicket.vehicle_type || 'N/A';
     const plate = firstTicket.plate_number || 'N/A';
     
-    // Determine the month for the header
-    let reportMonth = "All Time";
+    // Extract month and year parts for specific template cells
+    let monthName = "—";
+    let yearStr = "—";
     if (fromDate) {
         const d = new Date(fromDate);
-        reportMonth = d.toLocaleString('default', { month: 'long', year: 'numeric' });
+        monthName = d.toLocaleString('default', { month: 'long' }).toUpperCase();
+        yearStr = d.getFullYear().toString();
     }
 
-    const headerLines = [
-        `Vehicle Details: ${vehicle} (${plate})`,
-        `For the month of: ${reportMonth}`,
-        `Transport Officer: ${selectedDriverName}`
-    ];
-
     const exportData = mapTicketsForExport(filtered);
-    const dateStr = new Date().toISOString().split('T')[0];
     
-    exportToExcel(
-        exportData, 
-        `Trip_Ticket_${selectedDriverName.replace(/\s+/g, '_')}_${dateStr}.xlsx`, 
-        'Trip Ledger',
-        headerLines
-    );
+    exportGCRTripTicket(exportData, {
+        vehicle: vehicle,
+        plate: plate,
+        driverName: selectedDriverName,
+        month: monthName,
+        year: yearStr
+    });
 };
 
 
