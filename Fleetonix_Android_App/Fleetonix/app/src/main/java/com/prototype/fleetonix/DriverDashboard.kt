@@ -913,7 +913,7 @@ fun DriverDashboard(
     DisposableEffect(Unit) {
         val appContext = context.applicationContext
         val receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context?, intent: Intent?) {
+            override fun onReceive(rcvContext: Context?, intent: Intent?) {
                 if (intent?.action == LocationService.ACTION_LOCATION_UPDATE) {
                     val lat = intent.getDoubleExtra(LocationService.EXTRA_LATITUDE, 0.0)
                     val lng = intent.getDoubleExtra(LocationService.EXTRA_LONGITUDE, 0.0)

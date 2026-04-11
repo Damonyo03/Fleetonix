@@ -175,8 +175,7 @@ fun TripHistoryScreen(
         
         TripTicketDialog(
             driverName = ticket.driverName,
-            vehiclePlate = ticket.plate,
-            vehicleType = "Vehicle",
+            vehicleDetails = ticket.plate,
             timeOfDeparture = ticket.departureTime,
             timeOfArrival = ticket.arrivalTime,
             totalKm = ticket.totalKm,
