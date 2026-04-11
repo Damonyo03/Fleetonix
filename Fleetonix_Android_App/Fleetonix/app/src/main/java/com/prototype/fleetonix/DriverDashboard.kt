@@ -289,44 +289,6 @@ fun DriverDashboard(
     var lastTimeInObj by remember { mutableStateOf<LocalDateTime?>(null) }
     var isDtrLoading by remember { mutableStateOf(false) }
 
-    // Logic: Auto Time-In Helper to ensure drivers are on-duty before trip actions
-    val triggerAutoTimeIn: suspend () -> Unit = {
-        if (!isTimedIn) {
-            try {
-                isDtrLoading = true
-                val uid = (FirebaseAuth.getInstance().currentUser?.uid)
-                if (uid != null) {
-                    val nowVal = LocalDateTime.now()
-                    val logData = hashMapOf(
-                        "driver_uid" to uid,
-                        "driver_email" to (FirebaseAuth.getInstance().currentUser?.email ?: ""),
-                        "driver_name" to liveDriverName,
-                        "accredited_company_id" to accreditedCompanyId,
-                        "action" to "time_in",
-                        "timestamp" to FieldValue.serverTimestamp(),
-                        "latitude" to currentLatitude,
-                        "longitude" to currentLongitude,
-                        "device_time" to nowVal.toString(),
-                        "meta" to "auto_triggered_by_trip"
-                    )
-                    FirebaseFirestore.getInstance().collection("dtr_logs").add(logData).await()
-                    FirebaseFirestore.getInstance().collection("drivers").document(uid).update(
-                        "is_currently_timed_in", true,
-                        "last_time_in", FieldValue.serverTimestamp()
-                    ).await()
-                    
-                    isTimedIn = true
-                    lastTimeInObj = nowVal
-                    Log.d("DriverDashboard", "Auto Time-In success")
-                }
-            } catch (e: Exception) {
-                Log.e("DriverDashboard", "Auto Time-In failed: ${e.message}")
-            } finally {
-                isDtrLoading = false
-            }
-        }
-    }
-
     var lastTimeInStr by remember { mutableStateOf<String?>(null) }
     var lastAddress by remember { mutableStateOf<String?>(null) }
     var lastTotalHours by remember { mutableStateOf<Double?>(null) }
@@ -581,6 +543,44 @@ fun DriverDashboard(
     var currentSpeed by remember { mutableStateOf(0f) }
     var currentAccuracy by remember { mutableStateOf(0f) }
     var currentHeading by remember { mutableStateOf(0f) }
+
+    // Logic: Auto Time-In Helper to ensure drivers are on-duty before trip actions
+    val triggerAutoTimeIn: suspend () -> Unit = {
+        if (!isTimedIn) {
+            try {
+                isDtrLoading = true
+                val uid = (FirebaseAuth.getInstance().currentUser?.uid)
+                if (uid != null) {
+                    val nowVal = LocalDateTime.now()
+                    val logData = hashMapOf(
+                        "driver_uid" to uid,
+                        "driver_email" to (FirebaseAuth.getInstance().currentUser?.email ?: ""),
+                        "driver_name" to liveDriverName,
+                        "accredited_company_id" to accreditedCompanyId,
+                        "action" to "time_in",
+                        "timestamp" to FieldValue.serverTimestamp(),
+                        "latitude" to currentLatitude,
+                        "longitude" to currentLongitude,
+                        "device_time" to nowVal.toString(),
+                        "meta" to "auto_triggered_by_trip"
+                    )
+                    FirebaseFirestore.getInstance().collection("dtr_logs").add(logData).await()
+                    FirebaseFirestore.getInstance().collection("drivers").document(uid).update(
+                        "is_currently_timed_in", true,
+                        "last_time_in", FieldValue.serverTimestamp()
+                    ).await()
+                    
+                    isTimedIn = true
+                    lastTimeInObj = nowVal
+                    Log.d("DriverDashboard", "Auto Time-In success")
+                }
+            } catch (e: Exception) {
+                Log.e("DriverDashboard", "Auto Time-In failed: ${e.message}")
+            } finally {
+                isDtrLoading = false
+            }
+        }
+    }
 
     // INITIAL LOCATION LOGIC: Get last known location immediately
     LaunchedEffect(Unit) {
@@ -1740,7 +1740,7 @@ fun DriverDashboard(
                             }
 
                             // NSCRP: 3D Navigation Perspective Update
-                            LaunchedEffect(currentLatitude, currentLongitude, bearing) {
+                            LaunchedEffect(currentLatitude, currentLongitude, currentHeading) {
                                 if (tripPhase != "idle" && tripPhase != "completed" && currentLatitude != 0.0) {
                                     cameraPositionState.animate(
                                         CameraUpdateFactory.newCameraPosition(
@@ -1748,7 +1748,7 @@ fun DriverDashboard(
                                                 .target(driverPos)
                                                 .zoom(18f)
                                                 .tilt(60f) // Standard 3D Navigation tilt
-                                                .bearing(bearing) // Auto-rotate with driver heading
+                                                .bearing(currentHeading) // Auto-rotate with driver heading
                                                 .build()
                                         ),
                                         800
