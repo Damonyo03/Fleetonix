@@ -75,9 +75,9 @@
                         <h1>Attendance Dashboard</h1>
                         <p>Real-time GPS verified activity logs for your fleet.</p>
                     </div>
-                    <div class="header-actions" style="display: flex; gap: 12px; align-items: center;">
-                        <input type="date" id="dateFilter" class="btn btn-secondary" style="width: auto; text-transform: none; text-align: left;">
-                        <select id="rangeFilter" class="btn btn-secondary" style="width: auto; height: 38px;">
+                    <div class="header-actions" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                        <input type="date" id="dateFilter" class="form-control" style="width: auto;">
+                        <select id="rangeFilter" class="form-select" style="width: auto;">
                             <option value="day">Day</option>
                             <option value="week">Week</option>
                             <option value="month">Month</option>
@@ -92,7 +92,7 @@
                 </div>
 
                 <!-- Log Statistics (New Addition for UI Uniformity) -->
-                <div class="grid grid-cols-4" style="margin-bottom: 32px;" id="dtrStats">
+                <div class="grid-fluid" style="margin-bottom: 32px;" id="dtrStats">
                     <div class="glass-card">
                         <span style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Clock-Ins</span>
                         <div style="font-size:1.5rem; font-weight:800; color:var(--accent-green);" id="countClockIn">0</div>

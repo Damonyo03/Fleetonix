@@ -73,11 +73,11 @@
                 <div class="glass-card" style="padding: 16px; margin-bottom: 32px; display: flex; gap: 16px; flex-wrap: wrap; align-items: center;">
                     <div style="flex: 1; min-width: 320px; position: relative;">
                         <i class="fas fa-search" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
-                        <input type="text" id="searchInput" class="btn btn-secondary" placeholder="Search by name, email, or role..." style="width: 100%; text-align: left; padding-left: 48px; text-transform: none; cursor: text;">
+                        <input type="text" id="searchInput" class="form-control" placeholder="Search by name, email, or role..." style="padding-left: 48px;">
                     </div>
                     <div style="display: flex; align-items: center; gap: 12px;">
                         <span style="font-size: 0.875rem; color: var(--text-secondary);">Role:</span>
-                        <select id="roleFilter" class="btn btn-secondary" style="width: auto; text-align: left; text-transform: none;">
+                        <select id="roleFilter" class="form-select" style="width: auto;">
                             <option value="all">All Access Roles</option>
                             <option value="super_admin">Super Admins</option>
                             <option value="admin">Administrators</option>

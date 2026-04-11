@@ -112,24 +112,24 @@ async function showCreateBookingModal(clients) {
     const content = `
         <div class="form-group">
             <label for="modal_passenger_name">Passenger Name</label>
-            <input type="text" id="modal_passenger_name" class="form-input" placeholder="Enter full name..." required>
+            <input type="text" id="modal_passenger_name" class="form-control" placeholder="Enter full name..." required>
         </div>
         
         <div class="modal-form-row">
             <div class="form-group">
                 <label for="modal_passenger_email">Passenger Email (Optional)</label>
-                <input type="email" id="modal_passenger_email" class="form-input" placeholder="email@example.com">
+                <input type="email" id="modal_passenger_email" class="form-control" placeholder="email@example.com">
             </div>
             <div class="form-group">
                 <label for="modal_passenger_phone">Phone Number (Optional)</label>
-                <input type="tel" id="modal_passenger_phone" class="form-input" placeholder="+63 9XX XXX XXXX">
+                <input type="tel" id="modal_passenger_phone" class="form-control" placeholder="+63 9XX XXX XXXX">
             </div>
         </div>
 
         <div class="modal-form-row">
             <div class="form-group">
                 <label for="modal_contractor">Contractor</label>
-                <input type="text" id="modal_contractor" class="form-input" value="Jettsan" readonly>
+                <input type="text" id="modal_contractor" class="form-control" value="Jettsan" readonly>
             </div>
             <div class="form-group">
                 <!-- Operating Area Removed per Core Stability Refactor -->
@@ -139,13 +139,13 @@ async function showCreateBookingModal(clients) {
         <!-- Single Pickup & Dropoff -->
         <div class="form-group pickup-point" style="position: relative;">
             <label>Pickup Location</label>
-            <input type="text" id="modal_pickup" class="form-input pickup-input" placeholder="Search for pickup..." required autocomplete="off">
+            <input type="text" id="modal_pickup" class="form-control pickup-input" placeholder="Search for pickup..." required autocomplete="off">
             <input type="hidden" id="modal_lat" class="lat-input" value="0">
             <input type="hidden" id="modal_lng" class="lng-input" value="0">
         </div>
         <div class="form-group dropoff-point" style="position: relative;">
             <label>Dropoff Location</label>
-            <input type="text" id="modal_dropoff" class="form-input dropoff-input" placeholder="Search for dropoff..." required autocomplete="off">
+            <input type="text" id="modal_dropoff" class="form-control dropoff-input" placeholder="Search for dropoff..." required autocomplete="off">
             <input type="hidden" id="modal_drop_lat" class="drop-lat-input" value="0">
             <input type="hidden" id="modal_drop_lng" class="drop-lng-input" value="0">
         </div>
@@ -153,18 +153,18 @@ async function showCreateBookingModal(clients) {
         <div class="modal-form-row">
             <div class="form-group">
                 <label for="pickup_date">Pickup Date (Today/Tomorrow Only)</label>
-                <input type="date" id="pickup_date" class="form-input" value="${today}" min="${today}" max="${tomorrowStr}" required>
+                <input type="date" id="pickup_date" class="form-control" value="${today}" min="${today}" max="${tomorrowStr}" required>
             </div>
             <div class="form-group">
                 <label for="pickup_time">Pickup Time</label>
-                <input type="time" id="pickup_time" class="form-input" required>
+                <input type="time" id="pickup_time" class="form-control" required>
             </div>
         </div>
 
         <div class="modal-form-row">
             <div class="form-group">
                 <label for="passengers">Passengers (Pax)</label>
-                <input type="number" id="passengers" class="form-input" value="1" min="1" required>
+                <input type="number" id="passengers" class="form-control" value="1" min="1" required>
             </div>
             <div class="form-group" style="display: flex; align-items: center; padding-top: 25px;">
                 <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9em;">
@@ -175,7 +175,7 @@ async function showCreateBookingModal(clients) {
 
         <div class="form-group">
             <label for="special_instructions">Special Instructions (Optional)</label>
-            <textarea id="special_instructions" class="form-input" rows="2" placeholder="e.g. Near the main gate..."></textarea>
+            <textarea id="special_instructions" class="form-control" rows="2" placeholder="e.g. Near the main gate..."></textarea>
         </div>
 
         <div class="form-group" style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px; background: rgba(0, 212, 255, 0.05); padding: 12px; border-radius: 8px; border: 1px dashed var(--accent-blue);">
@@ -185,7 +185,7 @@ async function showCreateBookingModal(clients) {
 
         <div class="form-group">
             <label for="modal_driver">Assign Driver (Optional)</label>
-            <select id="modal_driver" class="form-input">
+            <select id="modal_driver" class="form-select">
                 <option value="">-- No Driver Assigned --</option>
             </select>
             <small style="color: var(--text-muted); font-size: 0.8em; margin-top: 4px; display: block;">Only available drivers are shown here.</small>
@@ -591,7 +591,7 @@ window.assignDriver = async (id) => {
             <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 10px;">
                 <i class="fas fa-info-circle"></i> Online drivers have updated their location in the last 10 minutes.
             </p>
-            <select id="modal_driver" class="form-input" required>
+            <select id="modal_driver" class="form-select" required>
                 <option value="">-- Choose a Driver --</option>
                 ${processedDrivers.map(d => `
                     <option value="${d.id}" 
@@ -607,11 +607,11 @@ window.assignDriver = async (id) => {
         </div>
         <div class="form-group">
             <label>Schedule Date</label>
-            <input type="date" id="modal_sched_date" class="form-input" value="${booking.pickup_date || ''}" required>
+            <input type="date" id="modal_sched_date" class="form-control" value="${booking.pickup_date || ''}" required>
         </div>
         <div class="form-group">
             <label>Schedule Time</label>
-            <input type="time" id="modal_sched_time" class="form-input" value="${booking.pickup_time || ''}" required>
+            <input type="time" id="modal_sched_time" class="form-control" value="${booking.pickup_time || ''}" required>
         </div>
     `;
 

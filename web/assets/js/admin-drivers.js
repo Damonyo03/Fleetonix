@@ -151,49 +151,61 @@ function renderDrivers(docs) {
 function getDriverFormContent(driver = {}) {
     return `
         <div class="form-group" style="text-align: center; margin-bottom: 24px;">
-            <div id="image-drop-zone" style="width: 120px; height: 120px; border-radius: 50%; border: 2px dashed var(--accent-blue); margin: 0 auto 12px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; background: rgba(0,212,255,0.05); cursor: pointer;">
-                ${driver.profile_image_url ? `<img id="preview-image" src="${driver.profile_image_url}" style="width:100%; height:100%; object-fit:cover;">` : `<i class="fas fa-camera" style="font-size: 2rem; color: var(--accent-blue);"></i>`}
-                <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.5); font-size: 0.65rem; color: white; padding: 4px;">Update</div>
+            <div id="image-drop-zone" style="width: 140px; height: 140px; border-radius: 50%; border: 2px dashed var(--accent-blue); margin: 0 auto 12px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; background: rgba(0,212,255,0.05); cursor: pointer; transition: all 0.3s ease;">
+                ${driver.profile_image_url ? `<img id="preview-image" src="${driver.profile_image_url}" style="width:100%; height:100%; object-fit:cover;">` : `<i class="fas fa-camera" id="preview-placeholder" style="font-size: 2.5rem; color: var(--accent-blue);"></i>`}
+                <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.6); font-size: 0.6rem; color: white; padding: 4px; font-weight: 700;">CHANGE PHOTO</div>
             </div>
             <input type="file" id="driver-image-input" accept="image/*" style="display: none;">
-            <p style="font-size: 0.75rem; color: var(--text-muted);">Drag and drop or click to upload photo</p>
-            <div id="cropper-container" style="display:none; margin-top: 12px;">
-                <img id="cropper-image" style="max-width: 100%;">
-                <button type="button" class="btn btn-primary" id="crop-confirm" style="margin-top: 10px; width: 100%;">Crop & Apply</button>
+            <p style="font-size: 0.75rem; color: var(--text-muted);">Recommended: Square high-res JPG/PNG</p>
+            
+            <div id="cropper-container" style="display:none; margin-top: 20px; padding: 16px; background: rgba(0,212,255,0.02); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                <div style="max-height: 400px; overflow: hidden; border-radius: 8px; margin-bottom: 16px;">
+                    <img id="cropper-image" style="max-width: 100%;">
+                </div>
+                <!-- Cropper Controls -->
+                <div style="display: flex; gap: 8px; margin-bottom: 16px; justify-content: center;">
+                    <button type="button" class="btn-icon" id="crop-rotate-l" title="Rotate Left"><i class="fas fa-undo"></i></button>
+                    <button type="button" class="btn-icon" id="crop-rotate-r" title="Rotate Right"><i class="fas fa-redo"></i></button>
+                    <button type="button" class="btn-icon" id="crop-zoom-in" title="Zoom In"><i class="fas fa-search-plus"></i></button>
+                    <button type="button" class="btn-icon" id="crop-zoom-out" title="Zoom Out"><i class="fas fa-search-minus"></i></button>
+                </div>
+                <button type="button" class="btn btn-primary" id="crop-confirm" style="width: 100%; justify-content: center;">
+                    <i class="fas fa-check"></i> Apply Accurate Crop
+                </button>
             </div>
         </div>
 
         <div class="form-group">
             <label>Driver Full Name</label>
-            <input type="text" id="modal_name" class="form-input" value="${driver.driver_name || ''}" required placeholder="John Doe">
+            <input type="text" id="modal_name" class="form-control" value="${driver.driver_name || ''}" required placeholder="John Doe">
         </div>
         
         <div class="form-grid-2">
             <div class="form-group">
                 <label>Plate Number</label>
-                <input type="text" id="modal_plate" class="form-input" value="${driver.plate_number || ''}" required placeholder="ABC 1234">
+                <input type="text" id="modal_plate" class="form-control" value="${driver.plate_number || ''}" required placeholder="ABC 1234">
             </div>
             <div class="form-group">
                 <label>Car Color</label>
-                <input type="text" id="modal_color" class="form-input" value="${driver.car_color || ''}" placeholder="e.g. Metallic White">
+                <input type="text" id="modal_color" class="form-control" value="${driver.car_color || ''}" placeholder="e.g. Metallic White">
             </div>
         </div>
 
         <div class="form-grid-2">
             <div class="form-group">
                 <label>Car Brand & Model</label>
-                <input type="text" id="modal_vehicle" class="form-input" value="${driver.vehicle_assigned || ''}" required placeholder="Toyota Innova">
+                <input type="text" id="modal_vehicle" class="form-control" value="${driver.vehicle_assigned || ''}" required placeholder="Toyota Innova">
             </div>
             <div class="form-group">
                 <label>Actual Odometer (KM)</label>
-                <input type="number" step="0.01" id="modal_mileage" class="form-input" value="${driver.current_mileage || 0}" required>
+                <input type="number" step="0.01" id="modal_mileage" class="form-control" value="${driver.current_mileage || 0}" required>
             </div>
         </div>
 
         <div class="form-grid-2">
             <div class="form-group">
                 <label>Car Type</label>
-                <select id="modal_type" class="form-input">
+                <select id="modal_type" class="form-select">
                     <option value="4-seater" ${(driver.car_details || '').includes('4-seater') ? 'selected' : ''}>4-Seater Sedan/SUV</option>
                     <option value="6-seater" ${(driver.car_details || '').includes('6-seater') ? 'selected' : ''}>6-Seater MPV/Large SUV</option>
                 </select>
@@ -202,37 +214,37 @@ function getDriverFormContent(driver = {}) {
 
         <div class="form-group">
             <label>License Number</label>
-            <input type="text" id="modal_license" class="form-input" value="${driver.license_number || ''}" required>
+            <input type="text" id="modal_license" class="form-control" value="${driver.license_number || ''}" required>
         </div>
 
         <div class="form-group">
             <label>Mobile Number</label>
-            <input type="text" id="modal_phone" class="form-input" value="${driver.driver_phone || ''}" required placeholder="09xxxxxxxxx">
+            <input type="text" id="modal_phone" class="form-control" value="${driver.driver_phone || ''}" required placeholder="09xxxxxxxxx">
         </div>
 
         ${driver.driver_email ? `
         <div class="form-group">
             <label>Driver Email (Read-only)</label>
-            <input type="email" class="form-input" value="${driver.driver_email}" readonly style="opacity: 0.6; cursor: not-allowed;">
+            <input type="email" class="form-control" value="${driver.driver_email}" readonly>
         </div>
         ` : `
         <div class="form-grid-2">
             <div class="form-group">
                 <label>Driver Email (Account login)</label>
-                <input type="email" id="modal_email" class="form-input" required placeholder="driver@fleetonix.com">
+                <input type="email" id="modal_email" class="form-control" required placeholder="driver@fleetonix.com">
             </div>
             <div class="form-group">
                 <label>Set Temporary Password</label>
-                <input type="text" id="modal_password" class="form-input" required placeholder="Minimum 6 chars">
+                <input type="text" id="modal_password" class="form-control" required placeholder="Minimum 6 chars">
             </div>
         </div>
         `}
 
         <div class="form-group">
             <label>Operating Status</label>
-            <div class="alert" id="status-alert-box" style="font-size: 0.8rem; padding: 10px; border-radius: 8px; border: 1px dashed">
+            <div class="alert" id="status-alert-box" style="font-size: 0.8rem; padding: 12px; border-radius: 12px; border: 1px dashed">
                 <i class="fas fa-sync"></i> Current Status: <strong id="status-text-val" style="text-transform: uppercase;">${(driver.current_status || 'Offline').replace('_',' ')}</strong>
-                <p style="margin: 4px 0 0; font-size: 0.7rem; color: var(--text-muted);">This status is synchronized with the Driver's Android application activity.</p>
+                <p style="margin: 4px 0 0; font-size: 0.7rem; color: var(--text-muted);">Synchronized with Driver Android App activity.</p>
             </div>
             <script>
                 (function() {
@@ -248,9 +260,6 @@ function getDriverFormContent(driver = {}) {
                     
                     box.style.borderColor = color;
                     box.style.background = color.replace('var(', 'rgba(').replace(')', ', 0.05)');
-                    if (box.style.background.startsWith('var')) { // Fallback for raw var replacement if not simple
-                         box.style.backgroundColor = 'rgba(255,255,255,0.02)';
-                    }
                     text.style.color = color;
                 })();
             </script>
@@ -307,7 +316,15 @@ function initModalCropper() {
             cropperInstance = new Cropper(cropperImage, {
                 aspectRatio: 1,
                 viewMode: 1,
-                autoCropArea: 1,
+                autoCropArea: 0.8,
+                responsive: true,
+                restore: false,
+                guides: true,
+                center: true,
+                highlight: false,
+                cropBoxMovable: true,
+                cropBoxResizable: true,
+                toggleDragModeOnDblclick: false,
             });
         };
         reader.readAsDataURL(file);
@@ -318,10 +335,22 @@ function initModalCropper() {
         if (file) handleFile(file);
     };
 
+    // Control Handlers
+    document.getElementById('crop-rotate-l').onclick = () => cropperInstance?.rotate(-90);
+    document.getElementById('crop-rotate-r').onclick = () => cropperInstance?.rotate(90);
+    document.getElementById('crop-zoom-in').onclick = () => cropperInstance?.zoom(0.1);
+    document.getElementById('crop-zoom-out').onclick = () => cropperInstance?.zoom(-0.1);
+
     document.getElementById('crop-confirm').onclick = () => {
         if (!cropperInstance) return;
-        const canvas = cropperInstance.getCroppedCanvas({ width: 256, height: 256 });
-        const dataUrl = canvas.toDataURL();
+        // Accurate sizing for profile headers
+        const canvas = cropperInstance.getCroppedCanvas({ 
+            width: 512, 
+            height: 512,
+            imageSmoothingEnabled: true,
+            imageSmoothingQuality: 'high'
+        });
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
         
         let previewImg = document.getElementById('preview-image');
         if (!previewImg) {
@@ -330,11 +359,9 @@ function initModalCropper() {
             if (placeholder) {
                 previewImg = document.createElement('img');
                 previewImg.id = 'preview-image';
-                previewImg.style.width = '100px';
-                previewImg.style.height = '100px';
-                previewImg.style.borderRadius = '50%';
+                previewImg.style.width = '100%';
+                previewImg.style.height = '100%';
                 previewImg.style.objectFit = 'cover';
-                previewImg.style.border = '2px solid var(--accent-blue)';
                 placeholder.parentNode.replaceChild(previewImg, placeholder);
             }
         }
