@@ -2726,6 +2726,8 @@ fun DriverDashboard(
                                 "time_of_departure" to (pickedUpAt ?: ""),
                                 "time_of_arrival" to (completedAt ?: ""),
                                 "total_km" to (totalDistanceMetres / 1000.0),
+                                "odometer_start" to (nextSchedule?.odometer_start ?: 0.0),
+                                "odometer_end" to odometerEnd,
                                 "route_polyline" to GoogleMapsService.encodePolyline(actualRoutePoints),
                                 "status" to "completed",
                                 "created_at" to FieldValue.serverTimestamp(), // Fallback if recovered

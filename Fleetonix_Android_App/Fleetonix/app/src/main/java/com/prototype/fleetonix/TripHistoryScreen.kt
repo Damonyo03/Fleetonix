@@ -62,15 +62,16 @@ fun TripHistoryScreen(
             val filterDate = createdAt ?: com.google.firebase.Timestamp(0, 0)
 
             // 2. Fetch ALL tickets for this user and filter/sort in memory to avoid missing index errors
+            // Simplify query to maximize reliability (driver_uid is usually indexed by default)
             val uidQuery = db.collection("trip_tickets")
                 .whereEqualTo("driver_uid", uid)
-                .whereGreaterThanOrEqualTo("created_at", filterDate)
-                .limit(100)
+                .orderBy("created_at", Query.Direction.DESCENDING)
+                .limit(50)
 
             val emailQuery = db.collection("trip_tickets")
                 .whereEqualTo("driver_email", emailPruned)
-                .whereGreaterThanOrEqualTo("created_at", filterDate)
-                .limit(100)
+                .orderBy("created_at", Query.Direction.DESCENDING)
+                .limit(50)
 
             Log.d("TripHistory", "Starting simplified queries with creation filter: $filterDate")
 
@@ -293,7 +294,7 @@ fun buildTripItem(doc: com.google.firebase.firestore.DocumentSnapshot): TripHist
             status = data["status"] as? String ?: "Completed",
             polyline = data["route_polyline"] as? String ?: "",
             date = ldt,
-            plate = data["vehicle_plate"] as? String ?: data["plate_number"] as? String ?: "N/A",
+            plate = data["vehicle_details"] as? String ?: data["vehicle_plate"] as? String ?: data["plate_number"] as? String ?: "N/A",
             odometerStart = (data["odometer_start"] as? Number)?.toDouble() ?: 0.0,
             odometerEnd = (data["odometer_end"] as? Number)?.toDouble() ?: 0.0
         )
