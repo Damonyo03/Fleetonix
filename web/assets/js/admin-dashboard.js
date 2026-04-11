@@ -60,9 +60,7 @@ onAuthStateChanged(auth, async (user) => {
     
     // Feature Init
     initGlobalStats();
-    initPostingFeature();
     initGlobalAdminListeners();
-    initNewBookingFeature();
     initDispatchFeature();
     
     // Phase 2: Incident Listener
@@ -483,58 +481,6 @@ window.closeQuickInfoPanel = function() {
 /**
  * ── Feature Preservation (Post/Booking/Dispatch) ──────────────────────
  */
-function initPostingFeature() {
-    const postBtn = document.getElementById('postScheduleBtn');
-    if (!postBtn) return;
-    postBtn.onclick = async () => {
-        // Query ALL unpublished schedules across any date
-        const q = query(
-            collection(db, "schedules"), 
-            where("is_published", "==", false)
-        );
-        
-        try {
-            const snap = await getDocs(q);
-            if (snap.empty) {
-                alert("No draft schedules found to post.");
-                return;
-            }
-
-            if (!confirm(`Are you sure you want to post and officialize ${snap.size} draft schedules? This will make them visible to drivers immediately.`)) return;
-
-            postBtn.disabled = true;
-            postBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Posting...';
-
-            const batch = writeBatch(db);
-            snap.docs.forEach(d => {
-                batch.update(d.ref, { 
-                    is_published: true, 
-                    posted_at: serverTimestamp(),
-                    updated_at: serverTimestamp()
-                });
-            });
-
-            await batch.commit();
-            alert(`Success! ${snap.size} schedules have been posted.`);
-        } catch (err) {
-            console.error("Post error:", err);
-            alert("Failed to post: " + err.message);
-        } finally {
-            postBtn.disabled = false;
-            postBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Post Schedule';
-        }
-    };
-}
-
-function initNewBookingFeature() {
-    const btn = document.getElementById('newAdminBookingBtn');
-    if (btn) {
-        btn.onclick = () => {
-            // Redirect to bookings page with trigger for modal
-            window.location.href = 'bookings.html?trigger=new-booking';
-        };
-    }
-}
 
 function initDispatchFeature() {
     // Legacy dispatch logic point
@@ -590,68 +536,6 @@ function initGlobalStats() {
         if (el) el.innerText = snap.size;
     });
 
-    // 6. Recent Completed Trips Widget
-    initRecentTripsWidget();
+    // 6. Recent Completed Trips Widget (Removed)
 }
 
-function initRecentTripsWidget() {
-    const container = document.getElementById('completedBookingsWidget');
-    if (!container) return;
-
-    const q = query(
-        collection(db, "schedules"), 
-        where("status", "==", "completed"), 
-        orderBy("completed_at", "desc"),
-        limit(5)
-    );
-
-    onSnapshot(q, snap => {
-        if (snap.empty) {
-            container.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);">No completed trips recorded today.</div>';
-            return;
-        }
-
-        container.innerHTML = `
-            <table class="data-table" style="width:100%;">
-                <thead>
-                    <tr>
-                        <th style="padding:16px;">Trip & Driver</th>
-                        <th style="padding:16px;">Vehicle Details</th>
-                        <th style="padding:16px; text-align:right;">Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${snap.docs.map(doc => {
-                        const data = doc.data();
-                        const completedAt = data.completed_at?.toDate ? data.completed_at.toDate().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '---';
-                        const vehicle = data.vehicle_assigned || data.car_details || '—';
-                        const plate = data.plate_number || '—';
-                        return `
-                            <tr>
-                                <td style="padding:16px;">
-                                    <div style="font-weight:800; color:#fff; font-size:0.95rem;">${data.driver_name || 'Fleet Driver'}</div>
-                                    <div style="font-size:0.75rem; color:var(--accent-blue); margin-top:2px;">
-                                        <i class="fas fa-user-circle"></i> ${data.passenger_name || data.client_name || 'Individual'}
-                                    </div>
-                                    <div style="font-size:0.7rem; color:var(--text-muted); margin-top:4px;">
-                                        Completed: ${completedAt}
-                                    </div>
-                                </td>
-                                <td style="padding:16px;">
-                                    <div style="font-size:0.85rem; color:var(--text-secondary);">${vehicle}</div>
-                                    <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">${plate}</div>
-                                </td>
-                                <td style="padding:16px; text-align:right;">
-                                    <button class="btn btn-secondary !w-auto !px-4 !py-2 !text-[10px] !h-auto" 
-                                            onclick="window.location.href='trip-tickets.html?tripId=${doc.id}'">
-                                        <i class="fas fa-ticket-alt"></i> VIEW TICKET
-                                    </button>
-                                </td>
-                            </tr>
-                        `;
-                    }).join('')}
-                </tbody>
-            </table>
-        `;
-    });
-}
