@@ -39,6 +39,10 @@ import android.net.Uri
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import coil.compose.AsyncImage
+import android.util.Log
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.drawscope.Stroke
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -390,8 +394,8 @@ fun CropDialog(
                     val canvasHeight = size.height
                     val circleRadius = 140.dp.toPx() // 280dp diameter
 
-                    with(drawContext.canvas.nativeCanvas) {
-                        val checkPoint = saveLayer(null, null)
+                    drawContext.canvas.nativeCanvas.apply {
+                        val checkPoint = saveLayer(0f, 0f, canvasWidth, canvasHeight, null)
                         
                         // Draw semi-transparent background
                         drawRect(color = Color.Black.copy(alpha = 0.7f))
@@ -409,7 +413,7 @@ fun CropDialog(
                             color = Color.White.copy(alpha = 0.5f),
                             radius = circleRadius,
                             center = androidx.compose.ui.geometry.Offset(canvasWidth / 2, canvasHeight / 2),
-                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
+                            style = Stroke(width = 2.dp.toPx())
                         )
                         
                         restoreToCount(checkPoint)
