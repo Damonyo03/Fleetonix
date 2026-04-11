@@ -95,6 +95,19 @@ function initScheduleList() {
     onSnapshot(q, (snapshot) => {
         allSchedules = snapshot.docs;
         renderSchedules(allSchedules);
+    }, (error) => {
+        console.warn("Schedules index missing or error, falling back to unordered query:", error);
+        // Fallback to simple collection query if index is missing
+        onSnapshot(collection(db, "schedules"), (snapshot) => {
+            allSchedules = snapshot.docs;
+            // Manual sort as fallback
+            const sorted = snapshot.docs.sort((a, b) => {
+                const aTime = a.data().created_at?.toMillis?.() || 0;
+                const bTime = b.data().created_at?.toMillis?.() || 0;
+                return bTime - aTime;
+            });
+            renderSchedules(sorted);
+        });
     });
 }
 
@@ -186,11 +199,7 @@ window.updateScheduleStatus = async (id) => {
             updated_at: serverTimestamp()
         });
 
-        if (newStatus === 'completed' || newStatus === 'cancelled') {
-            }
-        }
-
-        // Add to audit trail
+        // Add to audit trail (NOW INSIDE THE CALLBACK)
         await addDoc(collection(db, "activity"), {
             type: 'system',
             title: 'Trip Status Updated',
