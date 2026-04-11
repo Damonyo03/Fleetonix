@@ -59,7 +59,8 @@ service cloud.firestore {
             || docId == request.auth.uid)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
              'current_status', 'current_trip_id', 'current_trip_phase', 
-             'current_mileage', 'active_ticket_id', 'last_updated', 'on_break'
+             'current_mileage', 'active_ticket_id', 'last_updated', 'on_break',
+             'profile_image_url'
            ]);
       allow write: if request.auth != null && isAdmin();
     }
@@ -104,6 +105,16 @@ service cloud.firestore {
         && request.resource.data.driver_email.lower()
              == request.auth.token.email.lower();
       allow update, delete: if request.auth != null && isAdmin();
+    }
+
+    // ── users: users update own profile details; admins full CRUD ───────
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow update: if request.auth != null && (request.auth.uid == userId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+             'profile_image_url', 'full_name', 'phone', 'updated_at'
+           ]);
+      allow write: if request.auth != null && isAdmin();
     }
 
     // ── Everything else: admin-only write ───────────────────────────────
