@@ -323,7 +323,7 @@ function formatTime(ts) {
 
 window.filterBy = function(type, el) {
     currentFilter = type;
-    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
     el.classList.add('active');
     renderFiltered();
 };
