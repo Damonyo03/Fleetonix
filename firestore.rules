@@ -46,9 +46,22 @@ service cloud.firestore {
              'current_segment_index', 'total_segments_completed', 'segments', 
              'odometer_start', 'odometer_end', 'passenger_signature_url', 
              'driver_signature_url', 'refusal_reason', 'vehicle_type', 'plate_number', 
-             'route_polyline', 'time_of_departure', 'time_of_arrival', 'last_updated',
+             'route_polyline', 'actual_route_polyline', 'time_of_departure', 'time_of_arrival', 'last_updated',
              'cancellation_reason', 'cancelled_at'
            ]);
+    }
+
+    // ── drivers: drivers update own status; admins full access ───────────
+    match /drivers/{docId} {
+      allow read: if request.auth != null;
+      allow update: if request.auth != null
+        && (resource.data.driver_email.lower() == request.auth.token.email.lower()
+            || docId == request.auth.uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+             'current_status', 'current_trip_id', 'current_trip_phase', 
+             'current_mileage', 'active_ticket_id', 'last_updated', 'on_break'
+           ]);
+      allow write: if request.auth != null && isAdmin();
     }
 
     // ── trip_tickets: drivers create/update own; admins full access ──────
