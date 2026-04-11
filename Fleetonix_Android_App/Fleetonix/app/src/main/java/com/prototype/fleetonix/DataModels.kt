@@ -81,6 +81,7 @@ data class DriverSchedule(
     @SerializedName("current_city") val current_city: String? = null,
     @SerializedName("cancellation_reason") val cancellation_reason: String? = null,
     @SerializedName("cancelled_at") val cancelled_at: Any? = null,
+    @SerializedName("route_polyline") val route_polyline: String? = null,
     @SerializedName("client") val client: DriverClientInfo? = null
 )
 
