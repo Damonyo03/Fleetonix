@@ -296,7 +296,14 @@ function initModalCropper() {
             cropperContainer.style.display = 'block';
             cropperImage.src = event.target.result;
             
-            if (cropperInstance) cropperInstance.destroy();
+            if (cropperInstance) {
+                cropperInstance.destroy();
+                cropperInstance = null;
+            }
+            if (typeof Cropper === 'undefined') {
+                console.error("Cropper library not loaded");
+                return;
+            }
             cropperInstance = new Cropper(cropperImage, {
                 aspectRatio: 1,
                 viewMode: 1,
@@ -312,11 +319,13 @@ function initModalCropper() {
     };
 
     document.getElementById('crop-confirm').onclick = () => {
+        if (!cropperInstance) return;
         const canvas = cropperInstance.getCroppedCanvas({ width: 256, height: 256 });
         document.getElementById('preview-image').src = canvas.toDataURL();
         document.getElementById('cropped_image_base64').value = canvas.toDataURL();
         cropperContainer.style.display = 'none';
         cropperInstance.destroy();
+        cropperInstance = null;
     };
 }
 
@@ -383,6 +392,7 @@ if (addDriverBtn) {
             try {
                 const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
                 const uid = userCredential.user.uid;
+                const croppedImg = document.getElementById('cropped_image_base64').value;
                 let finalImageUrl = "";
                 if (croppedImg) {
                     try {

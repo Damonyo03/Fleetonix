@@ -297,7 +297,7 @@ fun DriverProfile(
                         
                         // 1. Convert bitmap to bytes
                         val baos = ByteArrayOutputStream()
-                        bitmap.compress(Bitmap.CompressFormat.JPEG, 85, baos)
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, baos)
                         val data = baos.toByteArray()
                         
                         // 2. Upload to Firebase Storage
@@ -317,7 +317,7 @@ fun DriverProfile(
                         isUploading = false
                     } catch (e: Exception) {
                         isUploading = false
-                        // Show error toast if needed
+                        Log.e("DriverProfile", "Upload failed", e)
                     }
                 }
             }
@@ -332,25 +332,31 @@ fun CropDialog(
     onConfirm: (Bitmap) -> Unit
 ) {
     val context = LocalContext.current
-    var bitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var originalBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
 
     LaunchedEffect(uri) {
-        val inputStream = context.contentResolver.openInputStream(uri)
-        bitmap = BitmapFactory.decodeStream(inputStream)
+        context.contentResolver.openInputStream(uri)?.use { stream ->
+            originalBitmap = BitmapFactory.decodeStream(stream)
+        }
     }
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = false
+        )
     ) {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = Color.Black
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                if (bitmap != null) {
+                // 1. The Image Layer
+                if (originalBitmap != null) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -363,7 +369,7 @@ fun CropDialog(
                         contentAlignment = Alignment.Center
                     ) {
                         androidx.compose.foundation.Image(
-                            bitmap = bitmap!!.asImageBitmap(),
+                            bitmap = originalBitmap!!.asImageBitmap(),
                             contentDescription = null,
                             modifier = Modifier
                                 .fillMaxSize()
@@ -378,67 +384,132 @@ fun CropDialog(
                     }
                 }
 
-                // UI Overlay: Circular Mask
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .pointerInput(Unit) { /* Intercept touches */ },
-                    contentAlignment = Alignment.Center
-                ) {
-                    // This is a simplified "crop window" visual
-                    Box(
-                        modifier = Modifier
-                            .size(280.dp)
-                            .border(2.dp, Color.White, CircleShape)
-                            .background(Color.Transparent)
-                    )
+                // 2. The Circular Mask Overlay (Dimmed background with hole)
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val canvasWidth = size.width
+                    val canvasHeight = size.height
+                    val circleRadius = 140.dp.toPx() // 280dp diameter
+
+                    with(drawContext.canvas.nativeCanvas) {
+                        val checkPoint = saveLayer(null, null)
+                        
+                        // Draw semi-transparent background
+                        drawRect(color = Color.Black.copy(alpha = 0.7f))
+                        
+                        // Draw the hole (Clear the circle)
+                        drawCircle(
+                            color = Color.Transparent,
+                            radius = circleRadius,
+                            center = androidx.compose.ui.geometry.Offset(canvasWidth / 2, canvasHeight / 2),
+                            blendMode = BlendMode.Clear
+                        )
+                        
+                        // Draw a subtle border for the circle
+                        drawCircle(
+                            color = Color.White.copy(alpha = 0.5f),
+                            radius = circleRadius,
+                            center = androidx.compose.ui.geometry.Offset(canvasWidth / 2, canvasHeight / 2),
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
+                        )
+                        
+                        restoreToCount(checkPoint)
+                    }
                 }
 
-                // Controls
+                // 3. Close Button (Top Left)
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.padding(16.dp).align(Alignment.TopStart).statusBarsPadding()
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                }
+
+                // 4. Bottom Controls
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(32.dp),
+                        .navigationBarsPadding()
+                        .padding(horizontal = 24.dp, vertical = 32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
                         "Pinch to Zoom • Drag to Move",
-                        color = Color.White.copy(alpha = 0.7f),
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(bottom = 16.dp)
+                        color = Color.White.copy(alpha = 0.9f),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier
+                            .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
                     )
+                    
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        Button(
+                        OutlinedButton(
                             onClick = onDismiss,
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
+                            modifier = Modifier.weight(1f).height(56.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
                         ) {
-                            Text("Cancel")
+                            Text("Cancel", style = MaterialTheme.typography.titleMedium)
                         }
+                        
                         Button(
                             onClick = {
-                                if (bitmap != null) {
-                                    // In a production app, we'd actually crop the bitmap here based on scale/offset.
-                                    // For this prototype, we'll send the bitmap as is (or semi-scaled) 
-                                    // to ensure the upload flow works. 
-                                    // Realistic cropping logic usually involves canvas transformations.
-                                    onConfirm(bitmap!!)
+                                originalBitmap?.let { bmp ->
+                                    // Functional Cropping Implementation
+                                    val cropped = cropBitmap(bmp, scale, offset)
+                                    onConfirm(cropped)
                                 }
                             },
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1f).height(56.dp),
+                            shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
                         ) {
-                            Text("Save Photo")
+                            Text("Save Photo", style = MaterialTheme.typography.titleMedium, color = Midnight)
                         }
                     }
                 }
             }
         }
     }
+}
+
+/**
+ * Helper to perform the actual bitmap cropping based on UI state.
+ * For this prototype, we produce a squared 512x512 bitmap for storage efficiency.
+ */
+fun cropBitmap(source: Bitmap, scale: Float, offset: androidx.compose.ui.geometry.Offset): Bitmap {
+    val size = 512
+    val result = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(result)
+    
+    // We want to draw the source bitmap so that the center of the UI crop area (screen center)
+    // maps to the center of our new bitmap.
+    
+    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    paint.isFilterBitmap = true
+    
+    // Calculate scaling to FIT the source into a virtual "screen" of e.g. 1080px width
+    // This is a simplification but works for common photo aspects.
+    val virtualScreenWidth = 1080f
+    val virtualScreenHeight = 1920f
+    
+    val scaleFactor = virtualScreenWidth / source.width.toFloat()
+    val finalScale = scale * scaleFactor
+    
+    val matrix = android.graphics.Matrix()
+    // Center in 512x512 result
+    matrix.postTranslate(-source.width / 2f, -source.height / 2f)
+    matrix.postScale(finalScale, finalScale)
+    matrix.postTranslate(size / 2f + offset.x, size / 2f + offset.y)
+    
+    canvas.drawBitmap(source, matrix, paint)
+    return result
 }
 
 @Composable
