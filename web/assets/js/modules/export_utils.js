@@ -105,12 +105,52 @@ export async function exportToExcel(data, fileName, sheetName = 'Sheet1', header
 }
 
 /**
+ * Helper to format Firestore timestamps, dates, and other values for Excel cells.
+ */
+function formatValue(val, type = 'string') {
+    if (!val || val === '—') return '—';
+    
+    // Handle Firestore Timestamps or generic objects that look like them
+    let d = null;
+    if (val && typeof val === 'object') {
+        if (val.toDate) d = val.toDate();
+        else if (val.seconds) d = new Date(val.seconds * 1000);
+        else if (val instanceof Date) d = val;
+    } else if (typeof val === 'string' && !isNaN(Date.parse(val))) {
+        d = new Date(val);
+    }
+
+    if (d) {
+        if (type === 'time') {
+            return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+        }
+        if (type === 'date') {
+            return d.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' });
+        }
+        return d.toLocaleString('en-US', { 
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', hour12: true 
+        });
+    }
+
+    // Fallback for numeric strings
+    if (type === 'number') {
+        const n = parseFloat(val);
+        return isNaN(n) ? val : n;
+    }
+
+    return String(val);
+}
+
+/**
  * Official GCR Consortium Export
  * Maps Trip Ticket documents to the exact 10 columns required for the official ledger.
  */
 export function mapTicketsForExport(tickets) {
     return tickets.map(t => {
-        const date = t.schedule_date || (t.completed_at?.toDate ? t.completed_at.toDate().toLocaleDateString() : '—');
+        const date = formatValue(t.schedule_date || t.completed_at, 'date');
+        const departureAt = formatValue(t.time_of_departure || t.accepted_at, 'time');
+        const arrivalAt = formatValue(t.time_of_arrival || t.timeOfArrival, 'time');
         
         // Handle Multi-Segment Format with Geocoding Transparency
         let pickupLocation = t.pickup_location || t.location_name || '—';
@@ -123,18 +163,17 @@ export function mapTicketsForExport(tickets) {
 
         return {
             "DATE/TIME": date,
-            "DEPARTURE TIME": t.time_of_departure || t.accepted_at || '—',
+            "DEPARTURE TIME": departureAt,
             "PICK-UP PLACE": pickupLocation,
-            "ARRIVAL TIME": t.time_of_arrival || '—',
+            "ARRIVAL TIME": arrivalAt,
             "DROP-OFF PLACE": dropoffLocation,
             "PASSENGER'S NAME": t.passenger_name || t.client_name || '—',
             "SIGNATURE": "", // Image will be overlaid here
             "PURPOSE": t.isOfficial !== false ? "OFFICIAL" : "PERSONAL",
-            "ODOMETER": t.odometer_reading_end || t.odometer_end || '—',
-            "OVERTIME": t.is_overtime ? "YES" : "NO",
+            "ODOMETER": formatValue(t.odometer_reading_end || t.odometer_end || 0, 'number'),
+            "OVERTIME": (t.is_overtime || t.isOvertime) ? "YES" : "NO",
             // Hidden fields for processing
-            "_raw_signature": t.driver_signature || null,
-            "_pickup_coords": t.segments?.[0]?.pickup_lat ? { lat: t.segments[0].pickup_lat, lng: t.segments[0].pickup_lng } : (t.latitude ? { lat: t.latitude, lng: t.longitude } : null)
+            "_raw_signature": t.driver_signature || null
         };
     });
 }
@@ -153,28 +192,34 @@ export async function exportGCRTripTicket(data, context) {
         const worksheet = workbook.addWorksheet('Trip Ticket');
 
         // 1. Branding & Header Section
-        // Title (Row 2)
-        worksheet.mergeCells('B2:J2');
-        const titleCell = worksheet.getCell('B2');
+        // Clear Row 1
+        worksheet.getRow(1).values = [];
+
+        // Title (Row 2) - Move slightly right if logo is on left, or merge full width
+        worksheet.mergeCells('A2:K2');
+        const titleCell = worksheet.getCell('A2');
         titleCell.value = 'DAILY VEHICLE TRIP TICKET';
-        titleCell.font = { name: 'Arial Black', size: 14, bold: true };
+        titleCell.font = { name: 'Arial Black', size: 16, bold: true };
         titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
         // Metadata Labels (Row 3, 4)
         worksheet.getCell('A3').value = 'VEHICLE DETAILS:';
         worksheet.getCell('B3').value = `${context.vehicle} (${context.plate})`;
+        worksheet.getRow(3).height = 20;
+
         worksheet.getCell('A4').value = 'TRANSPORT OFFICER:';
         worksheet.getCell('B4').value = context.driverName;
+        worksheet.getRow(4).height = 20;
 
         worksheet.getCell('I3').value = 'FOR THE MONTH OF:';
-        worksheet.getCell('J3').value = context.month;
-        worksheet.getCell('K3').value = context.year;
+        worksheet.getCell('J3').value = `${context.month} ${context.year}`;
+        worksheet.mergeCells('J3:K3');
 
         // Styling Labels
         ['A3', 'A4', 'I3'].forEach(cellId => {
             const cell = worksheet.getCell(cellId);
-            cell.font = { bold: true };
-            cell.alignment = { horizontal: 'right' };
+            cell.font = { bold: true, size: 11 };
+            cell.alignment = { horizontal: 'left' };
         });
 
         // 2. Table Headers (Row 6)
@@ -182,6 +227,7 @@ export async function exportGCRTripTicket(data, context) {
         const keys = Object.keys(data[0]).filter(k => !k.startsWith('_'));
         const headerRow = worksheet.getRow(headerRowNumber);
         headerRow.values = keys;
+        headerRow.height = 30;
         
         headerRow.eachCell((cell) => {
             cell.font = { bold: true, color: { argb: 'FF000000' } };
@@ -191,28 +237,21 @@ export async function exportGCRTripTicket(data, context) {
                 fgColor: { argb: 'FFFFFF00' } // Yellow
             };
             cell.border = {
-                top: { style: 'thin' },
+                top: { style: 'medium' },
                 left: { style: 'thin' },
-                bottom: { style: 'thin' },
+                bottom: { style: 'medium' },
                 right: { style: 'thin' }
             };
             cell.alignment = { horizontal: 'center', vertical: 'middle' };
         });
 
-        // Column Widths
-        worksheet.columns = keys.map(k => {
-            let width = 15;
-            if (k.includes('PLACE') || k.includes('NAME')) width = 30;
-            return { header: k, key: k, width: width };
-        });
-
         // 3. Data Rows
-        let rowCount = 0;
         for (const item of data) {
             const rowValues = keys.map(k => item[k]);
             const row = worksheet.addRow(rowValues);
+            row.height = 25;
             
-            // Signature Column (Index 7)
+            // Signature Column (Index 7 - Col G)
             if (item._raw_signature && item._raw_signature.startsWith('data:image')) {
                 try {
                     const imageId = workbook.addImage({
@@ -237,13 +276,12 @@ export async function exportGCRTripTicket(data, context) {
                     bottom: { style: 'thin' },
                     right: { style: 'thin' }
                 };
+                cell.alignment = { vertical: 'middle' };
             });
-            rowCount++;
         }
 
         // 4. Logo Injection (Placeholder or fetched)
         try {
-            // Attempt to fetch logo from web/img/logo.jpg if it exists in expected path
             const logoUrl = '../img/logo.jpg';
             const response = await fetch(logoUrl);
             const blob = await response.blob();
@@ -259,17 +297,29 @@ export async function exportGCRTripTicket(data, context) {
                 extension: 'png',
             });
             
+            // Position logo at the top center, floating above the title areas
+            // Or better, top left corner but small
             worksheet.addImage(logoId, {
-                tl: { col: 4, row: 0 },
-                ext: { width: 120, height: 60 }
+                tl: { col: 4.5, row: 0 },
+                ext: { width: 100, height: 50 },
+                editAs: 'absolute'
             });
         } catch (err) {
-            console.warn("Logo injection failed, skipping. Error:", err);
-            worksheet.getCell('E1').value = 'FLEETONIX';
-            worksheet.getCell('E1').font = { bold: true, size: 20 };
+            console.warn("Logo injection failed.");
         }
 
-        // 5. Download
+        // 5. Column Width Optimization
+        worksheet.columns.forEach((column, i) => {
+            let maxLength = 0;
+            column.eachCell({ includeEmpty: true }, (cell) => {
+                const columnLength = cell.value ? cell.value.toString().length : 10;
+                if (columnLength > maxLength) maxLength = columnLength;
+            });
+            column.width = maxLength < 12 ? 12 : maxLength + 5;
+            if (column.header && column.header.includes('PLACE')) column.width = 40;
+        });
+
+        // 6. Download
         const buffer = await workbook.xlsx.writeBuffer();
         const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
         const url = window.URL.createObjectURL(blob);

@@ -106,11 +106,24 @@ function loadTickets() {
         onSnapshot(schedulesQuery, (schedSnap) => {
             const schedTickets = schedSnap.docs.map(d => ({ id: d.id, _source: 'schedules', ...d.data() }));
 
-            // Merge: trip_tickets takes priority; add schedules not already covered
-            const tripTicketIds = new Set(tripTickets.map(t => t.id));
-            const mergedSchedules = schedTickets.filter(s => !tripTicketIds.has(s.id));
+            // Merge: trip_tickets takes priority; deduplicate based on content
+            const existingTrips = new Map();
+            
+            // First pass: add trip_tickets (priority)
+            tripTickets.forEach(t => {
+                const key = `${t.driver_id}_${t.completed_at?.seconds || t.completed_at || 'NA'}_${t.pickup_location || t.segments?.[0]?.pickup || 'NA'}`;
+                existingTrips.set(key, t);
+            });
 
-            allTickets = [...tripTickets, ...mergedSchedules];
+            // Second pass: add schedules if not already represented
+            schedTickets.forEach(s => {
+                const key = `${s.driver_id}_${s.completed_at?.seconds || s.completed_at || 'NA'}_${s.pickup_location || s.segments?.[0]?.pickup || 'NA'}`;
+                if (!existingTrips.has(key)) {
+                    existingTrips.set(key, s);
+                }
+            });
+
+            allTickets = Array.from(existingTrips.values());
             // Sort by completed_at descending
             allTickets.sort((a, b) => {
                 const at = a.completed_at?.toMillis?.() || a.completed_at?.seconds * 1000 || 0;
