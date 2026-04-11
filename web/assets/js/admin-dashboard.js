@@ -296,12 +296,13 @@ function createDotIcon(d, isMoving) {
     }
 
     const pulseHtml = isMoving || statusClass === 'accident' || statusClass === 'available' ? '<div class="dot-pulse"></div>' : '';
+    const glowClass = statusClass === 'available' ? 'pulse-glow' : '';
     
     return L.divIcon({
         className: 'custom-driver-marker',
-        html: `<div class="driver-dot ${statusClass}">${pulseHtml}</div>`,
-        iconSize: [20, 20],
-        iconAnchor: [10, 10]
+        html: `<div class="driver-dot ${statusClass} ${glowClass}">${pulseHtml}</div>`,
+        iconSize: [22, 22],
+        iconAnchor: [11, 11]
     });
 }
 

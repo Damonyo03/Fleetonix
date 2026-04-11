@@ -286,12 +286,51 @@ fun DriverDashboard(
 
     // DTR (Daily Time Record) states
     var isTimedIn by remember { mutableStateOf(false) }
-    var lastTimeInStr by remember { mutableStateOf<String?>(null) }
     var lastTimeInObj by remember { mutableStateOf<LocalDateTime?>(null) }
+    var isDtrLoading by remember { mutableStateOf(false) }
+
+    // Logic: Auto Time-In Helper to ensure drivers are on-duty before trip actions
+    val triggerAutoTimeIn: suspend () -> Unit = {
+        if (!isTimedIn) {
+            try {
+                isDtrLoading = true
+                val uid = (FirebaseAuth.getInstance().currentUser?.uid)
+                if (uid != null) {
+                    val nowVal = LocalDateTime.now()
+                    val logData = hashMapOf(
+                        "driver_uid" to uid,
+                        "driver_email" to (FirebaseAuth.getInstance().currentUser?.email ?: ""),
+                        "driver_name" to liveDriverName,
+                        "accredited_company_id" to accreditedCompanyId,
+                        "action" to "time_in",
+                        "timestamp" to FieldValue.serverTimestamp(),
+                        "latitude" to currentLatitude,
+                        "longitude" to currentLongitude,
+                        "device_time" to nowVal.toString(),
+                        "meta" to "auto_triggered_by_trip"
+                    )
+                    FirebaseFirestore.getInstance().collection("dtr_logs").add(logData).await()
+                    FirebaseFirestore.getInstance().collection("drivers").document(uid).update(
+                        "is_currently_timed_in", true,
+                        "last_time_in", FieldValue.serverTimestamp()
+                    ).await()
+                    
+                    isTimedIn = true
+                    lastTimeInObj = nowVal
+                    Log.d("DriverDashboard", "Auto Time-In success")
+                }
+            } catch (e: Exception) {
+                Log.e("DriverDashboard", "Auto Time-In failed: ${e.message}")
+            } finally {
+                isDtrLoading = false
+            }
+        }
+    }
+
+    var lastTimeInStr by remember { mutableStateOf<String?>(null) }
     var lastAddress by remember { mutableStateOf<String?>(null) }
     var lastTotalHours by remember { mutableStateOf<Double?>(null) }
     var lastIsOvertime by remember { mutableStateOf(false) }
-    var isDtrLoading by remember { mutableStateOf(false) }
     var dtrCooldown by remember { mutableStateOf(false) }
     var latestAckMessage by remember { mutableStateOf<String?>(null) }
     var showReRoutePrompt by remember { mutableStateOf(false) }
@@ -1697,14 +1736,22 @@ fun DriverDashboard(
                             // Auto-fit route when it's first loaded or changed
                             LaunchedEffect(polylinePoints) {
                                 if (polylinePoints.isNotEmpty()) {
-                                    val bounds = com.google.android.gms.maps.model.LatLngBounds.builder().apply {
-                                        polylinePoints.forEach { include(it) }
-                                        include(driverPos)
-                                    }.build()
-                                    
+                                }
+                            }
+
+                            // NSCRP: 3D Navigation Perspective Update
+                            LaunchedEffect(currentLatitude, currentLongitude, bearing) {
+                                if (tripPhase != "idle" && tripPhase != "completed" && currentLatitude != 0.0) {
                                     cameraPositionState.animate(
-                                        CameraUpdateFactory.newLatLngBounds(bounds, 100),
-                                        1000
+                                        CameraUpdateFactory.newCameraPosition(
+                                            CameraPosition.builder()
+                                                .target(driverPos)
+                                                .zoom(18f)
+                                                .tilt(60f) // Standard 3D Navigation tilt
+                                                .bearing(bearing) // Auto-rotate with driver heading
+                                                .build()
+                                        ),
+                                        800
                                     )
                                 }
                             }
@@ -2059,6 +2106,9 @@ fun DriverDashboard(
                                              scope.launch {
                                                  try {
                                                      isStartingTrip = true
+                                                     // Ensure driver is timed-in before navigation sequences
+                                                     triggerAutoTimeIn()
+                                                     
                                                      db.collection("schedules").document(docId).update(
                                                          "trip_phase", "en_route_pickup",
                                                          "started_at", FieldValue.serverTimestamp()
@@ -2558,6 +2608,8 @@ fun DriverDashboard(
                     scope.launch {
                         try {
                             isMarkingPickup = true
+                            // Automatic time-in safeguard
+                            triggerAutoTimeIn()
                             
                             // 2. Update Schedule with Odometer
                             if (isStarting) {
@@ -2616,7 +2668,7 @@ fun DriverDashboard(
                                 "odometer_end", endOdometerValue,
                                 "trip_phase", "completed",
                                 "status", "completed",
-                                "actual_route_polyline" to GoogleMapsService.encodePolyline(actualRoutePoints),
+                                "actual_route_polyline", GoogleMapsService.encodePolyline(actualRoutePoints),
                                 "completed_at", FieldValue.serverTimestamp()
                             ).await()
                             
