@@ -251,6 +251,9 @@ fun DriverDashboard(
 
     // Live Metadata States
     var liveDriverName by remember { mutableStateOf(session.user?.name ?: "Driver") }
+    var liveVehicleUnit by remember { mutableStateOf(session.driver?.vehicleAssigned ?: "Unknown") }
+    var liveVehiclePlate by remember { mutableStateOf(session.driver?.plateNumber ?: "Unknown") }
+    var liveVehicleColor by remember { mutableStateOf(session.driver?.carColor ?: "Unknown") }
     var accreditedCompanyId = "jettsan"
 
     // Accident report states
@@ -298,6 +301,24 @@ fun DriverDashboard(
     var lastIsOvertime by remember { mutableStateOf(false) }
     var dtrCooldown by remember { mutableStateOf(false) }
     var latestAckMessage by remember { mutableStateOf<String?>(null) }
+
+    // Live Metadata Sync (Asset Profile)
+    LaunchedEffect(auth.currentUser?.uid) {
+        val uid = auth.currentUser?.uid ?: return@LaunchedEffect
+        db.collection("drivers").document(uid).addSnapshotListener { snapshot, e ->
+            if (e != null) {
+                Log.e("DriverDashboard", "Metadata listener failed", e)
+                return@addSnapshotListener
+            }
+            if (snapshot != null && snapshot.exists()) {
+                liveDriverName = snapshot.getString("driver_name") ?: liveDriverName
+                liveVehicleUnit = snapshot.getString("vehicle_assigned") ?: "Unknown"
+                liveVehiclePlate = snapshot.getString("plate_number") ?: "Unknown"
+                liveVehicleColor = snapshot.getString("car_color") ?: "Unknown"
+                lastVehicleMileage = snapshot.getDouble("current_mileage") ?: lastVehicleMileage
+            }
+        }
+    }
     var showReRoutePrompt by remember { mutableStateOf(false) }
     var isReRouting by remember { mutableStateOf(false) }
 
@@ -2683,10 +2704,10 @@ fun DriverDashboard(
             val vDetails = if (vColor.isNotEmpty()) "$vModel ($vColor)" else vModel
             
             TripTicketDialog(
-                driverName = session.user?.name ?: "Driver",
-                vehicleUnit = session.driver?.vehicleAssigned ?: "Unknown",
-                vehiclePlate = session.driver?.plateNumber ?: "Unknown",
-                vehicleColor = session.driver?.carColor ?: "Unknown",
+                driverName = liveDriverName,
+                vehicleUnit = liveVehicleUnit,
+                vehiclePlate = liveVehiclePlate,
+                vehicleColor = liveVehicleColor,
                 timeOfDeparture = nextSchedule?.scheduled_time ?: "--:--",
                 timeOfArrival = completedAt ?: formatCurrentTime(),
                 totalKm = (totalDistanceMetres / 1000.0),
@@ -2725,9 +2746,9 @@ fun DriverDashboard(
                                 "driver_name" to liveDriverName,
                                 "passenger_name" to (nextSchedule?.passenger_name ?: nextSchedule?.client_name ?: "Unknown"),
                                 "client_name" to (nextSchedule?.client_name ?: "Jettsan"),
-                                "vehicle_plate" to (session.driver?.plateNumber ?: ""),
-                                "vehicle_unit" to (session.driver?.vehicleAssigned ?: ""),
-                                "vehicle_color" to (session.driver?.carColor ?: ""),
+                                "vehicle_plate" to liveVehiclePlate,
+                                "vehicle_unit" to liveVehicleUnit,
+                                "vehicle_color" to liveVehicleColor,
                                 "vehicle_details" to vDetails, // Keep for legacy
                                 "pickup_location" to (nextSchedule?.pickup_location?.address ?: nextSchedule?.pickup_location?.text ?: "Unknown"),
                                 "dropoff_location" to (nextSchedule?.dropoff_location?.address ?: nextSchedule?.dropoff_location?.text ?: "Unknown"),
