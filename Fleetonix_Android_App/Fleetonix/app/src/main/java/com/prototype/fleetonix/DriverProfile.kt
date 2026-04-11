@@ -43,6 +43,8 @@ import android.util.Log
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.unit.IntSize
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
