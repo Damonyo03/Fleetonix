@@ -358,7 +358,6 @@ function updateOnlineDriversList() {
                 <div class="flex items-center gap-4">
                     <!-- Consolidated Status Indicator (functional + heartbeat) -->
                     <div class="relative p-0.5">
-                        <div class="absolute inset-0 rounded-full ${isRecent ? 'bg-accent-green/20 animate-pulse blur-[2px]' : 'bg-transparent'}"></div>
                         <img src="${d.profile_image_url || '../img/default-avatar.png'}" 
                              class="relative w-12 h-12 rounded-full object-cover border-2 ${isRecent ? 'border-accent-green shadow-[0_0_12px_rgba(0,255,136,0.3)]' : 'border-slate-600'}"
                              onerror="this.src='../img/default-avatar.png'">

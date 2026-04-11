@@ -291,6 +291,12 @@ fun AuthFlow() {
                             passenger_email = data["passenger_email"] as? String,
                             passenger_phone = data["passenger_phone"] as? String,
                             special_instructions = data["special_instructions"] as? String,
+                            odometer_start = (data["odometer_start"] as? Number)?.toDouble(),
+                            odometer_end = (data["odometer_end"] as? Number)?.toDouble(),
+                            total_km_travelled = (data["total_km_travelled"] as? Number)?.toDouble(),
+                            started_at = data["started_at"],
+                            picked_up_at = data["picked_up_at"],
+                            completed_at = data["completed_at"],
                             return_to_pickup = data["return_to_pickup"] as? Boolean ?: false,
                             return_pickup_time = data["return_pickup_time"] as? String,
                             isOfficial = data["isOfficial"] as? Boolean ?: false
