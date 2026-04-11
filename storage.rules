@@ -1,0 +1,31 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper to check if user is an admin
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.role == 'admin' || 
+        request.auth.token.role == 'super_admin' ||
+        request.auth.token.user_type == 'admin'
+      );
+    }
+
+    // Helper to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // profile_photos: Drivers can manage their own; Admins can manage all
+    match /profile_photos/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (request.auth.uid == userId.split('\\.')[0] || isAdmin());
+    }
+
+    // Default: Deny all other writes, allow authenticated reads
+    match /{allPaths=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+  }
+}

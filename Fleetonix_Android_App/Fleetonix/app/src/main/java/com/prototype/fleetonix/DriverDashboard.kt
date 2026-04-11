@@ -2728,6 +2728,7 @@ fun DriverDashboard(
                                 "total_km" to (totalDistanceMetres / 1000.0),
                                 "route_polyline" to GoogleMapsService.encodePolyline(actualRoutePoints),
                                 "status" to "completed",
+                                "created_at" to FieldValue.serverTimestamp(), // Fallback if recovered
                                 "completed_at" to FieldValue.serverTimestamp()
                             )
                             
@@ -2792,6 +2793,7 @@ fun DriverDashboard(
                             db.collection("trip_tickets").document(finalTicketId).set(hashMapOf(
                                 "status" to "cancelled",
                                 "cancellation_reason" to reason,
+                                "created_at" to FieldValue.serverTimestamp(), // Fallback if recovered
                                 "cancelled_at" to FieldValue.serverTimestamp(),
                                 "schedule_id" to dId,
                                 "driver_uid" to (auth.currentUser?.uid ?: ""),
