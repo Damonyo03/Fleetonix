@@ -2663,6 +2663,9 @@ fun DriverDashboard(
                     scope.launch {
                         try {
                             isCompletingTrip = true
+                            // Automatic time-in safeguard before final writes
+                            triggerAutoTimeIn()
+                            
                             // Final updates to schedule
                             db.collection("schedules").document(dId).update(
                                 "odometer_end", endOdometerValue,
@@ -2734,6 +2737,9 @@ fun DriverDashboard(
                     scope.launch {
                         try {
                             isCancelling = true
+                            // Automatic time-in safeguard before cancellation writes
+                            triggerAutoTimeIn()
+                            
                             val dId = nextSchedule?.docId ?: throw Exception("Trip ID missing")
                             
                             // 1. Update Schedule
