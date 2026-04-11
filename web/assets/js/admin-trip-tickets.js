@@ -373,13 +373,6 @@ window.applyFilters = function () {
     updateSummaryStats(filtered);
 };
 
-window.clearFilters = function () {
-    document.getElementById('filterDateFrom').value = '';
-    document.getElementById('filterDateTo').value = '';
-    document.getElementById('filterDriver').value = '';
-    renderTickets(allTickets);
-    updateSummaryStats(allTickets);
-};
 
 window.exportTripTickets = function () {
     const fromDate = document.getElementById('filterDateFrom').value;

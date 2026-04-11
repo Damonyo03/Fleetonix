@@ -468,18 +468,14 @@ function initBookingList() {
     });
 
     if (statusFilter) statusFilter.addEventListener('change', applyFilters);
-    if (document.getElementById('areaFilter')) document.getElementById('areaFilter').addEventListener('change', applyFilters);
 }
 
 function applyFilters() {
     if (!bookingTableBody) return;
-    const status = statusFilter?.value || 'all';
-    const area = document.getElementById('areaFilter')?.value || 'all';
     const filtered = allBookings.filter(d => {
         const b = d.data();
         const matchStatus = status === 'all' || b.status === status;
-        const matchArea = area === 'all' || b.operating_area === area;
-        return matchStatus && matchArea;
+        return matchStatus;
     });
     renderBookings(filtered);
 }

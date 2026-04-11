@@ -59,14 +59,19 @@
             position: relative;
         }
 
-        /* Status Colors */
-        .driver-dot.available, .status-indicator-available { background-color: #00d4ff; box-shadow: 0 0 10px rgba(0, 212, 255, 0.5); }
+        /* Status Colors (Standardized) */
+        .driver-dot.available, .status-indicator-available { background-color: #10b981; box-shadow: 0 0 10px rgba(16, 185, 129, 0.5); }
         .driver-dot.on_schedule, .status-indicator-on_schedule { background-color: #3b82f6; box-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
-        .driver-dot.pickup, .status-indicator-pickup { background-color: #10b981; box-shadow: 0 0 10px rgba(16, 185, 129, 0.5); }
-        .driver-dot.dropoff, .status-indicator-dropoff { background-color: #f43f5e; box-shadow: 0 0 10px rgba(244, 63, 94, 0.5); }
-        .driver-dot.completed, .status-indicator-completed { background-color: #059669; }
+        .driver-dot.pickup, .status-indicator-pickup { background-color: #3b82f6; box-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
+        .driver-dot.dropoff, .status-indicator-dropoff { background-color: #a855f7; box-shadow: 0 0 10px rgba(168, 85, 247, 0.5); }
+        .driver-dot.completed, .status-indicator-completed { background-color: #10b981; }
         .driver-dot.stale, .status-indicator-stale { background-color: #4a5568; opacity: 0.6; }
-        .driver-dot.accident, .status-indicator-accident { background-color: #ef4444; box-shadow: 0 0 15px #ef4444; border-color: #fff; }
+        .driver-dot.accident, .status-indicator-accident { 
+            background-color: #f97316; 
+            box-shadow: 0 0 15px #f97316; 
+            border-color: #fff;
+            animation: accidentBlink 0.6s infinite alternate;
+        }
 
         /* ── Pulse Animation for Live Drivers ─────────────── */
         .dot-pulse {
@@ -81,14 +86,19 @@
             z-index: -1;
         }
 
-        .driver-dot.available .dot-pulse { background: rgba(0, 212, 255, 0.4); }
+        .driver-dot.available .dot-pulse { background: rgba(16, 185, 129, 0.4); }
         .driver-dot.on_schedule .dot-pulse { background: rgba(59, 130, 246, 0.4); }
-        .driver-dot.pickup .dot-pulse { background: rgba(16, 185, 129, 0.4); }
-        .driver-dot.dropoff .dot-pulse { background: rgba(244, 63, 94, 0.4); }
+        .driver-dot.pickup .dot-pulse { background: rgba(59, 130, 246, 0.4); }
+        .driver-dot.dropoff .dot-pulse { background: rgba(168, 85, 247, 0.4); }
 
         @keyframes dotPulse {
             0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
             100% { transform: translate(-50%, -50%) scale(3.5); opacity: 0; }
+        }
+
+        @keyframes accidentBlink {
+            from { background-color: #f97316; box-shadow: 0 0 20px #f97316; }
+            to { background-color: #ef4444; box-shadow: 0 0 30px #ef4444; }
         }
 
         .map-section { display: grid; grid-template-columns: 1fr 360px; gap: 24px; position: relative; }

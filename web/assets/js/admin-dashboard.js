@@ -289,20 +289,19 @@ function getDriverStatusClass(d, isMoving) {
     switch(tripPhase) {
         case 'accepted': 
         case 'on_schedule':
-            return 'on_schedule';
         case 'en_route_pickup':
         case 'pickup':
-            return 'pickup';
+            return 'pickup'; // BLUE
         case 'picked_up':
         case 'en_route_dropoff':
-            return 'dropoff';
+            return 'dropoff'; // PURPLE
         case 'completed':
         case 'dropped_off':
-            return 'completed';
+            return 'available'; // GREEN
         default:
             if (status === 'busy' || status === 'on_trip') return 'dropoff';
             if (isMoving) return 'pickup';
-            return 'available';
+            return 'available'; // GREEN
     }
 }
 

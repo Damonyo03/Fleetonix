@@ -82,17 +82,11 @@
                             <option value="week">Week</option>
                             <option value="month">Month</option>
                         </select>
-                        <button class="btn btn-primary" onclick="initDTRLogs()" style="padding: 10px 24px;">
-                            <i class="fas fa-search"></i> Refresh
-                        </button>
-                        <button class="btn btn-success" id="exportExcelBtn" style="padding: 10px 24px;">
-                            <i class="fas fa-file-excel"></i> Export
-                        </button>
                     </div>
                 </div>
 
                 <!-- Log Statistics (New Addition for UI Uniformity) -->
-                <div class="grid-fluid" style="margin-bottom: 32px;" id="dtrStats">
+                <div class="grid-cols-4" style="margin-bottom: 32px;" id="dtrStats">
                     <div class="glass-card">
                         <span style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Clock-Ins</span>
                         <div style="font-size:1.5rem; font-weight:800; color:var(--accent-green);" id="countClockIn">0</div>

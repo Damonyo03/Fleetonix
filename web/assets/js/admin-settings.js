@@ -85,7 +85,7 @@ function initClearDataFeature() {
         clearBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing Backup...';
 
         try {
-            const COLLECTIONS = ["schedules", "bookings", "activity", "driver_locations", "notifications", "accidents", "vehicle_issues", "trip_tickets"];
+            const COLLECTIONS = ["schedules", "bookings", "activity", "driver_activity", "driver_locations", "notifications", "accidents", "vehicle_issues", "trip_tickets", "dtr_logs", "incidents"];
             const backup = { version: "1.0", timestamp: new Date().toISOString(), data: {} };
 
             for (const col of COLLECTIONS) {

@@ -1267,14 +1267,14 @@ body {
 
 .qip-badge.pickup,
 .status-badge.pickup {
-    background: rgba(255, 159, 67, 0.15) !important;
-    color: var(--accent-orange) !important;
-    border-color: rgba(255, 159, 67, 0.3) !important;
+    background: rgba(59, 130, 246, 0.15) !important;
+    color: #3b82f6 !important;
+    border-color: rgba(59, 130, 246, 0.3) !important;
 }
 
 .qip-badge.dropoff,
 .status-badge.dropoff {
-    background: rgba(29, 209, 161, 0.15) !important;
-    color: var(--accent-teal-bright) !important;
-    border-color: rgba(29, 209, 161, 0.3) !important;
+    background: rgba(168, 85, 247, 0.15) !important;
+    color: #a855f7 !important;
+    border-color: rgba(168, 85, 247, 0.3) !important;
 }

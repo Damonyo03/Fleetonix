@@ -49,9 +49,6 @@ onAuthStateChanged(auth, async (user) => {
     initLayout('Trip Schedules', name);
 
     initScheduleList();
-
-    initScheduleList();
-    initClearDataFeature();
     initPublishFeature();
     initExportFeature();
 });
@@ -122,52 +119,6 @@ function initPublishFeature() {
     }
 }
 
-function initClearDataFeature() {
-    const btn = document.getElementById('clearDataBtn');
-    if (btn) {
-        const role = currentUserData?.role || currentUserData?.user_type;
-        // Only super_admin and admin can clear data
-        if (role !== 'super_admin' && role !== 'admin') {
-            btn.style.display = 'none';
-        }
-        btn.onclick = async () => {
-            if (!confirm("⚠️ WARNING: This will permanently delete all schedules, bookings, activity logs, and reports. A backup will be downloaded first. Proceed?")) return;
-
-            try {
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Clearing...';
-
-                const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-                const functionUrl = isLocal 
-                    ? "http://localhost:5001/appfleetonix/us-central1/adminClearData"
-                    : "https://us-central1-appfleetonix.cloudfunctions.net/adminClearData";
-
-                const response = await fetch(functionUrl, { method: "POST" });
-                const result = await response.json();
-
-                if (result.success) {
-                    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(result.backup, null, 2));
-                    const downloadAnchorNode = document.createElement('a');
-                    downloadAnchorNode.setAttribute("href", dataStr);
-                    downloadAnchorNode.setAttribute("download", `fleetonix_backup_${new Date().toISOString().split('T')[0]}.json`);
-                    document.body.appendChild(downloadAnchorNode);
-                    downloadAnchorNode.click();
-                    downloadAnchorNode.remove();
-
-                    alert("Data cleared successfully! Backup downloaded.");
-                    window.location.reload();
-                } else {
-                    throw new Error(result.message);
-                }
-            } catch (error) {
-                console.error("Clear data error:", error);
-                alert("Failed to clear data: " + error.message);
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-trash-alt"></i> Clear All Data';
-            }
-        };
-    }
-}
 
 function initScheduleList() {
     const q = query(collection(db, "schedules"), orderBy("created_at", "desc"));
