@@ -85,7 +85,7 @@ function initClearDataFeature() {
         clearBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing Backup...';
 
         try {
-            const COLLECTIONS = ["schedules", "bookings", "activity", "driver_activity", "driver_locations", "notifications", "accidents", "vehicle_issues", "trip_tickets", "dtr_logs", "incidents"];
+            const COLLECTIONS = ["schedules", "bookings", "activity", "driver_activity", "driver_locations", "notifications", "accidents", "trip_tickets", "dtr_logs", "incidents"];
             const backup = { version: "1.0", timestamp: new Date().toISOString(), data: {} };
 
             for (const col of COLLECTIONS) {
@@ -111,6 +111,15 @@ function initClearDataFeature() {
             }
 
             alert("Factory reset complete. System is now clear.");
+
+            // Final log
+            await addDoc(collection(db, "activity"), {
+                type: 'security',
+                title: 'Factory Reset Performed',
+                message: `Admin initiated a full system reset and wiped all operational data.`,
+                timestamp: serverTimestamp()
+            });
+
             window.location.reload();
         } catch (error) {
             alert("Reset failed: " + error.message);

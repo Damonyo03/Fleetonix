@@ -305,6 +305,20 @@ function getDriverStatusClass(d, isMoving) {
     }
 }
 
+/**
+ * Returns human-readable status text based on status class
+ */
+function getDriverStatusLabel(statusClass) {
+    switch(statusClass) {
+        case 'available': return 'Available';
+        case 'pickup': return 'On Route to Pickup';
+        case 'dropoff': return 'On Route to Drop-off';
+        case 'accident': return 'Accident Reported';
+        case 'stale': return 'Offline';
+        default: return 'Online';
+    }
+}
+
 function removeMarker(id) {
     if (driverMarkers[id]) {
         driversMap.removeLayer(driverMarkers[id].marker);
@@ -384,13 +398,10 @@ function updateOnlineDriversList() {
                         </div>
                     </div>
                     
-                    <div class="flex gap-2">
-                         <button class="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-900/40 text-slate-400 hover:text-accent-blue hover:bg-accent-blue/10 transition-colors">
-                            <i class="fas fa-phone-alt text-[10px]"></i>
-                         </button>
-                         <button class="w-7 h-7 flex items-center justify-center rounded-lg bg-slate-900/40 text-slate-400 hover:text-accent-blue hover:bg-accent-blue/10 transition-colors" onclick="window.location.href='trip-tickets.html?driver=${d.id}'">
-                            <i class="fas fa-history text-[10px]"></i>
-                         </button>
+                    <div class="flex items-center">
+                         <span class="text-[10px] font-bold uppercase tracking-widest text-slate-500 bg-slate-900/40 px-3 py-1.5 rounded-lg border border-slate-700/50">
+                            ${getDriverStatusLabel(getDriverStatusClass(d, (d.current_speed || 0) > 1.4))}
+                         </span>
                     </div>
                 </div>
 

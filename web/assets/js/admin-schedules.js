@@ -3,7 +3,6 @@ import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/fi
 import { getFirestore, collection, query, where, onSnapshot, doc, getDoc, updateDoc, deleteDoc, orderBy, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { initLayout, showModal, hideModal } from "./modules/ui.js";
-import { exportToExcel } from "./modules/export_utils.js";
 
 // Initialize Firebase
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -50,38 +49,9 @@ onAuthStateChanged(auth, async (user) => {
 
     initScheduleList();
     initPublishFeature();
-    initExportFeature();
 });
 
 
-function initExportFeature() {
-    const btn = document.getElementById('exportAllBtn');
-    if (btn) {
-        btn.onclick = () => {
-            if (allSchedules.length === 0) {
-                alert("No schedules found to export.");
-                return;
-            }
-            
-            const data = allSchedules.map(d => {
-                const s = d.data();
-                return {
-                    "Trip ID": d.id,
-                    "Driver": s.driver_name || 'N/A',
-                    "Passenger": s.passenger_name || s.client_name || 'N/A',
-                    "Pickup": s.pickup_location || 'N/A',
-                    "Time": s.schedule_time || 'N/A',
-                    "Status": s.status || 'scheduled',
-                    "Phase": s.trip_phase || 'pending',
-                    "Created": s.created_at ? new Date(s.created_at.seconds * 1000).toLocaleString() : 'N/A'
-                };
-            });
-            
-            const dateStr = new Date().toISOString().split('T')[0];
-            exportToExcel(data, `Fleetonix_All_Trips_${dateStr}.xlsx`, 'Active Schedules');
-        };
-    }
-}
 
 function initPublishFeature() {
     const btn = document.getElementById('publishAllBtn');
@@ -217,13 +187,16 @@ window.updateScheduleStatus = async (id) => {
         });
 
         if (newStatus === 'completed' || newStatus === 'cancelled') {
-            if (sched.driver_id) {
-                await updateDoc(doc(db, "drivers", sched.driver_id), {
-                    current_status: 'available',
-                    updated_at: serverTimestamp()
-                });
             }
         }
+
+        // Add to audit trail
+        await addDoc(collection(db, "activity"), {
+            type: 'system',
+            title: 'Trip Status Updated',
+            message: `Admin manually updated Trip #${id} to ${newStatus}`,
+            timestamp: serverTimestamp()
+        });
     });
 };
 
@@ -247,6 +220,15 @@ window.deleteSchedule = async (id) => {
             }
         }
         await deleteDoc(doc(db, "schedules", id));
+
+        // Audit log
+        await addDoc(collection(db, "activity"), {
+            type: 'security',
+            title: 'Trip Discarded',
+            message: `Admin cancelled & deleted Dispatch #${id}`,
+            timestamp: serverTimestamp()
+        });
+
         alert("Schedule deleted successfully.");
     } catch (error) {
         console.error("Delete schedule error:", error);

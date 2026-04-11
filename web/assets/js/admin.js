@@ -82,10 +82,9 @@ onAuthStateChanged(auth, async (user) => {
 
 // ── Real-time Notification Dispatcher ────────────────────────────────────────
 let accidentCount = 0;
-let issueCount = 0;
 
 const updateVisualBadges = () => {
-    const total = accidentCount + issueCount;
+    const total = accidentCount;
     
     // Sidebar Counters
     document.querySelectorAll('.notif-count').forEach(counter => {
@@ -115,10 +114,6 @@ onSnapshot(query(collection(db, "accidents"), where("status", "!=", "acknowledge
     updateVisualBadges();
 });
 
-onSnapshot(query(collection(db, "vehicle_issues"), where("status", "!=", "acknowledged")), (snap) => {
-    issueCount = snap.size;
-    updateVisualBadges();
-});
 
 // ── Global Session Management ────────────────────────────────────────────────
 document.addEventListener('click', (e) => {

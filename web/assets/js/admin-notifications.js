@@ -25,7 +25,9 @@ onAuthStateChanged(auth, async (user) => {
     // Start Listeners
     listenToSystemLogs();
     listenToTrips();
+    listenToBookings();
     listenToAccidents();
+    listenToDTR();
 });
 
 /** Listens to the activity collection for system events (CRUD) */
@@ -50,35 +52,62 @@ function listenToSystemLogs() {
 }
 
 /** Listens to schedules for trip updates */
-function listenToTrips() {
-    const q = query(collection(db, "schedules"), orderBy("updated_at", "desc"));
+        });
+    });
+}
+
+
+/** Listens to bookings for new and status changes */
+function listenToBookings() {
+    const q = query(collection(db, "bookings"), orderBy("created_at", "desc"));
     onSnapshot(q, (snapshot) => {
-        const trips = snapshot.docs.map(d => {
-            const s = d.data();
+        const bookings = snapshot.docs.map(d => {
+            const b = d.data();
             return {
-                id: d.id, source: 'trips', type: 'trip',
-                title: `Trip Update: Schedule #${s.schedule_id}`,
-                message: `Status: ${s.trip_phase || s.status} | Driver: ${s.driver_name || 'N/A'}`,
-                driver: s.driver_name,
-                created_at: s.updated_at || s.created_at,
+                id: d.id, source: 'bookings', type: 'booking',
+                title: `New Booking: #${d.id.slice(-6).toUpperCase()}`,
+                message: `${b.passenger_name || b.client_name} | From: ${b.pickup_location?.address || 'N/A'}`,
+                driver: b.assigned_driver_name || 'Unassigned',
+                created_at: b.created_at,
+                is_read: b.status !== 'pending'
+            };
+        });
+        mergeAndRender('bookings', bookings);
+    }, (err) => {
+        console.warn("Bookings index missing, falling back...");
+        onSnapshot(collection(db, "bookings"), (snapshot) => {
+            const bookings = snapshot.docs.map(d => ({
+                 id: d.id, source: 'bookings', type: 'booking',
+                 ...d.data(), created_at: d.data().created_at
+            }));
+            mergeAndRender('bookings', bookings);
+        });
+    });
+}
+
+
+/** Listens to DTR logs for operational awareness */
+function listenToDTR() {
+    const q = query(collection(db, "dtr_logs"), orderBy("timestamp", "desc"));
+    onSnapshot(q, (snapshot) => {
+        const dtr = snapshot.docs.map(d => {
+            const log = d.data();
+            return {
+                id: d.id, source: 'dtr_logs', type: 'attendance',
+                title: log.type === 'clock_in' ? 'Driver Clocked In' : 'Driver Clocked Out',
+                message: `${log.driver_name} (${log.plate_number}) at ${log.location_name || 'Field'}`,
+                driver: log.driver_name,
+                created_at: log.timestamp,
                 is_read: true
             };
         });
-        mergeAndRender('trips', trips);
+        mergeAndRender('attendance', dtr);
     }, (err) => {
-        onSnapshot(collection(db, "schedules"), (snapshot) => {
-            const trips = snapshot.docs.map(d => {
-                const s = d.data();
-                return {
-                    id: d.id, source: 'trips', type: 'trip',
-                    title: `Trip Update: Schedule #${s.schedule_id}`,
-                    message: `Status: ${s.trip_phase || s.status} | Driver: ${s.driver_name || 'N/A'}`,
-                    driver: s.driver_name,
-                    created_at: s.updated_at || s.created_at,
-                    is_read: true
-                };
-            });
-            mergeAndRender('trips', trips);
+        onSnapshot(collection(db, "dtr_logs"), (snapshot) => {
+            const dtr = snapshot.docs.map(d => ({
+                id: d.id, source: 'dtr_logs', type: 'attendance', ...d.data(), created_at: d.data().timestamp
+            }));
+            mergeAndRender('attendance', dtr);
         });
     });
 }
@@ -174,9 +203,10 @@ function renderFiltered() {
     let list = allNotifs;
     if (currentFilter !== 'all') {
         list = allNotifs.filter(n => {
-            if (currentFilter === 'trip') return n.type === 'trip';
+            if (currentFilter === 'ops') return n.type === 'trip' || n.type === 'booking';
             if (currentFilter === 'accident') return n.type === 'accident';
-            if (currentFilter === 'system') return n.type === 'system';
+            if (currentFilter === 'security') return n.type === 'system' || n.type === 'security';
+            if (currentFilter === 'attendance') return n.type === 'attendance';
             return true;
         });
     }
@@ -196,9 +226,11 @@ function renderNotifications(items) {
         const type = n.type.toLowerCase();
         const iconMap = {
             'trip': { icon: 'fa-car', cls: 'info' },
+            'booking': { icon: 'fa-calendar-check', cls: 'info' },
             'accident': { icon: 'fa-car-crash', cls: 'danger' },
-            'vehicle_issue': { icon: 'fa-tools', cls: 'warning' },
-            'system': { icon: 'fa-cog', cls: 'success' },
+            'attendance': { icon: 'fa-user-clock', cls: 'warning' },
+            'system': { icon: 'fa-shield-alt', cls: 'success' },
+            'security': { icon: 'fa-user-shield', cls: 'danger' },
         };
         const { icon, cls } = iconMap[type] || { icon: 'fa-bell', cls: 'info' };
         
