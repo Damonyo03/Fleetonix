@@ -149,13 +149,15 @@ fun DriverProfile(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Midnight)
             )
         },
-        containerColor = Midnight
+        containerColor = Midnight,
+        modifier = Modifier.systemBarsPadding()
     ) { padding ->
         Column(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
                 .padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(24.dp)

@@ -177,21 +177,35 @@ if (createUserBtn) {
 
         showModal('user-modal', 'Provision System User', content, async () => {
             const name = document.getElementById('modal_full_name').value;
-            const email = document.getElementById('modal_email').value;
+            const email = document.getElementById('modal_email').value.trim().toLowerCase();
             const type = document.getElementById('modal_user_type').value;
 
-            const userRef = doc(collection(db, "users"));
-            await setDoc(userRef, {
-                full_name: name,
-                email: email,
-                role: type,
-                user_type: type,
-                contractor: "Jettsan",
-                status: "active",
-                created_at: serverTimestamp(),
-                uid: userRef.id
-            });
-            alert("New system user provisioned successfully.");
+            if (!email) return alert("Email is required.");
+
+            try {
+                // Check if email already exists
+                const q = query(collection(db, "users"), where("email", "==", email));
+                const snap = await getDocs(q);
+                if (!snap.empty) {
+                    return alert(`An account with email ${email} already exists in the system.`);
+                }
+
+                const userRef = doc(collection(db, "users"));
+                await setDoc(userRef, {
+                    full_name: name,
+                    email: email,
+                    role: type,
+                    user_type: type,
+                    contractor: "Jettsan",
+                    status: "active",
+                    created_at: serverTimestamp(),
+                    uid: userRef.id
+                });
+                alert("New system user provisioned successfully.");
+            } catch (err) {
+                console.error("Provisioning failed:", err);
+                alert("Creation failed: " + err.message);
+            }
         });
     };
 }

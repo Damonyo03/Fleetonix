@@ -60,11 +60,13 @@
         }
 
         /* Status Colors */
-        .driver-dot.available { background-color: #00d4ff; box-shadow: 0 0 15px rgba(0, 212, 255, 0.6); }
-        .driver-dot.on_trip { background-color: #ff4b4b; box-shadow: 0 0 15px rgba(255, 75, 75, 0.6); }
-        .driver-dot.pickup { background-color: #10b981; box-shadow: 0 0 15px rgba(16, 185, 129, 0.6); }
-        .driver-dot.stale { background-color: #4a5568; opacity: 0.6; }
-        .driver-dot.accident { background-color: #f59e0b; box-shadow: 0 0 20px #ef4444; border-color: #fff; }
+        .driver-dot.available, .status-indicator-available { background-color: #00d4ff; box-shadow: 0 0 10px rgba(0, 212, 255, 0.5); }
+        .driver-dot.on_schedule, .status-indicator-on_schedule { background-color: #3b82f6; box-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
+        .driver-dot.pickup, .status-indicator-pickup { background-color: #10b981; box-shadow: 0 0 10px rgba(16, 185, 129, 0.5); }
+        .driver-dot.dropoff, .status-indicator-dropoff { background-color: #f43f5e; box-shadow: 0 0 10px rgba(244, 63, 94, 0.5); }
+        .driver-dot.completed, .status-indicator-completed { background-color: #059669; }
+        .driver-dot.stale, .status-indicator-stale { background-color: #4a5568; opacity: 0.6; }
+        .driver-dot.accident, .status-indicator-accident { background-color: #ef4444; box-shadow: 0 0 15px #ef4444; border-color: #fff; }
 
         /* ── Pulse Animation for Live Drivers ─────────────── */
         .dot-pulse {
@@ -80,8 +82,9 @@
         }
 
         .driver-dot.available .dot-pulse { background: rgba(0, 212, 255, 0.4); }
-        .driver-dot.on_trip .dot-pulse { background: rgba(255, 75, 75, 0.4); }
+        .driver-dot.on_schedule .dot-pulse { background: rgba(59, 130, 246, 0.4); }
         .driver-dot.pickup .dot-pulse { background: rgba(16, 185, 129, 0.4); }
+        .driver-dot.dropoff .dot-pulse { background: rgba(244, 63, 94, 0.4); }
 
         @keyframes dotPulse {
             0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
@@ -131,6 +134,22 @@
         .sidebar-nav .nav-item { transition: all 0.2s; border-radius: 12px; }
         .sidebar-nav .nav-item:hover { background: rgba(255,255,255,0.05); }
         .sidebar-nav .nav-item.active { background: rgba(0, 212, 255, 0.1); color: #00d4ff; }
+
+        /* ── Responsiveness ─────────────── */
+        @media (max-width: 1024px) {
+            .map-section { grid-template-columns: 1fr; }
+            .side-panel { height: 400px; margin-top: 10px; }
+            .sidebar { transform: translateX(-100%); position: fixed; z-index: 50; height: 100vh; }
+            .sidebar.active { transform: translateX(0); }
+            .main-content { margin-left: 0; padding: 16px; }
+        }
+
+        @media (max-width: 640px) {
+            .grid-cols-2 { grid-template-columns: 1fr; }
+            .header { padding: 0 16px; }
+            .page-header { flex-direction: column; align-items: flex-start; gap: 16px; }
+            #quickInfoPanel { width: calc(100% - 32px); left: 16px; bottom: 16px; padding: 16px; }
+        }
     </style>
 </head>
 <body>
@@ -201,37 +220,24 @@
                 </button>
 
                 <div class="grid grid-cols-2 secondary-stats" id="secondaryStats">
+                    <!-- Total Drivers Card -->
                     <div class="glass-card">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <span style="color:var(--text-secondary); font-size:0.875rem;">Average Trip Duration</span>
-                            <i class="fas fa-history" style="color:var(--accent-blue);"></i>
+                            <span style="color:var(--text-secondary); font-size:0.875rem;">Total Drivers</span>
+                            <i class="fas fa-id-card" style="color:var(--accent-blue);"></i>
                         </div>
-                        <div style="font-size:1.5rem; font-weight:700;" id="avgTripDuration">0 <small style="font-size:0.8rem; font-weight:400;">mins</small></div>
-                        <p style="color:var(--text-muted); font-size:0.75rem;">Based on today's trips</p>
+                        <div style="font-size:1.5rem; font-weight:700;" id="totalDriversCount">0</div>
+                        <p style="color:var(--text-muted); font-size:0.75rem;"><span id="activeDriversCount" style="color:var(--accent-green);">0</span> currently active</p>
                     </div>
+
+                    <!-- Total Trips Card -->
                     <div class="glass-card">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <span style="color:var(--text-secondary); font-size:0.875rem;">Monthly Bookings</span>
-                            <i class="fas fa-chart-line" style="color:var(--accent-green);"></i>
+                            <span style="color:var(--text-secondary); font-size:0.875rem;">Total Trips Taken</span>
+                            <i class="fas fa-route" style="color:var(--accent-orange);"></i>
                         </div>
-                        <div style="font-size:1.5rem; font-weight:700;" id="monthlyBookings">0</div>
-                        <p style="color:var(--text-muted); font-size:0.75rem;">Current month total</p>
-                    </div>
-                    <div class="glass-card">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <span style="color:var(--text-secondary); font-size:0.875rem;">Total Assets</span>
-                            <i class="fas fa-id-card"></i>
-                        </div>
-                        <div style="font-size:1.5rem; font-weight:700;" id="totalDrivers">0</div>
-                        <p style="color:var(--text-muted); font-size:0.75rem;"><span id="activeDrivers" style="color:var(--accent-green);">0</span> online now</p>
-                    </div>
-                    <div class="glass-card">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <span style="color:var(--text-secondary); font-size:0.875rem;">Contractors</span>
-                            <i class="fas fa-building"></i>
-                        </div>
-                        <div style="font-size:1.5rem; font-weight:700;" id="totalClients">0</div>
-                        <p style="color:var(--text-muted); font-size:0.75rem;">Active organizations</p>
+                        <div style="font-size:1.5rem; font-weight:700;" id="totalTripsCount">0</div>
+                        <p style="color:var(--text-muted); font-size:0.75rem;">Lifetime system total</p>
                     </div>
                 </div>
 

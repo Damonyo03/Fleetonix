@@ -263,38 +263,7 @@ function animateMarkerTo(marker, newLatLng, duration = 1500) {
 }
 
 function createDotIcon(d, isMoving) {
-    const status = d.current_status || 'offline';
-    const lastSeen = d.last_updated?.toDate ? d.last_updated.toDate() : new Date(d.last_updated || Date.now());
-    const isStale = (new Date() - lastSeen) > HEARTBEAT_EXPIRY_MS;
-    
-    // Status Mapping Architecture
-    let statusClass = 'available'; 
-    if (d.incident_active) {
-        statusClass = 'accident';
-    } else if (isStale) {
-        statusClass = 'stale';
-    } else {
-        const tripPhase = d.current_trip_phase || 'none';
-        switch(tripPhase) {
-            case 'accepted': 
-            case 'on_schedule':
-                statusClass = 'on_schedule'; break;
-            case 'en_route_pickup':
-            case 'pickup':
-                statusClass = 'pickup'; break;
-            case 'picked_up':
-            case 'en_route_dropoff':
-                statusClass = 'dropoff'; break;
-            case 'completed':
-            case 'dropped_off':
-                statusClass = 'completed'; break;
-            default:
-                if (status === 'busy' || status === 'on_trip') statusClass = 'dropoff';
-                else if (isMoving) statusClass = 'pickup';
-                else statusClass = 'available';
-        }
-    }
-
+    const statusClass = getDriverStatusClass(d, isMoving);
     const pulseHtml = isMoving || statusClass === 'accident' || statusClass === 'available' ? '<div class="dot-pulse"></div>' : '';
     const glowClass = statusClass === 'available' ? 'pulse-glow' : '';
     
@@ -304,6 +273,39 @@ function createDotIcon(d, isMoving) {
         iconSize: [22, 22],
         iconAnchor: [11, 11]
     });
+}
+
+/**
+ * Shared Status Logic for Syncing Map & Sidebar
+ */
+function getDriverStatusClass(d, isMoving) {
+    const lastSeen = d.last_updated?.toDate ? d.last_updated.toDate() : new Date(d.last_updated || Date.now());
+    const isStale = (new Date() - lastSeen) > HEARTBEAT_EXPIRY_MS;
+    
+    if (d.incident_active) return 'accident';
+    if (isStale) return 'stale';
+
+    const tripPhase = d.current_trip_phase || 'none';
+    const status = d.current_status || 'offline';
+
+    switch(tripPhase) {
+        case 'accepted': 
+        case 'on_schedule':
+            return 'on_schedule';
+        case 'en_route_pickup':
+        case 'pickup':
+            return 'pickup';
+        case 'picked_up':
+        case 'en_route_dropoff':
+            return 'dropoff';
+        case 'completed':
+        case 'dropped_off':
+            return 'completed';
+        default:
+            if (status === 'busy' || status === 'on_trip') return 'dropoff';
+            if (isMoving) return 'pickup';
+            return 'available';
+    }
 }
 
 function removeMarker(id) {
@@ -349,6 +351,11 @@ function updateOnlineDriversList() {
                         <img src="${d.profile_image_url || '../img/default-avatar.png'}" 
                              class="relative w-12 h-12 rounded-full object-cover border-2 ${isRecent ? 'border-accent-green shadow-[0_0_12px_rgba(0,255,136,0.4)]' : 'border-slate-600'}"
                              onerror="this.src='../img/default-avatar.png'">
+                        
+                        <!-- Status Badge synced with MAP -->
+                        <div class="absolute -top-1 -right-1 w-4 h-4 rounded-full border-2 border-slate-900 status-indicator-${getDriverStatusClass(d, (d.current_speed || 0) > 1.4)}" 
+                             title="${getDriverStatusClass(d, (d.current_speed || 0) > 1.4).toUpperCase()}"></div>
+                        
                         ${isRecent ? '<div class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-accent-green rounded-full border-2 border-slate-900 animate-pulse shadow-[0_0_8px_#00ff88]"></div>' : ''}
                     </div>
 
@@ -521,7 +528,100 @@ function initGlobalAdminListeners() {
 }
 
 function initGlobalStats() {
-    onSnapshot(collection(db, "accidents"), snap => {
-        document.getElementById('activeJobs') ? document.getElementById('activeJobs').innerText = snap.size : null;
+    // 1. Total Drivers
+    onSnapshot(collection(db, "drivers"), snap => {
+        const el = document.getElementById('totalDriversCount');
+        if (el) el.innerText = snap.size;
+    });
+
+    // 2. Active Drivers (using our heartbeat logic indirectly via markers)
+    // We update this via checking markers in the sidebar loop for simplicity, 
+    // but we can also set it here.
+    onSnapshot(collection(db, "driver_locations"), snap => {
+        const activeEl = document.getElementById('activeDriversCount');
+        if (activeEl) {
+            // Drivers seen in the last 5 minutes
+            const now = Date.now();
+            const active = snap.docs.filter(doc => {
+                const data = doc.data();
+                const ts = data.last_updated?.toDate ? data.last_updated.toDate() : new Date(data.timestamp || 0);
+                return (now - ts.getTime()) < HEARTBEAT_EXPIRY_MS;
+            }).length;
+            activeEl.innerText = active;
+        }
+    });
+
+    // 3. Lifetime Total Trips
+    onSnapshot(collection(db, "schedules"), snap => {
+        const el = document.getElementById('totalTripsCount');
+        if (el) el.innerText = snap.size;
+    });
+
+    // 4. Pending Bookings (Operational Counter)
+    onSnapshot(query(collection(db, "bookings"), where("status", "==", "pending")), snap => {
+        const el = document.getElementById('pendingBookings');
+        if (el) el.innerText = snap.size;
+    });
+
+    // 5. Active Trips (Operational Counter)
+    onSnapshot(query(collection(db, "schedules"), where("status", "==", "in_progress")), snap => {
+        const el = document.getElementById('activeSchedules');
+        if (el) el.innerText = snap.size;
+    });
+
+    // 6. Recent Completed Trips Widget
+    initRecentTripsWidget();
+}
+
+function initRecentTripsWidget() {
+    const container = document.getElementById('completedBookingsWidget');
+    if (!container) return;
+
+    const q = query(
+        collection(db, "schedules"), 
+        where("status", "==", "completed"), 
+        orderBy("completed_at", "desc"),
+        limit(5)
+    );
+
+    onSnapshot(q, snap => {
+        if (snap.empty) {
+            container.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);">No completed trips recorded today.</div>';
+            return;
+        }
+
+        container.innerHTML = `
+            <table class="table" style="width:100%;">
+                <thead>
+                    <tr>
+                        <th style="padding:12px; font-size:0.75rem; text-align:left; color:var(--text-muted);">Trip Info</th>
+                        <th style="padding:12px; font-size:0.75rem; text-align:left; color:var(--text-muted);">Passenger</th>
+                        <th style="padding:12px; font-size:0.75rem; text-align:right; color:var(--text-muted);">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${snap.docs.map(doc => {
+                        const data = doc.data();
+                        const completedAt = data.completed_at?.toDate ? data.completed_at.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '---';
+                        return `
+                            <tr style="border-top:1px solid var(--border-color);">
+                                <td style="padding:12px;">
+                                    <div style="font-weight:700; font-size:0.9rem;">${data.client_name || 'Fleet Service'}</div>
+                                    <div style="font-size:0.75rem; color:var(--text-muted);">${completedAt} • ${data.schedule_date || ''}</div>
+                                </td>
+                                <td style="padding:12px;">
+                                    <div style="font-size:0.85rem;">${data.passenger_name || 'Individual'}</div>
+                                </td>
+                                <td style="padding:12px; text-align:right;">
+                                    <button class="btn btn-secondary" style="padding:4px 12px; font-size:0.7rem;" onclick="window.location.href='trip-tickets.html?trip=${doc.id}'">
+                                        VIEW TICKET
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        `;
     });
 }

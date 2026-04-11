@@ -65,17 +65,16 @@ fun StatCard(title: String, value: String, accentColor: Color, modifier: Modifie
 @Composable
 fun TripTicketDialog(
     driverName: String,
-    vehiclePlate: String,
-    vehicleType: String,
+    vehicleDetails: String,
     timeOfDeparture: String,
     timeOfArrival: String,
     totalKm: Double,
     odometerStart: Double,
     odometerEnd: Double,
-    pickupLocation: String? = null,
-    dropoffLocation: String? = null,
-    routePoints: List<LatLng> = emptyList(),
-    isSubmitting: Boolean = false,
+    pickupLocation: String,
+    dropoffLocation: String,
+    routePoints: List<LatLng>,
+    isSubmitting: Boolean,
     onConfirm: () -> Unit
 ) {
     val cameraPositionState = rememberCameraPositionState()
@@ -160,7 +159,7 @@ fun TripTicketDialog(
                 ) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         DetailRow("Driver", driverName)
-                        DetailRow("Vehicle", "$vehicleType ($vehiclePlate)")
+                        DetailRow("Vehicle", vehicleDetails)
                         Divider(color = Color.White.copy(alpha = 0.1f))
                         DetailRow("Departure", timeOfDeparture)
                         DetailRow("Arrival", timeOfArrival)
@@ -961,8 +960,37 @@ fun DriverDashboard(
                             
                             // Detect if off-route (> 50m)
                             val distToPoly = GoogleMapsService.findMinimumDistanceToPolyline(driverPosVec, polylinePoints)
-                            if (distToPoly > 50f && !showReRoutePrompt && (tripPhase == "pickup" || tripPhase == "dropoff")) {
+                            
+                            // AUTO RE-ROUTE: If significantly off-track (> 100m) and not currently recalculating
+                            if (distToPoly > 100f && !isReRouting && (tripPhase == "pickup" || tripPhase == "dropoff")) {
+                                scope.launch {
+                                    isReRouting = true
+                                    try {
+                                        val dest = if (tripPhase == "pickup") nextSchedule?.pickup_location else nextSchedule?.dropoff_location
+                                        if (dest != null) {
+                                            val originStr = "${lat},${lng}"
+                                            val destStr = dest.address ?: dest.text ?: ""
+                                            val MapsKey = context.getString(R.string.google_maps_key).ifEmpty { "YOUR_KEY_HERE" }
+                                            val resp = GoogleMapsService.api.getDirections(originStr, destStr, MapsKey)
+                                            if (resp.status == "OK" && resp.routes.isNotEmpty()) {
+                                                val encoded = resp.routes[0].overviewPolyline.points
+                                                activePolylineEncoded = encoded
+                                                polylinePoints = GoogleMapsService.decodePolyline(encoded)
+                                                showReRoutePrompt = false
+                                                Log.d("DriverDashboard", "Automatic re-routing succeeded")
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        Log.e("DriverDashboard", "Auto re-route failed", e)
+                                    } finally {
+                                        isReRouting = false
+                                    }
+                                }
+                            } else if (distToPoly > 50f && !showReRoutePrompt && (tripPhase == "pickup" || tripPhase == "dropoff") && !isReRouting) {
+                                // Fallback: Show manual prompt if between 50-100m
                                 showReRoutePrompt = true
+                            } else if (distToPoly <= 30f) {
+                                showReRoutePrompt = false
                             }
                             
                             val trimmedPoly = GoogleMapsService.trimPolyline(driverPosVec, polylinePoints)
@@ -2646,10 +2674,13 @@ fun DriverDashboard(
         // NSCRP: Final Trip Ticket (Summary + Driver Verification)
         if (showTripTicket) {
             val dId = nextSchedule?.docId ?: ""
+            val vModel = session.driver?.vehicleAssigned ?: "Vehicle"
+            val vColor = session.driver?.carColor ?: ""
+            val vDetails = if (vColor.isNotEmpty()) "$vModel ($vColor)" else vModel
+            
             TripTicketDialog(
                 driverName = session.user?.name ?: "Driver",
-                vehiclePlate = session.driver?.plateNumber ?: "N/A",
-                vehicleType = session.driver?.vehicleAssigned ?: "Vehicle",
+                vehicleDetails = vDetails,
                 timeOfDeparture = nextSchedule?.scheduled_time ?: "--:--",
                 timeOfArrival = completedAt ?: formatCurrentTime(),
                 totalKm = (totalDistanceMetres / 1000.0),
@@ -2677,6 +2708,10 @@ fun DriverDashboard(
                             
                             // Save ticket data and update driver status
                             // Logic moved here for direct control
+                            val vModel = session.driver?.vehicleAssigned ?: "Vehicle"
+                            val vColor = session.driver?.carColor ?: ""
+                            val vDetails = if (vColor.isNotEmpty()) "$vModel ($vColor)" else vModel
+
                             val ticketData = hashMapOf(
                                 "schedule_id" to dId,
                                 "driver_uid" to (auth.currentUser?.uid ?: ""),
@@ -2685,6 +2720,7 @@ fun DriverDashboard(
                                 "passenger_name" to (nextSchedule?.passenger_name ?: nextSchedule?.client_name ?: "Unknown"),
                                 "client_name" to (nextSchedule?.client_name ?: "Jettsan"),
                                 "vehicle_plate" to (session.driver?.plateNumber ?: ""),
+                                "vehicle_details" to vDetails,
                                 "pickup_location" to (nextSchedule?.pickup_location?.address ?: nextSchedule?.pickup_location?.text ?: "Unknown"),
                                 "dropoff_location" to (nextSchedule?.dropoff_location?.address ?: nextSchedule?.dropoff_location?.text ?: "Unknown"),
                                 "time_of_departure" to (pickedUpAt ?: ""),
@@ -2695,9 +2731,10 @@ fun DriverDashboard(
                                 "completed_at" to FieldValue.serverTimestamp()
                             )
                             
-                            activeTicketId?.let { tId ->
-                                db.collection("trip_tickets").document(tId).update(ticketData as Map<String, Any>).await()
-                            }
+                            // Ensure activeTicketId is used OR recovered
+                            val finalTicketId = activeTicketId ?: "TKT_${dId}_${System.currentTimeMillis()}"
+                            
+                            db.collection("trip_tickets").document(finalTicketId).set(ticketData).await()
                             
                             // Update driver capacity/status
                             val email = auth.currentUser?.email
@@ -2750,14 +2787,16 @@ fun DriverDashboard(
                                 "cancelled_at", FieldValue.serverTimestamp()
                             ).await()
 
-                            // 2. Update Trip Ticket if exists
-                            activeTicketId?.let { tId ->
-                                db.collection("trip_tickets").document(tId).update(
-                                    "status", "cancelled",
-                                    "cancellation_reason", reason,
-                                    "cancelled_at", FieldValue.serverTimestamp()
-                                ).await()
-                            }
+                            // 2. Update Trip Ticket if exists (or create one for record)
+                            val finalTicketId = activeTicketId ?: "TKT_${dId}_${System.currentTimeMillis()}"
+                            db.collection("trip_tickets").document(finalTicketId).set(hashMapOf(
+                                "status" to "cancelled",
+                                "cancellation_reason" to reason,
+                                "cancelled_at" to FieldValue.serverTimestamp(),
+                                "schedule_id" to dId,
+                                "driver_uid" to (auth.currentUser?.uid ?: ""),
+                                "driver_email" to (auth.currentUser?.email?.lowercase()?.trim() ?: "")
+                            ), SetOptions.merge()).await()
 
                             // 3. Update Driver Status
                             val email = auth.currentUser?.email
