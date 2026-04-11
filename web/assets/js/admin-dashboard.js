@@ -356,18 +356,15 @@ function updateOnlineDriversList() {
                  onclick="focusDriverOnMap('${d.id}')">
                 
                 <div class="flex items-center gap-4">
-                    <!-- Avatar with Status Ring -->
+                    <!-- Consolidated Status Indicator (functional + heartbeat) -->
                     <div class="relative p-0.5">
-                        <div class="absolute inset-0 rounded-full ${isRecent ? 'bg-accent-green/30 animate-pulse blur-[2px]' : 'bg-transparent'}"></div>
+                        <div class="absolute inset-0 rounded-full ${isRecent ? 'bg-accent-green/20 animate-pulse blur-[2px]' : 'bg-transparent'}"></div>
                         <img src="${d.profile_image_url || '../img/default-avatar.png'}" 
-                             class="relative w-12 h-12 rounded-full object-cover border-2 ${isRecent ? 'border-accent-green shadow-[0_0_12px_rgba(0,255,136,0.4)]' : 'border-slate-600'}"
+                             class="relative w-12 h-12 rounded-full object-cover border-2 ${isRecent ? 'border-accent-green shadow-[0_0_12px_rgba(0,255,136,0.3)]' : 'border-slate-600'}"
                              onerror="this.src='../img/default-avatar.png'">
                         
-                        <!-- Status Badge synced with MAP -->
-                        <div class="absolute -top-1 -right-1 w-4 h-4 rounded-full border-2 border-slate-900 status-indicator-${getDriverStatusClass(d, (d.current_speed || 0) > 1.4)}" 
+                        <div class="absolute -top-1 -right-1 w-4 h-4 rounded-full border-2 border-slate-900 status-indicator-${getDriverStatusClass(d, (d.current_speed || 0) > 1.4)} ${isRecent ? 'animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.6)]' : ''}" 
                              title="${getDriverStatusClass(d, (d.current_speed || 0) > 1.4).toUpperCase()}"></div>
-                        
-                        ${isRecent ? '<div class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-accent-green rounded-full border-2 border-slate-900 animate-pulse shadow-[0_0_8px_#00ff88]"></div>' : ''}
                     </div>
 
                     <!-- Heart of the Card -->
