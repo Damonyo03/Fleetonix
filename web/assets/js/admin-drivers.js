@@ -321,8 +321,27 @@ function initModalCropper() {
     document.getElementById('crop-confirm').onclick = () => {
         if (!cropperInstance) return;
         const canvas = cropperInstance.getCroppedCanvas({ width: 256, height: 256 });
-        document.getElementById('preview-image').src = canvas.toDataURL();
-        document.getElementById('cropped_image_base64').value = canvas.toDataURL();
+        const dataUrl = canvas.toDataURL();
+        
+        let previewImg = document.getElementById('preview-image');
+        if (!previewImg) {
+            // Replace placeholder with img
+            const placeholder = document.getElementById('preview-placeholder');
+            if (placeholder) {
+                previewImg = document.createElement('img');
+                previewImg.id = 'preview-image';
+                previewImg.style.width = '100px';
+                previewImg.style.height = '100px';
+                previewImg.style.borderRadius = '50%';
+                previewImg.style.objectFit = 'cover';
+                previewImg.style.border = '2px solid var(--accent-blue)';
+                placeholder.parentNode.replaceChild(previewImg, placeholder);
+            }
+        }
+        
+        if (previewImg) previewImg.src = dataUrl;
+        document.getElementById('cropped_image_base64').value = dataUrl;
+        
         cropperContainer.style.display = 'none';
         cropperInstance.destroy();
         cropperInstance = null;

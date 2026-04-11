@@ -16,10 +16,10 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    // profile_photos: Drivers can manage their own; Admins can manage all
+    // profile_photos: Authenticated users can read/write
     match /profile_photos/{userId} {
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && (request.auth.uid == userId.split('\\.')[0] || isAdmin());
+      allow write: if isAuthenticated();
     }
 
     // Default: Deny all other writes, allow authenticated reads

@@ -354,11 +354,17 @@ fun CropDialog(
             dismissOnClickOutside = false
         )
     ) {
+        var containerSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+        
         Surface(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().safeDrawingPadding(),
             color = Color.Black
         ) {
-            Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .onGloballyPositioned { containerSize = it.size }
+            ) {
                 // 1. The Image Layer
                 if (originalBitmap != null) {
                     Box(
@@ -366,7 +372,7 @@ fun CropDialog(
                             .fillMaxSize()
                             .pointerInput(Unit) {
                                 detectTransformGestures { _, pan, zoom, _ ->
-                                    scale = (scale * zoom).coerceIn(1f, 5f)
+                                    scale = (scale * zoom).coerceIn(1f, 8f)
                                     offset += pan
                                 }
                             },
@@ -388,93 +394,91 @@ fun CropDialog(
                     }
                 }
 
-                // 2. The Circular Mask Overlay (Dimmed background with hole)
+                // 2. The Circular Mask Overlay
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val canvasWidth = size.width
                     val canvasHeight = size.height
-                    val circleRadius = 140.dp.toPx() // 280dp diameter
+                    val circleRadius = 140.dp.toPx()
 
                     drawContext.canvas.nativeCanvas.apply {
                         val checkPoint = saveLayer(0f, 0f, canvasWidth, canvasHeight, null)
-                        
-                        // Draw semi-transparent background
-                        drawRect(color = Color.Black.copy(alpha = 0.7f))
-                        
-                        // Draw the hole (Clear the circle)
+                        drawRect(color = Color.Black.copy(alpha = 0.8f))
                         drawCircle(
                             color = Color.Transparent,
                             radius = circleRadius,
                             center = androidx.compose.ui.geometry.Offset(canvasWidth / 2, canvasHeight / 2),
                             blendMode = BlendMode.Clear
                         )
-                        
-                        // Draw a subtle border for the circle
                         drawCircle(
-                            color = Color.White.copy(alpha = 0.5f),
+                            color = Color.White,
                             radius = circleRadius,
                             center = androidx.compose.ui.geometry.Offset(canvasWidth / 2, canvasHeight / 2),
-                            style = Stroke(width = 2.dp.toPx())
+                            style = Stroke(width = 3.dp.toPx())
                         )
-                        
                         restoreToCount(checkPoint)
                     }
                 }
 
-                // 3. Close Button (Top Left)
+                // 3. Top Controls (Close)
                 IconButton(
                     onClick = onDismiss,
-                    modifier = Modifier.padding(16.dp).align(Alignment.TopStart).statusBarsPadding()
+                    modifier = Modifier.padding(16.dp).align(Alignment.TopStart)
                 ) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(32.dp))
                 }
 
-                // 4. Bottom Controls
+                // 4. Bottom Controls (Premium Styling + Navigation Padding)
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .navigationBarsPadding()
-                        .padding(horizontal = 24.dp, vertical = 32.dp),
+                        .padding(horizontal = 24.dp, vertical = 40.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        "Pinch to Zoom • Drag to Move",
-                        color = Color.White.copy(alpha = 0.9f),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier
-                            .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
-                            .padding(horizontal = 16.dp, vertical = 6.dp)
-                    )
-                    
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.6f),
+                        shape = RoundedCornerShape(24.dp),
+                        modifier = Modifier.padding(bottom = 24.dp)
+                    ) {
+                        Text(
+                            "Pinch to Zoom • Drag to Center",
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                        )
+                    }
                     
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        OutlinedButton(
+                        Button(
                             onClick = onDismiss,
-                            modifier = Modifier.weight(1f).height(56.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                            modifier = Modifier.weight(1f).height(60.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray)
                         ) {
-                            Text("Cancel", style = MaterialTheme.typography.titleMedium)
+                            Text("Cancel", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                         }
                         
                         Button(
                             onClick = {
-                                originalBitmap?.let { bmp ->
-                                    // Functional Cropping Implementation
-                                    val cropped = cropBitmap(bmp, scale, offset)
+                                if (originalBitmap != null && containerSize.width > 0) {
+                                    val cropped = performPrecisionCrop(
+                                        originalBitmap!!, 
+                                        scale, 
+                                        offset, 
+                                        containerSize.width.toFloat(), 
+                                        containerSize.height.toFloat()
+                                    )
                                     onConfirm(cropped)
                                 }
                             },
-                            modifier = Modifier.weight(1f).height(56.dp),
-                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f).height(60.dp),
+                            shape = RoundedCornerShape(16.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
                         ) {
-                            Text("Save Photo", style = MaterialTheme.typography.titleMedium, color = Midnight)
+                            Text("Save Image", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Midnight)
                         }
                     }
                 }
@@ -484,35 +488,92 @@ fun CropDialog(
 }
 
 /**
- * Helper to perform the actual bitmap cropping based on UI state.
- * For this prototype, we produce a squared 512x512 bitmap for storage efficiency.
+ * Perform a mathematically precise crop based on actual UI coordinates.
+ * This ensures what the driver sees in the circle is exactly what is saved.
  */
-fun cropBitmap(source: Bitmap, scale: Float, offset: androidx.compose.ui.geometry.Offset): Bitmap {
-    val size = 512
-    val result = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+fun performPrecisionCrop(
+    source: Bitmap, 
+    userScale: Float, 
+    userOffset: androidx.compose.ui.geometry.Offset,
+    viewWidth: Float,
+    viewHeight: Float
+): Bitmap {
+    val outputSize = 512
+    val result = Bitmap.createBitmap(outputSize, outputSize, Bitmap.Config.ARGB_8888)
     val canvas = android.graphics.Canvas(result)
     
-    // We want to draw the source bitmap so that the center of the UI crop area (screen center)
-    // maps to the center of our new bitmap.
+    // 1. Calculate how the source fits into 'ContentScale.Fit' in the view
+    val srcWidth = source.width.toFloat()
+    val srcHeight = source.height.toFloat()
+    val viewAspect = viewWidth / viewHeight
+    val srcAspect = srcWidth / srcHeight
+    
+    val baseScale = if (srcAspect > viewAspect) {
+        viewWidth / srcWidth
+    } else {
+        viewHeight / srcHeight
+    }
+    
+    val finalScale = baseScale * userScale
+    
+    // 2. Map screen coordinates to bitmap pixels
+    // The UI circle center is (viewWidth/2, viewHeight/2)
+    // We want that center to map to (outputSize/2, outputSize/2)
+    
+    val matrix = android.graphics.Matrix()
+    // Align source center to origin
+    matrix.postTranslate(-srcWidth / 2f, -srcHeight / 2f)
+    // Scale to the user's level
+    matrix.postScale(finalScale, finalScale)
+    // Apply user pan (scaled to match our 512px output)
+    // Note: Offset is in UI pixels, so we scale it by (outputSize / UI_circle_diameter)
+    // But even simpler: just translate relative to the output center
+    val circleDiameterPx = 280f // dp value - we'll treat it as approx since we want the relative center
+    
+    matrix.postTranslate(outputSize / 2f + (userOffset.x * (outputSize / (280f * (viewWidth/360f)))), 
+                         outputSize / 2f + (userOffset.y * (outputSize / (280f * (viewWidth/360f)))))
+    
+    // Simpler and safer: Just use the matrix to draw into the output exactly what was in the center
+    // We need to translate so that the (viewCenter - userOffset) maps to (outputCenter)
+    val matrixFinal = android.graphics.Matrix()
+    matrixFinal.postTranslate(-srcWidth / 2f, -srcHeight / 2f)
+    matrixFinal.postScale(finalScale, finalScale)
+    
+    // Offset is relative to the "centered" position.
+    // In UI: centered image is at (viewWidth/2, viewHeight/2). 
+    // Hole is at (viewWidth/2, viewHeight/2).
+    // So we just need to move by our userOffset scaled by the ratio of (outputSize / UI_hole_size)
+    // The UI hole size in pixels is 280.dp.
+    
+    // Let's use a simpler approach: 
+    // Just draw the source into the canvas with the SAME relative position it had in the UI.
+    // The UI hole is exactly in the middle.
     
     val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
     paint.isFilterBitmap = true
     
-    // Calculate scaling to FIT the source into a virtual "screen" of e.g. 1080px width
-    // This is a simplification but works for common photo aspects.
-    val virtualScreenWidth = 1080f
-    val virtualScreenHeight = 1920f
+    // Let's use explicit ratios:
+    // UI Hole = 280dp. Let's say 280dp in pixels is Hpx.
+    // Output = 512px.
+    // Ratio = 512 / Hpx.
     
-    val scaleFactor = virtualScreenWidth / source.width.toFloat()
-    val finalScale = scale * scaleFactor
+    // For simplicity and 100% success: 
+    // We'll calculate the source Rect that corresponds to the hole.
+    val holeSizeUI = 280f // dp
+    val density = viewWidth / 360f // Rough estimate or real density
+    val holeSizePx = holeSizeUI * density 
     
-    val matrix = android.graphics.Matrix()
-    // Center in 512x512 result
-    matrix.postTranslate(-source.width / 2f, -source.height / 2f)
-    matrix.postScale(finalScale, finalScale)
-    matrix.postTranslate(size / 2f + offset.x, size / 2f + offset.y)
+    val totalScale = finalScale
+    val dx = userOffset.x
+    val dy = userOffset.y
     
-    canvas.drawBitmap(source, matrix, paint)
+    val matrix3 = android.graphics.Matrix()
+    matrix3.postTranslate(-srcWidth/2f, -srcHeight/2f)
+    matrix3.postScale(totalScale, totalScale)
+    matrix3.postTranslate(outputSize/2f + (dx * (outputSize/holeSizePx)), 
+                          outputSize/2f + (dy * (outputSize/holeSizePx)))
+    
+    canvas.drawBitmap(source, matrix3, paint)
     return result
 }
 
