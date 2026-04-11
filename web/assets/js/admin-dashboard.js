@@ -487,21 +487,42 @@ function initPostingFeature() {
     const postBtn = document.getElementById('postScheduleBtn');
     if (!postBtn) return;
     postBtn.onclick = async () => {
-        if (!confirm("Officialize tomorrow's schedules?")) return;
+        // Query ALL unpublished schedules across any date
+        const q = query(
+            collection(db, "schedules"), 
+            where("is_published", "==", false)
+        );
+        
         try {
-            postBtn.disabled = true;
-            const tomorrow = new Date();
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            const dateStr = tomorrow.toISOString().split('T')[0];
-            const q = query(collection(db, "schedules"), where("schedule_date", "==", dateStr), where("isOfficial", "==", false));
             const snap = await getDocs(q);
-            if (snap.empty) return alert("No schedules found.");
+            if (snap.empty) {
+                alert("No draft schedules found to post.");
+                return;
+            }
+
+            if (!confirm(`Are you sure you want to post and officialize ${snap.size} draft schedules? This will make them visible to drivers immediately.`)) return;
+
+            postBtn.disabled = true;
+            postBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Posting...';
+
             const batch = writeBatch(db);
-            snap.docs.forEach(d => batch.update(d.ref, { isOfficial: true, posted_at: serverTimestamp() }));
+            snap.docs.forEach(d => {
+                batch.update(d.ref, { 
+                    is_published: true, 
+                    posted_at: serverTimestamp(),
+                    updated_at: serverTimestamp()
+                });
+            });
+
             await batch.commit();
-            alert("Posted successfully!");
-        } catch (err) { alert(err.message); }
-        finally { postBtn.disabled = false; }
+            alert(`Success! ${snap.size} schedules have been posted.`);
+        } catch (err) {
+            console.error("Post error:", err);
+            alert("Failed to post: " + err.message);
+        } finally {
+            postBtn.disabled = false;
+            postBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Post Schedule';
+        }
     };
 }
 
@@ -591,30 +612,39 @@ function initRecentTripsWidget() {
         }
 
         container.innerHTML = `
-            <table class="table" style="width:100%;">
+            <table class="data-table" style="width:100%;">
                 <thead>
                     <tr>
-                        <th style="padding:12px; font-size:0.75rem; text-align:left; color:var(--text-muted);">Trip Info</th>
-                        <th style="padding:12px; font-size:0.75rem; text-align:left; color:var(--text-muted);">Passenger</th>
-                        <th style="padding:12px; font-size:0.75rem; text-align:right; color:var(--text-muted);">Action</th>
+                        <th style="padding:16px;">Trip & Driver</th>
+                        <th style="padding:16px;">Vehicle Details</th>
+                        <th style="padding:16px; text-align:right;">Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${snap.docs.map(doc => {
                         const data = doc.data();
-                        const completedAt = data.completed_at?.toDate ? data.completed_at.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '---';
+                        const completedAt = data.completed_at?.toDate ? data.completed_at.toDate().toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '---';
+                        const vehicle = data.vehicle_assigned || data.car_details || '—';
+                        const plate = data.plate_number || '—';
                         return `
-                            <tr style="border-top:1px solid var(--border-color);">
-                                <td style="padding:12px;">
-                                    <div style="font-weight:700; font-size:0.9rem;">${data.client_name || 'Fleet Service'}</div>
-                                    <div style="font-size:0.75rem; color:var(--text-muted);">${completedAt} • ${data.schedule_date || ''}</div>
+                            <tr>
+                                <td style="padding:16px;">
+                                    <div style="font-weight:800; color:#fff; font-size:0.95rem;">${data.driver_name || 'Fleet Driver'}</div>
+                                    <div style="font-size:0.75rem; color:var(--accent-blue); margin-top:2px;">
+                                        <i class="fas fa-user-circle"></i> ${data.passenger_name || data.client_name || 'Individual'}
+                                    </div>
+                                    <div style="font-size:0.7rem; color:var(--text-muted); margin-top:4px;">
+                                        Completed: ${completedAt}
+                                    </div>
                                 </td>
-                                <td style="padding:12px;">
-                                    <div style="font-size:0.85rem;">${data.passenger_name || 'Individual'}</div>
+                                <td style="padding:16px;">
+                                    <div style="font-size:0.85rem; color:var(--text-secondary);">${vehicle}</div>
+                                    <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">${plate}</div>
                                 </td>
-                                <td style="padding:12px; text-align:right;">
-                                    <button class="btn btn-secondary" style="padding:4px 12px; font-size:0.7rem;" onclick="window.location.href='trip-tickets.html?trip=${doc.id}'">
-                                        VIEW TICKET
+                                <td style="padding:16px; text-align:right;">
+                                    <button class="btn btn-secondary !w-auto !px-4 !py-2 !text-[10px] !h-auto" 
+                                            onclick="window.location.href='trip-tickets.html?tripId=${doc.id}'">
+                                        <i class="fas fa-ticket-alt"></i> VIEW TICKET
                                     </button>
                                 </td>
                             </tr>

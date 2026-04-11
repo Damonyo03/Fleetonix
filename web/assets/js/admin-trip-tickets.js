@@ -121,6 +121,9 @@ function loadTickets() {
             populateDriverFilter();
             renderTickets(allTickets);
             updateSummaryStats(allTickets);
+            
+            // Focus on specific trip if requested via URL
+            setTimeout(checkTripFocus, 800);
         }, (err) => {
             console.warn("Schedules listener error:", err.message);
             // Just use trip_tickets if schedules fails
@@ -297,6 +300,31 @@ function formatTimestamp(ts) {
         });
     } catch {
         return '—';
+    }
+}
+
+/**
+ * Focus and highlight a specific trip ticket from the URL
+ */
+function checkTripFocus() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tripId = urlParams.get('tripId');
+    if (!tripId) return;
+
+    const target = document.getElementById(`ticket-${tripId}`);
+    if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target.style.transition = 'all 0.5s ease';
+        target.style.border = '2px solid var(--accent-blue)';
+        target.style.boxShadow = '0 0 30px rgba(0, 212, 255, 0.4)';
+        
+        // Pulse effect
+        setTimeout(() => {
+            target.style.transform = 'scale(1.02)';
+            setTimeout(() => {
+                target.style.transform = 'scale(1)';
+            }, 300);
+        }, 500);
     }
 }
 
