@@ -71,6 +71,8 @@ data class DriverSchedule(
     @SerializedName("odometer_start") val odometer_start: Double? = null,
     @SerializedName("odometer_end") val odometer_end: Double? = null,
     @SerializedName("total_km_travelled") val total_km_travelled: Double? = null,
+    @SerializedName("started_at") val started_at: Any? = null,
+    @SerializedName("picked_up_at") val picked_up_at: Any? = null,
     @SerializedName("completed_at") val completed_at: Any? = null,
     @SerializedName("is_published") val is_published: Boolean = false,
     @SerializedName("isOfficial") val isOfficial: Boolean = false,

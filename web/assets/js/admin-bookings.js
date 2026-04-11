@@ -156,7 +156,7 @@ async function showCreateBookingModal(clients) {
                 <input type="date" id="pickup_date" class="form-control" value="${today}" min="${today}" max="${tomorrowStr}" required>
             </div>
             <div class="form-group">
-                <label for="pickup_time">Pickup Time</label>
+                <label for="pickup_time">Start Time</label>
                 <input type="time" id="pickup_time" class="form-control" required>
             </div>
         </div>
@@ -606,7 +606,7 @@ window.assignDriver = async (id) => {
             <input type="date" id="modal_sched_date" class="form-control" value="${booking.pickup_date || ''}" required>
         </div>
         <div class="form-group">
-            <label>Schedule Time</label>
+            <label>Start Time</label>
             <input type="time" id="modal_sched_time" class="form-control" value="${booking.pickup_time || ''}" required>
         </div>
     `;

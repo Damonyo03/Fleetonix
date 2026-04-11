@@ -296,7 +296,7 @@ fun buildTripItem(doc: com.google.firebase.firestore.DocumentSnapshot): TripHist
             pickup = pickupAddr,
             dropoff = dropoffAddr,
             status = data["status"] as? String ?: "Completed",
-            polyline = data["route_polyline"] as? String ?: "",
+            polyline = data["actual_route_polyline"] as? String ?: data["route_polyline"] as? String ?: "",
             date = ldt,
             plate = data["vehicle_plate"] as? String ?: data["plate_number"] as? String ?: "N/A",
             unit = data["vehicle_unit"] as? String ?: data["vehicle_details"] as? String ?: "N/A",

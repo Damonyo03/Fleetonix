@@ -175,12 +175,17 @@ function populateDriverFilter() {
         [...uniqueDrivers].sort().map(name => `<option value="${name}" ${name === currentVal ? 'selected' : ''}>${name}</option>`).join('');
 }
 
+function calculateTripKm(t) {
+    if (t.odometer_start > 0 && t.odometer_end > t.odometer_start) {
+        return parseFloat((t.odometer_end - t.odometer_start).toFixed(2));
+    }
+    return parseFloat(t.total_km || t.total_km_travelled || t.totalKmTravelled || 0);
+}
+
 function updateSummaryStats(tickets) {
     const totalTrips = tickets.length;
-    const totalKm = tickets.reduce((sum, t) => {
-        const km = parseFloat(t.total_km_travelled || t.totalKmTravelled || 0);
-        return sum + km;
-    }, 0);
+    let totalKm = 0;
+    tickets.forEach(t => { totalKm += calculateTripKm(t); });
     const drivers = new Set(tickets.map(t => t.driver_id).filter(Boolean)).size;
 
     document.getElementById('totalTrips').textContent = totalTrips;
@@ -205,9 +210,11 @@ function renderTickets(tickets) {
 
     container.innerHTML = tickets.map(ticket => {
         const completedAt = formatTimestamp(ticket.completed_at);
-        const acceptedAt = ticket.accepted_at || ticket.time_of_departure || '—';
+        const startTime = (ticket.time_of_departure && ticket.time_of_departure !== '—') ? ticket.time_of_departure : (ticket.accepted_at || '—');
         const arrivalAt = ticket.time_of_arrival || ticket.timeOfArrival || '—';
-        const totalKm = parseFloat(ticket.total_km_travelled || ticket.totalKmTravelled || 0).toFixed(2);
+        
+        const totalKmVal = calculateTripKm(ticket);
+        const totalKm = totalKmVal.toFixed(2);
         const vehicleType = ticket.vehicle_type || ticket.vehicle_assigned || '—';
         const plateNumber = ticket.plate_number || '—';
         const userRole = currentUserData?.role || currentUserData?.user_type;
@@ -247,7 +254,7 @@ function renderTickets(tickets) {
                 <div class="ticket-metrics" style="display: flex; gap: 12px; margin-bottom: 24px;">
                     <div class="metric-box" style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); flex: 1; text-align: center;">
                         <div class="metric-label" style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;"><i class="fas fa-flag-checkered"></i> Start Time</div>
-                        <div class="metric-value" style="font-size: 1rem; color: var(--accent-blue); font-weight: 700;">${acceptedAt}</div>
+                        <div class="metric-value" style="font-size: 1rem; color: var(--accent-blue); font-weight: 700;">${startTime}</div>
                     </div>
                     <div class="metric-box" style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); flex: 1; text-align: center;">
                         <div class="metric-label" style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;"><i class="fas fa-flag"></i> Arrival</div>

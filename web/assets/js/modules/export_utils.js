@@ -149,7 +149,7 @@ function formatValue(val, type = 'string') {
 export function mapTicketsForExport(tickets) {
     return tickets.map(t => {
         const date = formatValue(t.schedule_date || t.completed_at, 'date');
-        const departureAt = formatValue(t.time_of_departure || t.accepted_at, 'time');
+        const startTime = formatValue(t.time_of_departure || t.accepted_at, 'time');
         const arrivalAt = formatValue(t.time_of_arrival || t.timeOfArrival, 'time');
         
         // Handle Multi-Segment Format with Geocoding Transparency
@@ -163,7 +163,7 @@ export function mapTicketsForExport(tickets) {
 
         return {
             "DATE/TIME": date,
-            "DEPARTURE TIME": departureAt,
+            "START TIME": startTime,
             "PICK-UP PLACE": pickupLocation,
             "ARRIVAL TIME": arrivalAt,
             "DROP-OFF PLACE": dropoffLocation,

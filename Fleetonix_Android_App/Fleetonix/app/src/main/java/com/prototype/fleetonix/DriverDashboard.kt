@@ -987,22 +987,25 @@ fun DriverDashboard(
                             val distToPoly = GoogleMapsService.findMinimumDistanceToPolyline(driverPosVec, polylinePoints)
                             
                             // AUTO RE-ROUTE: If significantly off-track (> 100m) and not currently recalculating
-                            if (distToPoly > 100f && !isReRouting && (tripPhase == "pickup" || tripPhase == "dropoff")) {
+                            // Fixed phase names: en_route_pickup, en_route_dropoff
+                            val isActiveRoutingPhase = (tripPhase == "en_route_pickup" || tripPhase == "en_route_dropoff" || tripPhase == "pickup" || tripPhase == "dropoff")
+                            
+                            if (distToPoly > 100f && !isReRouting && isActiveRoutingPhase) {
                                 scope.launch {
                                     isReRouting = true
                                     try {
-                                        val dest = if (tripPhase == "pickup") nextSchedule?.pickup_location else nextSchedule?.dropoff_location
+                                        val dest = if (tripPhase == "en_route_pickup" || tripPhase == "pickup") nextSchedule?.pickup_location else nextSchedule?.dropoff_location
                                         if (dest != null) {
                                             val originStr = "${lat},${lng}"
                                             val destStr = dest.address ?: dest.text ?: ""
-                                            val MapsKey = context.getString(R.string.google_maps_key).ifEmpty { "YOUR_KEY_HERE" }
-                                            val resp = GoogleMapsService.api.getDirections(originStr, destStr, MapsKey)
+                                            val mapsKey = googleMapsApiKey // Use the verified key defined at line 667
+                                            val resp = GoogleMapsService.api.getDirections(originStr, destStr, mapsKey)
                                             if (resp.status == "OK" && resp.routes.isNotEmpty()) {
                                                 val encoded = resp.routes[0].overviewPolyline.points
                                                 activePolylineEncoded = encoded
                                                 polylinePoints = GoogleMapsService.decodePolyline(encoded)
                                                 showReRoutePrompt = false
-                                                Log.d("DriverDashboard", "Automatic re-routing succeeded")
+                                                Log.d("DriverDashboard", "Automatic re-routing succeeded for phase: $tripPhase")
                                             }
                                         }
                                     } catch (e: Exception) {
@@ -1011,7 +1014,7 @@ fun DriverDashboard(
                                         isReRouting = false
                                     }
                                 }
-                            } else if (distToPoly > 50f && !showReRoutePrompt && (tripPhase == "pickup" || tripPhase == "dropoff") && !isReRouting) {
+                            } else if (distToPoly > 50f && !showReRoutePrompt && isActiveRoutingPhase && !isReRouting) {
                                 // Fallback: Show manual prompt if between 50-100m
                                 showReRoutePrompt = true
                             } else if (distToPoly <= 30f) {
@@ -1789,6 +1792,21 @@ fun DriverDashboard(
                             // Auto-fit route when it's first loaded or changed
                             LaunchedEffect(polylinePoints) {
                                 if (polylinePoints.isNotEmpty()) {
+                                    try {
+                                        val builder = LatLngBounds.builder()
+                                        polylinePoints.forEach { builder.include(it) }
+                                        // Include driver position in the bounds to ensure they are visible
+                                        if (currentLatitude != 0.0) {
+                                            builder.include(LatLng(currentLatitude, currentLongitude))
+                                        }
+                                        val bounds = builder.build()
+                                        cameraPositionState.animate(
+                                            CameraUpdateFactory.newLatLngBounds(bounds, 100),
+                                            1000
+                                        )
+                                    } catch (e: Exception) {
+                                        Log.e("DriverDashboard", "Error fitting route bounds", e)
+                                    }
                                 }
                             }
 
@@ -1837,19 +1855,32 @@ fun DriverDashboard(
                                 
                                 // Render direction polyline
                                 if (polylinePoints.isNotEmpty()) {
+                                    // High-visibility Vibrant Cyan polyline
                                     Polyline(
                                         points = polylinePoints,
-                                        color = Color(0xFF3B82F6),
-                                        width = 12f
+                                        color = Color(0xFF00E5FF),
+                                        width = 16f,
+                                        startCap = RoundCap(),
+                                        endCap = RoundCap(),
+                                        jointType = JointType.ROUND
                                     )
                                     
+                                    // Start point marker (e.g. the path origin)
+                                    val startPos = polylinePoints.first()
+                                    Marker(
+                                        state = com.google.maps.android.compose.rememberMarkerState(position = startPos),
+                                        title = "Trip Start",
+                                        icon = BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_AZURE)
+                                    )
+
                                     // Destination marker
                                     val dest = polylinePoints.last()
-                                    val isPickup = tripPhase == "pickup" || tripPhase == "pending"
+                                    val isPickup = tripPhase == "pickup" || tripPhase == "en_route_pickup" || tripPhase == "pending"
                                     Marker(
                                         state = com.google.maps.android.compose.rememberMarkerState(position = dest),
                                         title = if (isPickup) "Pickup Location" else "Dropoff Location",
-                                        snippet = if (isPickup) "Destination for Pickup" else "Customer Destination"
+                                        snippet = if (isPickup) "Arrive here for Pickup" else "Customer Destination",
+                                        icon = BitmapDescriptorFactory.defaultMarker(if (isPickup) BitmapDescriptorFactory.HUE_ORANGE else BitmapDescriptorFactory.HUE_RED)
                                     )
                                 }
                             }
@@ -1983,12 +2014,12 @@ fun DriverDashboard(
                                             scope.launch {
                                                 isReRouting = true
                                                 try {
-                                                    val dest = if (tripPhase == "pickup") nextSchedule?.pickup_location else nextSchedule?.dropoff_location
+                                                    val dest = if (tripPhase == "en_route_pickup" || tripPhase == "pickup") nextSchedule?.pickup_location else nextSchedule?.dropoff_location
                                                     if (dest != null) {
                                                         val originStr = "${currentLatitude},${currentLongitude}"
                                                         val destStr = dest.address ?: dest.text ?: ""
-                                                        val MapsKey = context.getString(R.string.google_maps_key).ifEmpty { "YOUR_KEY_HERE" }
-                                                        val resp = GoogleMapsService.api.getDirections(originStr, destStr, MapsKey)
+                                                        val mapsKey = googleMapsApiKey // Use the verified key defined at line 667
+                                                        val resp = GoogleMapsService.api.getDirections(originStr, destStr, mapsKey)
                                                         if (resp.status == "OK" && resp.routes.isNotEmpty()) {
                                                             val encoded = resp.routes[0].overviewPolyline.points
                                                             activePolylineEncoded = encoded
@@ -2147,7 +2178,7 @@ fun DriverDashboard(
                                 )
                             }
                             
-                             val phase = tripPhase ?: "pending"
+val phase = tripPhase ?: "pending"
                              val isAnyLoading = isStartingTrip || isMarkingPickup || isMarkingDropoff || isMarkingReturnPickup || isCompletingTrip
 
                              when {
@@ -2155,48 +2186,7 @@ fun DriverDashboard(
                                  phase == "accepted" -> {
                                      Button(
                                          onClick = {
-                                             val docId = nextSchedule?.docId ?: return@Button
-                                             scope.launch {
-                                                 try {
-                                                     isStartingTrip = true
-                                                     // Ensure driver is timed-in before navigation sequences
-                                                     triggerAutoTimeIn()
-                                                     
-                                                     db.collection("schedules").document(docId).update(
-                                                         "trip_phase", "en_route_pickup",
-                                                         "started_at", FieldValue.serverTimestamp()
-                                                     ).await()
-
-                                                     // Start high-accuracy tracking
-                                                     val startTripIntent = Intent(context, LocationService::class.java).apply {
-                                                         action = LocationService.ACTION_START_TRIP
-                                                         putExtra(LocationService.EXTRA_DRIVER_UID, auth.currentUser?.uid)
-                                                         putExtra(LocationService.EXTRA_DRIVER_EMAIL, auth.currentUser?.email?.lowercase()?.trim() ?: "")
-                                                         putExtra(LocationService.EXTRA_SCHEDULE_ID, nextSchedule?.docId ?: "")
-                                                     }
-                                                     context.startService(startTripIntent)
-                                                     
-                                                     totalDistanceMetres = 0f
-                                                     actualRoutePoints.clear()
-                                                     
-                                                     // Sync to drivers collection
-                                                     val email = auth.currentUser?.email
-                                                     if (email != null) {
-                                                         val dSnap = db.collection("drivers")
-                                                             .whereEqualTo("driver_email", email.lowercase().trim())
-                                                             .get().await()
-                                                         dSnap.documents.firstOrNull()?.reference?.update(
-                                                             "current_status", "En Route to Pickup",
-                                                             "current_trip_phase", "en_route_pickup"
-                                                         )
-                                                     }
-                                                     tripActionSuccess = "Routing to Pickup point..."
-                                                 } catch (e: Exception) {
-                                                     tripActionError = "Failed: ${e.message}"
-                                                 } finally {
-                                                     isStartingTrip = false
-                                                 }
-                                             }
+                                             showOdometerDialog = true
                                          },
                                          modifier = Modifier.fillMaxWidth().height(64.dp),
                                          colors = ButtonDefaults.buttonColors(containerColor = AccentBlue),
@@ -2220,6 +2210,8 @@ fun DriverDashboard(
                                                          "trip_phase", "picked_up",
                                                          "picked_up_at", FieldValue.serverTimestamp()
                                                      ).await()
+                                                     
+                                                     pickedUpAt = formatCurrentTime()
                                                      
                                                      // Sync to drivers collection
                                                      val email = auth.currentUser?.email
@@ -2666,17 +2658,47 @@ fun DriverDashboard(
                             
                             // 2. Update Schedule with Odometer
                             if (isStarting) {
-                                val timestampStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("hh:mm a"))
-                                val updateData = mapOf(
+                                val timestampStr = formatCurrentTime()
+                                val phaseUpdate = if (tripPhase == "accepted") "en_route_pickup" else "picked_up"
+                                
+                                val updateData = mutableMapOf<String, Any>(
                                     "odometer_start" to mileage,
-                                    "trip_phase" to "picked_up",
-                                    "picked_up_at" to timestampStr,
-                                    "status" to "accepted" // Ensure status is consistent
+                                    "trip_phase" to phaseUpdate,
+                                    "status" to "accepted"
                                 )
+                                
+                                if (tripPhase == "accepted") {
+                                    updateData["started_at"] = FieldValue.serverTimestamp()
+                                    // Also start tracking service here
+                                    val startTripIntent = Intent(context, LocationService::class.java).apply {
+                                        action = LocationService.ACTION_START_TRIP
+                                        putExtra(LocationService.EXTRA_DRIVER_UID, auth.currentUser?.uid)
+                                        putExtra(LocationService.EXTRA_DRIVER_EMAIL, auth.currentUser?.email?.lowercase()?.trim() ?: "")
+                                        putExtra(LocationService.EXTRA_SCHEDULE_ID, nextSchedule?.docId ?: "")
+                                    }
+                                    context.startService(startTripIntent)
+                                    totalDistanceMetres = 0f
+                                    actualRoutePoints.clear()
+                                } else {
+                                    updateData["picked_up_at"] = FieldValue.serverTimestamp()
+                                    pickedUpAt = timestampStr
+                                }
+
                                 db.collection("schedules").document(docId).update(updateData).await()
-                                // 3. Update Driver's Current Mileage
-                                db.collection("drivers").document(uid).update("current_mileage", mileage).await()
-                                tripActionSuccess = "Trip started! Please drive safely to the destination."
+                                
+                                // 3. Update Driver's Current Mileage & Status
+                                val driverUpdate = mutableMapOf<String, Any>(
+                                    "current_mileage" to mileage,
+                                    "current_trip_phase" to phaseUpdate
+                                )
+                                if (tripPhase == "accepted") {
+                                    driverUpdate["current_status"] = "En Route to Pickup"
+                                } else {
+                                    driverUpdate["current_status"] = "Passenger Picked Up"
+                                }
+                                
+                                db.collection("drivers").document(uid).update(driverUpdate).await()
+                                tripActionSuccess = if (tripPhase == "accepted") "Trip started! Routing to pickup..." else "Passenger picked up! Routing to destination..."
                             } else {
                                 // End odometer flow
                                 endOdometerValue = mileage
@@ -2708,9 +2730,9 @@ fun DriverDashboard(
                 vehicleUnit = liveVehicleUnit,
                 vehiclePlate = liveVehiclePlate,
                 vehicleColor = liveVehicleColor,
-                timeOfDeparture = nextSchedule?.scheduled_time ?: "--:--",
+                timeOfDeparture = pickedUpAt ?: nextSchedule?.scheduled_time ?: "--:--",
                 timeOfArrival = completedAt ?: formatCurrentTime(),
-                totalKm = (totalDistanceMetres / 1000.0),
+                totalKm = endOdometerValue - (nextSchedule?.odometer_start ?: 0.0),
                 odometerStart = nextSchedule?.odometer_start ?: 0.0,
                 odometerEnd = endOdometerValue,
                 pickupLocation = nextSchedule?.pickup_location?.address ?: nextSchedule?.pickup_location?.text ?: "Start",
@@ -2752,12 +2774,15 @@ fun DriverDashboard(
                                 "vehicle_details" to vDetails, // Keep for legacy
                                 "pickup_location" to (nextSchedule?.pickup_location?.address ?: nextSchedule?.pickup_location?.text ?: "Unknown"),
                                 "dropoff_location" to (nextSchedule?.dropoff_location?.address ?: nextSchedule?.dropoff_location?.text ?: "Unknown"),
-                                "time_of_departure" to (pickedUpAt ?: ""),
+                                "time_of_departure" to (pickedUpAt ?: nextSchedule?.scheduled_time ?: ""),
                                 "time_of_arrival" to (completedAt ?: ""),
-                                "total_km" to (totalDistanceMetres / 1000.0),
+                                "total_km" to (endOdometerValue - (nextSchedule?.odometer_start ?: 0.0)),
+                                "total_km_travelled" to (endOdometerValue - (nextSchedule?.odometer_start ?: 0.0)),
                                 "odometer_start" to (nextSchedule?.odometer_start ?: 0.0),
                                 "odometer_end" to endOdometerValue,
+                                "actual_route_polyline" to GoogleMapsService.encodePolyline(actualRoutePoints),
                                 "route_polyline" to GoogleMapsService.encodePolyline(actualRoutePoints),
+                                "recommended_route_polyline" to (nextSchedule?.route_polyline ?: ""),
                                 "status" to "completed",
                                 "created_at" to FieldValue.serverTimestamp(), // Fallback if recovered
                                 "completed_at" to FieldValue.serverTimestamp()
