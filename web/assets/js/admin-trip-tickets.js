@@ -35,6 +35,11 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 
+let unsubTripTickets = null;
+let unsubSchedules = null;
+let rawTripTickets = [];
+let rawSchedTickets = [];
+
 function loadTickets() {
     if (!currentUserData) {
         console.warn("User data not loaded yet.");
@@ -43,7 +48,11 @@ function loadTickets() {
 
     const role = currentUserData.role || currentUserData.user_type;
 
-    // --- Real-time listener on trip_tickets (primary source from Android app) ---
+    // Detach existing listeners if any
+    if (unsubTripTickets) unsubTripTickets();
+    if (unsubSchedules) unsubSchedules();
+
+    // 1. Listen to trip_tickets (Real-time storage)
     let tripTicketsQuery;
     if (role === 'driver') {
         tripTicketsQuery = query(
@@ -58,15 +67,17 @@ function loadTickets() {
         );
     }
 
-    onSnapshot(tripTicketsQuery, (snapshot) => {
-        // Map trip_tickets into a uniform structure
-        const tripTickets = snapshot.docs.map(d => {
+    unsubTripTickets = onSnapshot(tripTicketsQuery, (snapshot) => {
+        rawTripTickets = snapshot.docs.map(d => {
             const data = d.data();
+            const driverId = data.driver_id || data.driver_uid || '';
             return {
                 id: d.id,
                 _source: 'trip_tickets',
+                schedule_id: data.schedule_id || '',
                 driver_name: data.driver_name || data.driverName || '—',
-                driver_uid: data.driver_uid || '',
+                driver_id: driverId,
+                driver_uid: driverId,
                 driver_email: data.driver_email || '',
                 vehicle_assigned: data.vehicle_assigned || data.vehicle_type || '—',
                 plate_number: data.plate_number || data.vehicle_plate || '—',
@@ -81,86 +92,82 @@ function loadTickets() {
                 actual_route_polyline: data.actual_route_polyline || '',
                 odometer_start: data.odometer_start || 0,
                 odometer_end: data.odometer_end || 0,
-                completed_at: data.created_at,
+                completed_at: data.created_at || data.completed_at,
                 schedule_date: data.schedule_date || '',
                 schedule_time: data.schedule_time || '',
                 ...data
             };
         });
-
-        // --- Also listen to completed schedules (legacy source) ---
-        let schedulesQuery;
-        if (role === 'driver') {
-            schedulesQuery = query(
-                collection(db, "schedules"),
-                where("status", "==", "completed"),
-                where("driver_id", "==", currentUserData.uid)
-            );
-        } else {
-            schedulesQuery = query(
-                collection(db, "schedules"),
-                where("status", "==", "completed")
-            );
-        }
-
-        onSnapshot(schedulesQuery, (schedSnap) => {
-            const schedTickets = schedSnap.docs.map(d => ({ id: d.id, _source: 'schedules', ...d.data() }));
-
-            // Merge: trip_tickets takes priority; deduplicate based on content
-            const existingTrips = new Map();
-            
-            // First pass: add trip_tickets (priority)
-            tripTickets.forEach(t => {
-                const key = `${t.driver_id}_${t.completed_at?.seconds || t.completed_at || 'NA'}_${t.pickup_location || t.segments?.[0]?.pickup || 'NA'}`;
-                existingTrips.set(key, t);
-            });
-
-            // Second pass: add schedules if not already represented
-            schedTickets.forEach(s => {
-                const key = `${s.driver_id}_${s.completed_at?.seconds || s.completed_at || 'NA'}_${s.pickup_location || s.segments?.[0]?.pickup || 'NA'}`;
-                if (!existingTrips.has(key)) {
-                    existingTrips.set(key, s);
-                }
-            });
-
-            allTickets = Array.from(existingTrips.values());
-            // Sort by completed_at descending
-            allTickets.sort((a, b) => {
-                const at = a.completed_at?.toMillis?.() || a.completed_at?.seconds * 1000 || 0;
-                const bt = b.completed_at?.toMillis?.() || b.completed_at?.seconds * 1000 || 0;
-                return bt - at;
-            });
-
-            populateDriverFilter();
-            renderTickets(allTickets);
-            updateSummaryStats(allTickets);
-            
-            // Focus on specific trip if requested via URL
-            setTimeout(checkTripFocus, 800);
-        }, (err) => {
-            console.warn("Schedules listener error:", err.message);
-            // Just use trip_tickets if schedules fails
-            allTickets = tripTickets;
-            populateDriverFilter();
-            renderTickets(allTickets);
-            updateSummaryStats(allTickets);
-        });
-    }, (error) => {
-        console.error("trip_tickets listener failed:", error.message);
-        // Fallback: listen to completed schedules only
-        const q = query(collection(db, "schedules"), where("status", "==", "completed"));
-        onSnapshot(q, (snapshot) => {
-            allTickets = snapshot.docs.map(d => ({ id: d.id, _source: 'schedules', ...d.data() }));
-            allTickets.sort((a, b) => {
-                const at = a.completed_at?.toMillis?.() || 0;
-                const bt = b.completed_at?.toMillis?.() || 0;
-                return bt - at;
-            });
-            populateDriverFilter();
-            renderTickets(allTickets);
-            updateSummaryStats(allTickets);
-        });
+        mergeAndRender();
     });
+
+    // 2. Listen to completed schedules (Metadata registry)
+    let schedulesQuery;
+    if (role === 'driver') {
+        schedulesQuery = query(
+            collection(db, "schedules"),
+            where("status", "==", "completed"),
+            where("driver_id", "==", currentUserData.uid)
+        );
+    } else {
+        schedulesQuery = query(
+            collection(db, "schedules"),
+            where("status", "==", "completed")
+        );
+    }
+
+    unsubSchedules = onSnapshot(schedulesQuery, (snapshot) => {
+        rawSchedTickets = snapshot.docs.map(d => ({
+            id: d.id,
+            schedule_id: d.id,
+            _source: 'schedules',
+            ...d.data()
+        }));
+        mergeAndRender();
+    });
+}
+
+function mergeAndRender() {
+    const existingTrips = new Map();
+    
+    // First pass: add trip_tickets (Real-time data from Android)
+    rawTripTickets.forEach(t => {
+        const key = t.schedule_id || t.id;
+        existingTrips.set(key, t);
+    });
+
+    // Second pass: add schedules if not already represented/enrich existing
+    rawSchedTickets.forEach(s => {
+        const key = s.schedule_id || s.id;
+        if (!existingTrips.has(key)) {
+            existingTrips.set(key, s);
+        } else {
+            const existing = existingTrips.get(key);
+            // Deep merge: schedule metadata fills gaps in trip_tickets
+            existingTrips.set(key, { ...s, ...existing });
+        }
+    });
+
+    allTickets = Array.from(existingTrips.values());
+    
+    // Sort by primary time indicator
+    allTickets.sort((a, b) => {
+        const getTime = (val) => {
+            if (!val) return 0;
+            if (val.toMillis) return val.toMillis();
+            if (val.seconds) return val.seconds * 1000;
+            const d = new Date(val);
+            return isNaN(d.getTime()) ? 0 : d.getTime();
+        };
+        return getTime(b.completed_at) - getTime(a.completed_at);
+    });
+
+    populateDriverFilter();
+    renderTickets(allTickets);
+    updateSummaryStats(allTickets);
+    
+    // Focus on specific trip if requested via URL
+    setTimeout(checkTripFocus, 800);
 }
 
 function populateDriverFilter() {
