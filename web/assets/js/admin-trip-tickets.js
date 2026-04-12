@@ -281,7 +281,7 @@ function renderTickets(tickets) {
                 </div>
 
                 ${(ticket.route_polyline || ticket.actual_route_polyline) ? `
-                    <button class="btn-view-route" onclick="viewTripRoute('${ticket.id}', '${ticket.route_polyline}', '${ticket.actual_route_polyline}', '${ticket.driver_name}')" style="width: 100%; margin-top: 15px; background: rgba(20, 184, 166, 0.1); border: 1px solid rgba(20, 184, 166, 0.3); color: var(--accent-teal); padding: 10px; border-radius: 6px; cursor: pointer; transition: all 0.3s ease;">
+                    <button class="btn-view-route" onclick="viewTripRoute('${ticket.id}')" style="width: 100%; margin-top: 15px; background: rgba(20, 184, 166, 0.1); border: 1px solid rgba(20, 184, 166, 0.3); color: var(--accent-teal); padding: 10px; border-radius: 6px; cursor: pointer; transition: all 0.3s ease;">
                         <i class="fas fa-map-marked-alt"></i> View Trip Transparency Map
                     </button>
                     <div style="display: flex; justify-content: space-between; margin-top: 5px; font-size: 0.7rem; color: var(--text-muted); padding: 0 4px;">
@@ -451,16 +451,23 @@ window.exportTripTickets = function () {
 let routeMap = null;
 let currentPolyline = null;
 
-window.viewTripRoute = function (id, recommendedPolyline, actualPolyline, driverName) {
+window.viewTripRoute = function (id) {
+    const t = allTickets.find(ticket => ticket.id === id);
+    if (!t) return;
+
     const modal = document.getElementById('routeModal');
     if (!modal) return;
 
     modal.style.display = 'flex';
 
+    const recommendedPolyline = t.recommended_route_polyline || t.route_polyline || '';
+    const actualPolyline = t.actual_route_polyline || '';
+
     // Constants for consistency with Android app
     const ACCENT_TEAL = '#00C9A7';
     const ACCENT_BLUE = '#4E6BFF';
     const ACCENT_ORANGE = '#FFA24C';
+    const ACCENT_YELLOW = '#F9D423';
 
     // Initialize map if not already done
     if (!routeMap) {
@@ -485,17 +492,18 @@ window.viewTripRoute = function (id, recommendedPolyline, actualPolyline, driver
     if (window._recommendedPath) window._recommendedPath.setMap(null);
     if (window._actualPath) window._actualPath.setMap(null);
     if (window._startMarker) window._startMarker.setMap(null);
-    if (window._endMarker) window._endMarker.setMap(null);
+    if (window._pickupMarker) window._pickupMarker.setMap(null);
+    if (window._dropoffMarker) window._dropoffMarker.setMap(null);
 
     const bounds = new google.maps.LatLngBounds();
 
-    // 1. Draw Recommended path only if Actual is missing, or draw it faintly
+    // 1. Draw Recommended path
     if (recommendedPolyline && recommendedPolyline !== 'undefined') {
         const path = google.maps.geometry.encoding.decodePath(recommendedPolyline);
         window._recommendedPath = new google.maps.Polyline({
             path: path,
             strokeColor: '#64748b',
-            strokeOpacity: actualPolyline ? 0.2 : 0.6, // Dim if actual exists
+            strokeOpacity: actualPolyline ? 0.2 : 0.6,
             strokeWeight: 4,
             map: routeMap,
             icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 2 }, offset: '0', repeat: '10px' }]
@@ -515,48 +523,76 @@ window.viewTripRoute = function (id, recommendedPolyline, actualPolyline, driver
             strokeLinejoin: 'round',
             map: routeMap
         });
-
-        // Add Telemetry Markers (Pickup and Dropoff at exact GPS points)
-        if (path.length > 0) {
-            window._startMarker = new google.maps.Marker({
-                position: path[0],
-                map: routeMap,
-                title: 'Actual Recorded Start',
-                icon: {
-                    path: google.maps.SymbolPath.CIRCLE,
-                    fillColor: ACCENT_BLUE,
-                    fillOpacity: 1,
-                    strokeColor: '#FFFFFF',
-                    strokeWeight: 2,
-                    scale: 8
-                }
-            });
-
-            window._endMarker = new google.maps.Marker({
-                position: path[path.length - 1],
-                map: routeMap,
-                title: 'Actual Recorded End',
-                icon: {
-                    path: google.maps.SymbolPath.CIRCLE,
-                    fillColor: ACCENT_ORANGE,
-                    fillOpacity: 1,
-                    strokeColor: '#FFFFFF',
-                    strokeWeight: 2,
-                    scale: 8
-                }
-            });
-        }
-
         path.forEach(p => bounds.extend(p));
-        
-        // If Actual exists, we ensure Recommended is de-emphasized
-        if (window._recommendedPath) window._recommendedPath.setOptions({ strokeOpacity: 0.1 });
+    }
+
+    // 3. Add 3-Point Markers (Telemetry Verification)
+    
+    // A. Start Trip
+    if (t.start_latitude && t.start_longitude) {
+        const startPos = { lat: t.start_latitude, lng: t.start_longitude };
+        window._startMarker = new google.maps.Marker({
+            position: startPos,
+            map: routeMap,
+            title: "Start Trip",
+            label: { text: "S", color: "white", fontWeight: "bold" },
+            icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                fillColor: ACCENT_BLUE,
+                fillOpacity: 1,
+                strokeWeight: 2,
+                strokeColor: 'white',
+                scale: 12
+            }
+        });
+        bounds.extend(startPos);
+    }
+
+    // B. Actual Pickup
+    if (t.pickup_latitude && t.pickup_longitude) {
+        const pickupPos = { lat: t.pickup_latitude, lng: t.pickup_longitude };
+        window._pickupMarker = new google.maps.Marker({
+            position: pickupPos,
+            map: routeMap,
+            title: "Passenger Picked Up",
+            label: { text: "P", color: "black", fontWeight: "bold" },
+            icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                fillColor: ACCENT_YELLOW,
+                fillOpacity: 1,
+                strokeWeight: 2,
+                strokeColor: 'white',
+                scale: 12
+            }
+        });
+        bounds.extend(pickupPos);
+    }
+
+    // C. Actual Drop-off
+    if (t.dropoff_latitude && t.dropoff_longitude) {
+        const dropoffPos = { lat: t.dropoff_latitude, lng: t.dropoff_longitude };
+        window._dropoffMarker = new google.maps.Marker({
+            position: dropoffPos,
+            map: routeMap,
+            title: "Dropped Off",
+            label: { text: "D", color: "white", fontWeight: "bold" },
+            icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                fillColor: ACCENT_ORANGE,
+                fillOpacity: 1,
+                strokeWeight: 2,
+                strokeColor: 'white',
+                scale: 12
+            }
+        });
+        bounds.extend(dropoffPos);
     }
 
     if (!bounds.isEmpty()) {
         routeMap.fitBounds(bounds);
     }
-};
+}
+
 
 // Close modal logic
 document.addEventListener('DOMContentLoaded', () => {

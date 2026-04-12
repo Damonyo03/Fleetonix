@@ -521,6 +521,14 @@ fun DriverDashboard(
     var targetTripId by remember { mutableStateOf<String?>(null) }
     var activeTicketId by remember { mutableStateOf<String?>(null) }
 
+    // 3-Point Telemetry Coordinates (Actual events)
+    var tripStartLat by rememberSaveable { mutableStateOf<Double?>(null) }
+    var tripStartLng by rememberSaveable { mutableStateOf<Double?>(null) }
+    var tripPickupLat by rememberSaveable { mutableStateOf<Double?>(null) }
+    var tripPickupLng by rememberSaveable { mutableStateOf<Double?>(null) }
+    var tripDropoffLat by rememberSaveable { mutableStateOf<Double?>(null) }
+    var tripDropoffLng by rememberSaveable { mutableStateOf<Double?>(null) }
+
     // New Task Popup states
     var lastKnownScheduleId by remember { mutableStateOf<Int?>(null) }
     var showNewTaskOverlay by remember { mutableStateOf(false) }
@@ -2784,6 +2792,12 @@ val phase = tripPhase ?: "pending"
                                 "route_polyline" to GoogleMapsService.encodePolyline(actualRoutePoints),
                                 "recommended_route_polyline" to (nextSchedule?.route_polyline ?: ""),
                                 "status" to "completed",
+                                "start_latitude" to (tripStartLat ?: (if (actualRoutePoints.isNotEmpty()) actualRoutePoints.first().latitude else 0.0)),
+                                "start_longitude" to (tripStartLng ?: (if (actualRoutePoints.isNotEmpty()) actualRoutePoints.first().longitude else 0.0)),
+                                "pickup_latitude" to (tripPickupLat ?: 0.0),
+                                "pickup_longitude" to (tripPickupLng ?: 0.0),
+                                "dropoff_latitude" to (tripDropoffLat ?: (if (actualRoutePoints.isNotEmpty()) actualRoutePoints.last().latitude else 0.0)),
+                                "dropoff_longitude" to (tripDropoffLng ?: (if (actualRoutePoints.isNotEmpty()) actualRoutePoints.last().longitude else 0.0)),
                                 "created_at" to FieldValue.serverTimestamp(), // Fallback if recovered
                                 "completed_at" to FieldValue.serverTimestamp()
                             )
