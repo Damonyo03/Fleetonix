@@ -969,7 +969,7 @@ fun DriverDashboard(
                                         try {
                                             db.collection("trip_tickets").document(ticketId).update(
                                                 "total_km", totalDistanceMetres / 1000.0,
-                                                "route_polyline", routePolyline
+                                                "actual_route_polyline", routePolyline
                                             )
                                         } catch (e: Exception) {
                                             Log.e("DriverDashboard", "Live sync failed", e)

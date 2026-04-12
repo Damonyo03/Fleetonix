@@ -450,6 +450,11 @@ window.viewTripRoute = function (id, recommendedPolyline, actualPolyline, driver
 
     modal.style.display = 'flex';
 
+    // Constants for consistency with Android app
+    const ACCENT_TEAL = '#00C9A7';
+    const ACCENT_BLUE = '#4E6BFF';
+    const ACCENT_ORANGE = '#FFA24C';
+
     // Initialize map if not already done
     if (!routeMap) {
         routeMap = new google.maps.Map(document.getElementById('routeMap'), {
@@ -461,33 +466,29 @@ window.viewTripRoute = function (id, recommendedPolyline, actualPolyline, driver
                 { "elementType": "labels.text.fill", "stylers": [{ "color": "#746855" }] },
                 { "featureType": "administrative.locality", "elementType": "labels.text.fill", "stylers": [{ "color": "#d59563" }] },
                 { "featureType": "poi", "elementType": "labels.text.fill", "stylers": [{ "color": "#d59563" }] },
-                { "featureType": "poi.park", "elementType": "geometry", "stylers": [{ "color": "#263c3f" }] },
-                { "featureType": "poi.park", "elementType": "labels.text.fill", "stylers": [{ "color": "#6b9a76" }] },
                 { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#38414e" }] },
                 { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#212a37" }] },
                 { "featureType": "road", "elementType": "labels.text.fill", "stylers": [{ "color": "#9ca5b3" }] },
-                { "featureType": "road.highway", "elementType": "geometry", "stylers": [{ "color": "#746855" }] },
-                { "featureType": "road.highway", "elementType": "geometry.stroke", "stylers": [{ "color": "#1f2835" }] },
-                { "featureType": "road.highway", "elementType": "labels.text.fill", "stylers": [{ "color": "#f3d19c" }] },
-                { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#17263c" }] },
-                { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#515c6d" }] },
-                { "featureType": "water", "elementType": "labels.text.stroke", "stylers": [{ "color": "#17263c" }] }
+                { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#17263c" }] }
             ]
         });
     }
 
-    // Clear existing polylines
+    // Clear existing elements
     if (window._recommendedPath) window._recommendedPath.setMap(null);
     if (window._actualPath) window._actualPath.setMap(null);
+    if (window._startMarker) window._startMarker.setMap(null);
+    if (window._endMarker) window._endMarker.setMap(null);
 
     const bounds = new google.maps.LatLngBounds();
 
+    // 1. Draw Recommended path only if Actual is missing, or draw it faintly
     if (recommendedPolyline && recommendedPolyline !== 'undefined') {
         const path = google.maps.geometry.encoding.decodePath(recommendedPolyline);
         window._recommendedPath = new google.maps.Polyline({
             path: path,
             strokeColor: '#64748b',
-            strokeOpacity: 0.6,
+            strokeOpacity: actualPolyline ? 0.2 : 0.6, // Dim if actual exists
             strokeWeight: 4,
             map: routeMap,
             icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 2 }, offset: '0', repeat: '10px' }]
@@ -495,16 +496,54 @@ window.viewTripRoute = function (id, recommendedPolyline, actualPolyline, driver
         path.forEach(p => bounds.extend(p));
     }
 
+    // 2. Draw Actual path (The "Source of Truth")
     if (actualPolyline && actualPolyline !== 'undefined') {
         const path = google.maps.geometry.encoding.decodePath(actualPolyline);
         window._actualPath = new google.maps.Polyline({
             path: path,
-            strokeColor: '#00d4ff',
+            strokeColor: ACCENT_TEAL,
             strokeOpacity: 1.0,
-            strokeWeight: 6,
+            strokeWeight: 10,
+            strokeLinecap: 'round',
+            strokeLinejoin: 'round',
             map: routeMap
         });
+
+        // Add Telemetry Markers (Pickup and Dropoff at exact GPS points)
+        if (path.length > 0) {
+            window._startMarker = new google.maps.Marker({
+                position: path[0],
+                map: routeMap,
+                title: 'Actual Recorded Start',
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    fillColor: ACCENT_BLUE,
+                    fillOpacity: 1,
+                    strokeColor: '#FFFFFF',
+                    strokeWeight: 2,
+                    scale: 8
+                }
+            });
+
+            window._endMarker = new google.maps.Marker({
+                position: path[path.length - 1],
+                map: routeMap,
+                title: 'Actual Recorded End',
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    fillColor: ACCENT_ORANGE,
+                    fillOpacity: 1,
+                    strokeColor: '#FFFFFF',
+                    strokeWeight: 2,
+                    scale: 8
+                }
+            });
+        }
+
         path.forEach(p => bounds.extend(p));
+        
+        // If Actual exists, we ensure Recommended is de-emphasized
+        if (window._recommendedPath) window._recommendedPath.setOptions({ strokeOpacity: 0.1 });
     }
 
     if (!bounds.isEmpty()) {

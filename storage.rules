@@ -5,9 +5,10 @@ service firebase.storage {
     // Helper to check if user is an admin
     function isAdmin() {
       return request.auth != null && (
-        request.auth.token.role == 'admin' || 
-        request.auth.token.role == 'super_admin' ||
-        request.auth.token.user_type == 'admin'
+        ('role' in request.auth.token && request.auth.token.role == 'admin') ||
+        ('role' in request.auth.token && request.auth.token.role == 'super_admin') ||
+        ('role' in request.auth.token && request.auth.token.role == 'company_admin') ||
+        ('user_type' in request.auth.token && request.auth.token.user_type == 'admin')
       );
     }
 
@@ -16,16 +17,19 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    // profile_photos: Authenticated users can read/write
+    // profile_photos: OWNER ONLY read/write (Hardened MSL-01)
     match /profile_photos/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
+      allow read, write: if request.auth.uid == userId || isAdmin();
     }
 
-    // Default: Deny all other writes, allow authenticated reads
+    // signatures: OWNER ONLY read/write (Protects against MSL-02)
+    match /signatures/{userId} {
+      allow read, write: if request.auth.uid == userId || isAdmin();
+    }
+
+    // Default: Deny all other access unless Admin
     match /{allPaths=**} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow read, write: if isAdmin();
     }
   }
 }

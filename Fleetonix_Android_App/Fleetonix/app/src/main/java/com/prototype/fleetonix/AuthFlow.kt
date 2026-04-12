@@ -150,16 +150,16 @@ fun AuthFlow() {
                         isFirstLoginMode = false
                         isDriverVerified = true
                         Log.d("AuthFlow", "Account is ACTIVE. Overriding all gates for $uid")
+                    } else if (status == "pending_verification" || isFirstTime) {
+                        isPendingApproval = false
+                        isFirstLoginMode = true
+                        isDriverVerified = false // Force verification flow
+                        Log.d("AuthFlow", "Account requires SETUP (OTP + PW Change) for $uid")
                     } else {
                         isPendingApproval = (status == "pending_approval" || status == "pending")
-                        
-                        if (isFirstTime) {
-                            isFirstLoginMode = true
-                            // Don't reset isDriverVerified if it was set explicitly in this session
-                        } else {
-                            isFirstLoginMode = false
-                            isDriverVerified = true 
-                        }
+                        isFirstLoginMode = false
+                        isDriverVerified = true 
+                        Log.d("AuthFlow", "Account is PENDING APPROVAL or legacy active for $uid")
                     }
                     
                     Log.d("AuthFlow", "Status Update: $status, Pending: $isPendingApproval, Verified: $isDriverVerified, FirstMode: $isFirstLoginMode")
@@ -216,7 +216,7 @@ fun AuthFlow() {
 
         val email = user.email?.lowercase()?.trim()
         if (BuildConfig.DEBUG) {
-            Log.d("AuthFlow", "Subscribing to schedules for: $email (refresh: $refreshTrigger)")
+            Log.d("AuthFlow", "Subscribing to schedules (refresh: $refreshTrigger)")
         }
 
         val listener = db.collection("schedules")

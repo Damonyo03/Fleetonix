@@ -87,78 +87,30 @@ fun OTPVerifyScreen(
                 errorMessage = null
 
                 if (BuildConfig.DEBUG) {
-                    android.util.Log.d("OTPVerifyScreen", "Verifying OTP via Firestore for $userEmail")
+                    android.util.Log.d("OTPVerifyScreen", "Verifying OTP via Secure API for $userId")
                 }
 
-                var otpDoc = db.collection("otps").document(userId).get().await()
-                var sourceCollection = "otps"
-                
-                // FALLBACK: Check registration_otps for new driver activation
-                if (!otpDoc.exists()) {
-                    otpDoc = db.collection("registration_otps").document(userEmail.lowercase().trim()).get().await()
-                    sourceCollection = "registration_otps"
-                }
+                // Call the secure Cloud Function API instead of raw Firestore
+                val response = FleetonixApi.driverService.verifyForgotPasswordOTP(
+                    DriverOTPVerifyRequest(
+                        userId = userId,
+                        otpCode = trimmedOtp
+                    )
+                )
 
-                if (!otpDoc.exists()) {
-                    errorMessage = "OTP not found. Please click resend to get a new code."
-                    isLoading = false
-                    return@launch
-                }
-
-                // Check for 'otp' field (otps col) or 'code' field (registration_otps col)
-                val storedOtp = otpDoc.getString("otp") ?: otpDoc.getString("code")
-                val expiresAt = otpDoc.getTimestamp("expires_at")
-                
-                if (storedOtp == trimmedOtp) {
-                    if (expiresAt != null && expiresAt.toDate().after(java.util.Date())) {
-                        // Success!
-                        if (BuildConfig.DEBUG) {
-                            android.util.Log.d("OTPVerifyScreen", "OTP verified successfully via $sourceCollection")
-                        }
-                        
-                        // Delete OTP after success
-                        db.collection(sourceCollection).document(otpDoc.id).delete()
-                        
-                        // Prepare DriverLoginData
-                        val userDoc = db.collection("users").document(userId).get().await()
-                        val userData = userDoc.data
-                        
-                        val driverSnap = db.collection("drivers")
-                            .whereEqualTo("driver_email", userEmail)
-                            .get()
-                            .await()
-                        val driverData = driverSnap.documents.firstOrNull()?.data
-
-                        val loginData = DriverLoginData(
-                            sessionToken = "firebase_$userId",
-                            user = DriverUser(
-                                id = userId,
-                                userType = "driver",
-                                name = userData?.get("full_name") as? String,
-                                email = userEmail
-                            ),
-                            driver = DriverProfile(
-                                id = driverSnap.documents.firstOrNull()?.id,
-                                profileImageUrl = driverData?.get("profile_image_url") as? String,
-                                carDetails = driverData?.get("car_details") as? String,
-                                carColor = driverData?.get("car_color") as? String,
-                                vehicleAssigned = driverData?.get("vehicle_assigned") as? String,
-                                vehicleType = driverData?.get("vehicle_type") as? String,
-                                plateNumber = driverData?.get("plate_number") as? String,
-                                currentMileage = (driverData?.get("current_mileage") as? Number)?.toDouble(),
-                                currentStatus = driverData?.get("current_status") as? String ?: "available"
-                            )
-                        )
-                        onVerified(loginData, trimmedOtp)
-                    } else {
-                        errorMessage = "OTP has expired. Please login again."
+                if (response.success && response.data != null) {
+                    val loginData = response.data
+                    if (BuildConfig.DEBUG) {
+                        android.util.Log.d("OTPVerifyScreen", "OTP verified successfully via API")
                     }
+                    
+                    onVerified(loginData, trimmedOtp)
                 } else {
-                    errorMessage = "Invalid OTP code. Please try again."
+                    errorMessage = response.message.ifBlank { "Invalid OTP code" }
                 }
             } catch (ex: Exception) {
-                android.util.Log.e("OTPVerifyScreen", "Exception during OTP verification", ex)
-                errorMessage = ex.message ?: "Verification failed"
+                android.util.Log.e("OTPVerifyScreen", "Exception during OTP verification")
+                errorMessage = "Verification failed. Please try again."
             } finally {
                 isLoading = false
             }

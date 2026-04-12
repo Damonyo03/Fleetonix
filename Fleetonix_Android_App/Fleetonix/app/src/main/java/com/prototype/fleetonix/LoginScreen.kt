@@ -98,9 +98,9 @@ fun LoginScreen(
                     val db = FirebaseFirestore.getInstance()
                     val userDoc = db.collection("users").document(user.uid).get().await()
                     
-                        // Login successful - OTP suppressed as requested
+                        // Login successful - handing over to AuthFlow for status verification
                         if (BuildConfig.DEBUG) {
-                            Log.d("LoginScreen", "Login successful for ${user.email}. Handing over to AuthFlow.")
+                            Log.d("LoginScreen", "Login successful. Auth state changed.")
                         }
                 }
                 

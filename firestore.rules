@@ -2,18 +2,27 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── Reusable Admin Gate ───────────────────────────────────────────
-    function isAdmin() {
-      let u = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-      return u.role in ['super_admin', 'company_admin', 'admin'] || 
-             u.user_type in ['super_admin', 'company_admin', 'admin'];
+    // ── Reusable Logic ───────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    // ── driver_locations: owner-only write, auth-only read ──────────────
+    function isAdmin() {
+      let path = /databases/$(database)/documents/users/$(request.auth.uid);
+      return exists(path) && (
+        get(path).data.get('role', 'none') in ['super_admin', 'company_admin', 'admin'] || 
+        get(path).data.get('user_type', 'none') in ['super_admin', 'company_admin', 'admin']
+      );
+    }
+
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // ── driver_locations: owner-only write, admins-only read ──────────────
     match /driver_locations/{docId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null
-        && (request.auth.uid == docId || request.auth.token.email.lower() == docId.lower())
+      allow read: if isSignedIn() && (isOwner(docId) || isAdmin());
+      allow write: if isSignedIn() && isOwner(docId)
         // Coordinate plausibility guard
         && request.resource.data.current_latitude is number
         && request.resource.data.current_latitude >= -90
@@ -23,22 +32,32 @@ service cloud.firestore {
         && request.resource.data.current_longitude <= 180;
     }
 
-    // ── drivers: admins full CRUD; self-ownership read/write ────────────
+    // ── drivers: admins full access; self-read/update ────────────
     match /drivers/{userId} {
-      allow read, write: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow update: if isSignedIn() && isOwner(userId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+             'current_status', 'current_trip_id', 'current_trip_phase', 
+             'current_mileage', 'active_ticket_id', 'last_updated', 'on_break',
+             'profile_image_url'
+           ]);
+      allow write: if isSignedIn() && isAdmin();
     }
 
-    // ── bookings: admins full CRUD ─────────────────────────────────────
+    // ── bookings: admins full access (Drivers never read these) ─────────
     match /bookings/{docId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && isAdmin();
+      allow read, write: if isSignedIn() && isAdmin();
     }
 
-    // ── schedules: drivers update trip_phase only; admins full write ────
+    // ── schedules: assigned driver read/update; admins full write ────
     match /schedules/{docId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && isAdmin();
-      allow update: if request.auth != null
+      // Drivers can read if they are the assigned driver
+      allow read: if isSignedIn() && (
+        request.auth.token.email.lower() == resource.data.driver_email.lower() || 
+        isAdmin()
+      );
+      allow write: if isSignedIn() && isAdmin();
+      allow update: if isSignedIn()
         && request.auth.token.email.lower() == resource.data.driver_email.lower()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
              'status', 'trip_phase', 'accepted_at', 'started_at', 'picked_up_at', 
@@ -51,76 +70,64 @@ service cloud.firestore {
            ]);
     }
 
-    // ── drivers: drivers update own status; admins full access ───────────
-    match /drivers/{docId} {
-      allow read: if request.auth != null;
-      allow update: if request.auth != null
-        && (resource.data.driver_email.lower() == request.auth.token.email.lower()
-            || docId == request.auth.uid)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-             'current_status', 'current_trip_id', 'current_trip_phase', 
-             'current_mileage', 'active_ticket_id', 'last_updated', 'on_break',
-             'profile_image_url'
-           ]);
-      allow write: if request.auth != null && isAdmin();
-    }
-
-    // ── trip_tickets: drivers create/update own; admins full access ──────
+    // ── trip_tickets: drivers create/read own; admins full access ──────
     match /trip_tickets/{docId} {
-      allow read: if request.auth != null;
-      allow create, update: if request.auth != null
+      allow read: if isSignedIn() && (
+        resource.data.driver_uid == request.auth.uid || 
+        resource.data.driver_email.lower() == request.auth.token.email.lower() ||
+        isAdmin()
+      );
+      allow create, update: if isSignedIn()
         && (request.resource.data.driver_email.lower() == request.auth.token.email.lower()
             || request.resource.data.driver_uid == request.auth.uid);
-      allow delete: if request.auth != null && isAdmin();
+      allow delete: if isSignedIn() && isAdmin();
     }
 
-    // ── incidents: drivers can create; admins full access ───────────────
+    // ── incidents/accidents/vehicle_issues: drivers create own; admin full access ─
     match /incidents/{docId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null
-        && request.resource.data.driver_email.lower() == request.auth.token.email.lower();
-      allow update, delete: if request.auth != null && isAdmin();
+      allow read: if isSignedIn() && (resource.data.driver_uid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.driver_email.lower() == request.auth.token.email.lower();
+      allow update, delete: if isSignedIn() && isAdmin();
     }
-
-    // ── accidents: drivers can create; admins full access ───────────────
     match /accidents/{docId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null
-        && request.resource.data.driver_email.lower() == request.auth.token.email.lower();
-      allow update, delete: if request.auth != null && isAdmin();
+      allow read: if isSignedIn() && (resource.data.driver_uid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.driver_email.lower() == request.auth.token.email.lower();
+      allow update, delete: if isSignedIn() && isAdmin();
     }
-
-    // ── vehicle_issues: drivers can create; admins full access ──────────
     match /vehicle_issues/{docId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null
-        && request.resource.data.driver_email.lower() == request.auth.token.email.lower();
-      allow update, delete: if request.auth != null && isAdmin();
+      allow read: if isSignedIn() && (resource.data.driver_uid == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.driver_email.lower() == request.auth.token.email.lower();
+      allow update, delete: if isSignedIn() && isAdmin();
     }
 
-    // ── dtr_logs: drivers write own records; admins full access ──────────
+    // ── dtr_logs: drivers write/read own records; admins full access ──────
     match /dtr_logs/{docId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null
-        && request.resource.data.driver_email.lower()
-             == request.auth.token.email.lower();
-      allow update, delete: if request.auth != null && isAdmin();
+      allow read: if isSignedIn() && (resource.data.driver_email.lower() == request.auth.token.email.lower() || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.driver_email.lower() == request.auth.token.email.lower();
+      allow update, delete: if isSignedIn() && isAdmin();
     }
 
-    // ── users: users update own profile details; admins full CRUD ───────
+    // ── users: users read/update own profile; admins full CRUD ───────
     match /users/{userId} {
-      allow read: if request.auth != null;
-      allow update: if request.auth != null && (request.auth.uid == userId)
+      allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
+      allow update: if isSignedIn() && isOwner(userId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
              'profile_image_url', 'full_name', 'phone', 'updated_at'
            ]);
-      allow write: if request.auth != null && isAdmin();
+      allow write: if isSignedIn() && isAdmin();
     }
 
-    // ── Everything else: admin-only write ───────────────────────────────
+    // ── SECURITY: OTP Collections - CLOUD FUNCTIONS ONLY ────────────────
+    match /otps/{docId} {
+      allow read, write: if false; 
+    }
+    match /registration_otps/{docId} {
+      allow read, write: if false;
+    }
+
+    // ── Everything else: Default Deny ───────────────────────────────
     match /{document=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && isAdmin();
+      allow read, write: if false;
     }
   }
 }

@@ -161,7 +161,7 @@ exports.sendPasswordResetOTP = onRequest({ cors: true }, async (req, res) => {
     await admin.firestore().collection("otps").doc(userRecord.uid).set({
       email: email,
       hash: otpHash,
-      otp: otp, // Added to support Android app direct Firestore read
+      attempts: 0,
       created_at: admin.firestore.FieldValue.serverTimestamp(),
       expires_at: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 15 * 60 * 1000)),
     });
@@ -207,7 +207,15 @@ exports.resetPasswordWithOTP = onRequest({ cors: true }, async (req, res) => {
     // Support both 'hash' field and 'code' field for flexibility
     const isValid = (data.hash === incomingHash) || (data.code === otp) || (data.otp === otp);
 
-    if (!isValid) return res.status(401).json({ success: false, message: "Invalid OTP code." });
+    if (!isValid) {
+      const newAttempts = (data.attempts || 0) + 1;
+      if (newAttempts >= 5) {
+          await db.collection(sourceCollection).doc(otpDoc.id).delete();
+          return res.status(401).json({ success: false, message: "Too many failed attempts. Please request a new code." });
+      }
+      await db.collection(sourceCollection).doc(otpDoc.id).update({ attempts: newAttempts });
+      return res.status(401).json({ success: false, message: `Invalid OTP code. ${5 - newAttempts} attempts remaining.` });
+    }
     
     // Check expiration (Registration OTPs might use 'expires_at', otps uses 'expires_at')
     const expiry = data.expires_at?.toDate ? data.expires_at.toDate() : new Date(Date.now() + 1000000); // Default to safe far-future if missing
@@ -215,6 +223,32 @@ exports.resetPasswordWithOTP = onRequest({ cors: true }, async (req, res) => {
 
     await admin.auth().updateUser(userId, { password: targetPassword });
     
+    // If this was an activation OTP (registration), move status to pending_approval
+    if (sourceCollection === "registration_otps") {
+        await db.collection("users").doc(userId).update({
+            status: "pending_approval",
+            activated_at: admin.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // Also update driver status if applicable
+        const driverDoc = await db.collection("drivers").doc(userId).get();
+        if (driverDoc.exists) {
+            await db.collection("drivers").doc(userId).update({
+                status: "pending_approval"
+            });
+        }
+
+        // AUDIT: Notify Admin for Approval (mirroring verifyAndActivateAccount)
+        await db.collection("notifications").add({
+            title: "New Enrollment Approval",
+            message: `User ${userId} has set their password and is waiting for activation.`,
+            type: "enrollment",
+            created_at: admin.firestore.FieldValue.serverTimestamp(),
+            is_read: false,
+            role: "admin"
+        });
+    }
+
     // Clean up the used OTP
     await db.collection(sourceCollection).doc(otpDoc.id).delete();
 
@@ -231,14 +265,70 @@ exports.verifyOTP = onRequest({ cors: true }, async (req, res) => {
   if (!userId || !otpCode) return res.status(200).json({ success: false, message: "Missing fields" });
 
   try {
-    const doc = await admin.firestore().collection("otps").doc(userId).get();
-    if (!doc.exists) return res.json({ success: false, message: "Token expired" });
+    let otpDoc = await admin.firestore().collection("otps").doc(userId).get();
+    let sourceCollection = "otps";
+    
+    // FALLBACK: If not found in 'otps', check 'registration_otps' by email (new driver activation)
+    if (!otpDoc.exists) {
+        try {
+            const userAuth = await admin.auth().getUser(userId);
+            const email = userAuth.email.toLowerCase().trim();
+            otpDoc = await admin.firestore().collection("registration_otps").doc(email).get();
+            sourceCollection = "registration_otps";
+        } catch (authError) {
+            // User not found in Auth, doc remains !exists
+        }
+    }
 
+    if (!otpDoc.exists) return res.json({ success: false, message: "Token expired or not found" });
+
+    const data = otpDoc.data();
     const incomingHash = crypto.createHash("sha256").update(otpCode).digest("hex");
-    if (doc.data().hash === incomingHash) {
-      res.json({ success: true, message: "OTP verified" });
+    
+    // Support both 'hash' field and legacy fields 'code'/'otp'
+    const isValid = (data.hash === incomingHash) || (data.code === otpCode) || (data.otp === otpCode);
+
+    if (isValid) {
+      // Fetch profile data...
+      const userSnap = await admin.firestore().collection("users").doc(userId).get();
+      const userData = userSnap.exists ? userSnap.data() : {};
+      
+      const driverSnap = await admin.firestore().collection("drivers").doc(userId).get();
+      const driverData = driverSnap.exists ? driverSnap.data() : {};
+
+      res.json({ 
+        success: true, 
+        message: "OTP verified",
+        data: {
+          session_token: `firebase_${userId}`,
+          user: {
+            id: userId,
+            user_type: userData.user_type || userData.role || "driver",
+            name: userData.full_name || userData.fullName,
+            email: userData.email,
+            phone: userData.phone
+          },
+          driver: {
+            id: userId,
+            profile_image_url: driverData.profile_image_url,
+            car_details: driverData.car_details,
+            car_color: driverData.car_color,
+            vehicle_assigned: driverData.vehicle_assigned,
+            vehicle_type: driverData.vehicle_type,
+            plate_number: driverData.plate_number,
+            current_mileage: driverData.current_mileage,
+            current_status: driverData.current_status || "available"
+          }
+        }
+      });
     } else {
-      res.json({ success: false, message: "Invalid OTP" });
+      const newAttempts = (data.attempts || 0) + 1;
+      if (newAttempts >= 5) {
+          await admin.firestore().collection(sourceCollection).doc(otpDoc.id).delete();
+          return res.json({ success: false, message: "Too many failed attempts. Please request a new code." });
+      }
+      await admin.firestore().collection(sourceCollection).doc(otpDoc.id).update({ attempts: newAttempts });
+      res.json({ success: false, message: `Invalid OTP. ${5 - newAttempts} attempts remaining.` });
     }
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });
@@ -296,6 +386,7 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
       role: role,
       company_name: "Jettsan",
       status: "pending_verification",
+      isFirstLogin: true,
       created_at: admin.firestore.FieldValue.serverTimestamp(),
     };
 
@@ -316,7 +407,8 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
     await admin.firestore().collection("registration_otps").doc(emailLower).set({
         email: emailLower,
         hash: otpHash,
-        code: otp,
+        attempts: 0,
+        // REMOVED: Insecure plaintext 'code' field
         created_at: admin.firestore.FieldValue.serverTimestamp(),
         expires_at: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 24 * 60 * 60 * 1000)),
     });
