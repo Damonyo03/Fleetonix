@@ -51,22 +51,6 @@ export async function exportToExcel(data, fileName, sheetName = 'Sheet1', header
             const rowValues = keys.map(k => item[k]);
             const row = worksheet.addRow(rowValues);
             
-            // Handle Signature Embedding
-            if (item._raw_signature && item._raw_signature.startsWith('data:image')) {
-                const imageId = workbook.addImage({
-                    base64: item._raw_signature,
-                    extension: 'png',
-                });
-                
-                // Position image in the "Signature" column
-                const sigColIndex = keys.indexOf("Signature") + 1;
-                worksheet.addImage(imageId, {
-                    tl: { col: sigColIndex - 0.9, row: row.number - 0.9 },
-                    ext: { width: 100, height: 40 }
-                });
-                row.height = 45; // Adjust row height to fit signature
-            }
-
             // Handle Map Hyperlinks for Pickup place
             const placeColIndex = keys.indexOf("Pickup place") + 1;
             if (item._pickup_coords && item._pickup_coords.lat) {
@@ -168,12 +152,9 @@ export function mapTicketsForExport(tickets) {
             "ARRIVAL TIME": arrivalAt,
             "DROP-OFF PLACE": dropoffLocation,
             "PASSENGER'S NAME": t.passenger_name || t.client_name || '—',
-            "SIGNATURE": "", // Image will be overlaid here
             "PURPOSE": t.isOfficial !== false ? "OFFICIAL" : "PERSONAL",
             "ODOMETER": formatValue(t.odometer_reading_end || t.odometer_end || 0, 'number'),
-            "OVERTIME": (t.is_overtime || t.isOvertime) ? "YES" : "NO",
-            // Hidden fields for processing
-            "_raw_signature": t.driver_signature || null
+            "OVERTIME": (t.is_overtime || t.isOvertime) ? "YES" : "NO"
         };
     });
 }
@@ -251,23 +232,6 @@ export async function exportGCRTripTicket(data, context) {
             const row = worksheet.addRow(rowValues);
             row.height = 25;
             
-            // Signature Column (Index 7 - Col G)
-            if (item._raw_signature && item._raw_signature.startsWith('data:image')) {
-                try {
-                    const imageId = workbook.addImage({
-                        base64: item._raw_signature,
-                        extension: 'png',
-                    });
-                    worksheet.addImage(imageId, {
-                        tl: { col: 6, row: row.number - 1 },
-                        ext: { width: 80, height: 35 }
-                    });
-                    row.height = 40;
-                } catch (e) {
-                    console.error("Signature image error:", e);
-                }
-            }
-
             // Borders for all cells
             row.eachCell((cell) => {
                 cell.border = {

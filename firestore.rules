@@ -63,8 +63,8 @@ service cloud.firestore {
              'status', 'trip_phase', 'accepted_at', 'started_at', 'picked_up_at', 
              'dropped_off_at', 'completed_at', 'driver_viewed_at', 'total_km_travelled', 
              'current_segment_index', 'total_segments_completed', 'segments', 
-             'odometer_start', 'odometer_end', 'passenger_signature_url', 
-             'driver_signature_url', 'refusal_reason', 'vehicle_type', 'plate_number', 
+             'odometer_start', 'odometer_end', 'refusal_reason', 
+             'vehicle_type', 'plate_number', 
              'route_polyline', 'actual_route_polyline', 'time_of_departure', 'time_of_arrival', 'last_updated',
              'cancellation_reason', 'cancelled_at'
            ]);

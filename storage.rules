@@ -22,11 +22,6 @@ service firebase.storage {
       allow read, write: if request.auth.uid == userId || isAdmin();
     }
 
-    // signatures: OWNER ONLY read/write (Protects against MSL-02)
-    match /signatures/{userId} {
-      allow read, write: if request.auth.uid == userId || isAdmin();
-    }
-
     // Default: Deny all other access unless Admin
     match /{allPaths=**} {
       allow read, write: if isAdmin();

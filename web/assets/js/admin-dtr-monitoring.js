@@ -123,8 +123,7 @@ function renderLogs(docs) {
             "Action Status": log.is_overtime ? `${actionLabel} (OT)` : actionLabel,
             "Precision Timestamp": timeString,
             "GPS Location": typeof gpsText === 'string' && gpsText.includes('<a') ? `${Number(log.latitude).toFixed(4)}, ${Number(log.longitude).toFixed(4)}` : gpsText,
-            "Audit Notes": log.notes || '',
-            "Signature Designation": "" // Always empty
+            "Audit Notes": log.notes || ''
         });
         
         return `
