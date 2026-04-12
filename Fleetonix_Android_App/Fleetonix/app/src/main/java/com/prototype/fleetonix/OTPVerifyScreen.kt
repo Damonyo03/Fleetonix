@@ -50,7 +50,7 @@ import retrofit2.HttpException
 fun OTPVerifyScreen(
     userId: String,
     userEmail: String,
-    onVerified: (DriverLoginData, String) -> Unit,
+    onVerified: (DriverOTPData, String) -> Unit,
     onBack: () -> Unit
 ) {
     var otpCode by rememberSaveable { mutableStateOf("") }
