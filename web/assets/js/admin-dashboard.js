@@ -57,7 +57,7 @@ onAuthStateChanged(auth, async (user) => {
         return;
     }
 
-    initLayout('Dashboard', name);
+    initLayout('Dashboard', name, 0, role);
 
     const welcomeMsg = document.getElementById('welcomeMessage');
     if (welcomeMsg) welcomeMsg.innerText = `Welcome back, ${name}! Here's your fleet overview.`;

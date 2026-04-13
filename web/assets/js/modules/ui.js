@@ -19,6 +19,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (cachedName) {
         _applyUserName(cachedName);
     }
+
+    // Apply role-based nav restrictions instantly from cache (before Firebase resolves)
+    const cachedRole = localStorage.getItem(USER_ROLE_KEY);
+    if (cachedRole) {
+        _applyRoleNavRestrictions(cachedRole);
+    }
 });
 
 /** Internal helper: writes the user name to all known user-menu elements. */
@@ -49,6 +55,26 @@ export function cacheUser(name, role = '') {
     if (role) localStorage.setItem(USER_ROLE_KEY, role);
 }
 
+/**
+ * Hides sidebar nav items that should not be visible for a given role.
+ * Currently: 'admin' cannot see the Dashboard Map link.
+ * @param {string} role
+ */
+function _applyRoleNavRestrictions(role) {
+    if (role === 'admin') {
+        // Hide all nav links pointing to dashboard.html
+        document.querySelectorAll('.nav-item, a[href]').forEach(el => {
+            const href = el.getAttribute('href') || '';
+            if (href.includes('dashboard.html')) {
+                el.style.display = 'none';
+            }
+        });
+
+        // Also hide the MONITORING section label if Dashboard Map was the only item
+        // (keep DTR and Drivers visible — they're accessible to admins)
+    }
+}
+
 /** Returns the cached display name, or null if not set. */
 export function getCachedUserName() {
     return localStorage.getItem(USER_CACHE_KEY);
@@ -67,7 +93,7 @@ export function clearUserCache() {
  * @param {string} [userName]  - Logged-in user's display name. If omitted, the cached name is used.
  * @param {number} [unreadCount=0]
  */
-export function initLayout(pageTitle, userName, unreadCount = 0) {
+export function initLayout(pageTitle, userName, unreadCount = 0, role = '') {
     const sidebar    = document.getElementById('sidebar');
     const menuToggle = document.getElementById('menuToggle');
 
@@ -103,8 +129,9 @@ export function initLayout(pageTitle, userName, unreadCount = 0) {
     const resolvedName = (userName && userName.trim()) ? userName.trim() : (getCachedUserName() || 'User');
 
     // Persist/update the cache so the NEXT page can render it immediately.
+    const resolvedRole = role || localStorage.getItem(USER_ROLE_KEY) || '';
     if (userName && userName.trim()) {
-        cacheUser(userName.trim());
+        cacheUser(userName.trim(), resolvedRole);
     }
 
     // ── Header title ─────────────────────────────────────────────────────────
@@ -136,7 +163,12 @@ export function initLayout(pageTitle, userName, unreadCount = 0) {
     const sidebarCount = document.querySelector('.notif-count');
     if (sidebarCount) {
         sidebarCount.innerText = unreadCount >= 0 ? unreadCount : '0';
-        sidebarCount.style.display = 'inline-flex'; // Always keep visible or handle in caller
+        sidebarCount.style.display = 'inline-flex';
+    }
+
+    // ── Role-based nav restrictions ───────────────────────────────────────────
+    if (resolvedRole) {
+        _applyRoleNavRestrictions(resolvedRole);
     }
 }
 
