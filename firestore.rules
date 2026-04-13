@@ -36,7 +36,10 @@ service cloud.firestore {
     match /drivers/{userId} {
       allow read: if isSignedIn() && (isOwner(userId) || resource.data.get('driver_uid', '') == request.auth.uid || isAdmin());
       allow update: if isSignedIn() 
-        && (isOwner(userId) || resource.data.get('driver_uid', '') == request.auth.uid || getAuthEmail() == resource.data.get('driver_email', '').lower() || isAdmin())
+        && (isOwner(userId) || 
+            resource.data.get('driver_uid', '') == request.auth.uid || 
+            ( (resource.data.get('driver_uid', '') == '' || resource.data.get('driver_uid', null) == null) && getAuthEmail() == resource.data.get('driver_email', '').lower() ) ||
+            isAdmin())
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
              'current_status', 'current_trip_id', 'current_trip_phase', 
              'current_mileage', 'active_ticket_id', 'last_updated', 'on_break',
@@ -57,7 +60,7 @@ service cloud.firestore {
       allow write: if isSignedIn() && isAdmin();
       allow update: if isSignedIn()
         && (resource.data.get('driver_uid', '') == request.auth.uid || 
-            (resource.data.get('driver_uid', '') == '' && getAuthEmail() == resource.data.get('driver_email', '').lower()) || 
+            ( (resource.data.get('driver_uid', '') == '' || resource.data.get('driver_uid', null) == null) && getAuthEmail() == resource.data.get('driver_email', '').lower()) || 
             isAdmin())
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
              'status', 'trip_phase', 'accepted_at', 'started_at', 'picked_up_at', 

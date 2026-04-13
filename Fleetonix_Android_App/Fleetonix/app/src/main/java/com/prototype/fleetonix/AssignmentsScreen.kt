@@ -760,7 +760,8 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                                                         "trip_phase", "accepted",
                                                         "odometer_start", odo,
                                                         "driver_uid", auth.currentUser?.uid,
-                                                        "accepted_at", com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                                        "accepted_at", com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                                                        "updated_at", com.google.firebase.firestore.FieldValue.serverTimestamp()
                                                     ).await()
 
                                                     // Sync to drivers collection
@@ -773,8 +774,9 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                                                         driverSnap.documents.firstOrNull()?.reference?.update(
                                                             "current_status", "on_schedule",
                                                             "current_trip_id", item.docId,
-                                                            "current_trip_phase", "accepted"
-                                                        )
+                                                            "current_trip_phase", "accepted",
+                                                            "updated_at", com.google.firebase.firestore.FieldValue.serverTimestamp()
+                                                        )?.await()
                                                     }
 
                                                     onBack()
