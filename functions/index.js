@@ -173,9 +173,11 @@ exports.sendPasswordResetOTP = onRequest({ cors: true }, async (req, res) => {
       html: getOTPHtmlTemplate(otp, email),
     });
 
-    res.json({ success: true, message: "OTP sent successfully" });
+    res.json({ success: true, message: "OTP sent successfully", data: { userId: userRecord.uid } });
   } catch (error) {
-    res.json({ success: true, message: "If an account exists, an OTP has been sent." });
+    // Return a vague success to avoid email enumeration, but still log the real error
+    logger.error("sendPasswordResetOTP error:", error.message);
+    res.json({ success: false, message: "No account found with that email address." });
   }
 });
 
