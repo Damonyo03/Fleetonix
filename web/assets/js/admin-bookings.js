@@ -250,7 +250,7 @@ async function showCreateBookingModal(clients) {
         </div>
 
         <div class="form-group">
-            <label for="modal_driver">Assign Driver (Optional)</label>
+            <label for="modal_driver">Assign Driver</label>
             <select id="modal_driver" class="form-select">
                 <option value="">-- No Driver Assigned --</option>
             </select>
@@ -448,10 +448,7 @@ async function showCreateBookingModal(clients) {
         });
 
         alert("Booking created successfully! " + (autoDispatch ? "It has been sent to dispatch." : "It is now pending approval."));
-        
-        if (autoDispatch) {
-            window.location.href = 'schedules.html';
-        }
+        hideModal('admin-booking-modal');
     });
 
     // Handle Unsubscribes when modal closes
@@ -520,10 +517,11 @@ function initBookingList() {
 }
 
 function applyFilters() {
-    if (!bookingTableBody) return;
+    if (!bookingTableBody || !statusFilter) return;
+    const filterValue = statusFilter.value;
     const filtered = allBookings.filter(d => {
         const b = d.data();
-        const matchStatus = status === 'all' || b.status === status;
+        const matchStatus = filterValue === 'all' || b.status === filterValue;
         return matchStatus;
     });
     renderBookings(filtered);
@@ -744,8 +742,8 @@ window.assignDriver = async (id) => {
         });
 
         alert("Driver assigned and schedule created!");
+        hideModal('assign-modal');
         clearModalListeners();
-        window.location.href = 'schedules.html';
     });
 
     // Handle Unsubscribes for this modal
