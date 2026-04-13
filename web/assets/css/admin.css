@@ -38,14 +38,23 @@
     --text-muted: #64748b;
     
     /* Spacing & Borders */
-    --radius-lg: 16px;
-    --radius-md: 12px;
+    --padding-card: 24px;
+    --radius-lg: 24px; /* Heavy Squircle */
+    --radius-md: 16px;
     --radius-sm: 8px;
     --border-color: rgba(255, 255, 255, 0.1);
     
     /* Sidebar Width */
     --sidebar-width: 280px;
     --sidebar-collapsed: 80px;
+}
+
+/* ── Mobile Overrides for Root Variables ────────────────────────────────────── */
+@media (max-width: 768px) {
+    :root {
+        --padding-card: 16px;
+        --sidebar-width: 0px; /* Hide desktop margin */
+    }
 }
 
 * {
@@ -73,7 +82,7 @@ body {
 /* ── Sidebar ───────────────────────────────────────────────────────────────── */
 
 .sidebar {
-    width: var(--sidebar-width);
+    width: 280px; /* Base width */
     background: var(--bg-secondary);
     border-right: 1px solid var(--border-color);
     height: 100vh;
@@ -81,9 +90,21 @@ body {
     top: 0;
     left: 0;
     z-index: 1000;
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28);
     display: flex;
     flex-direction: column;
+}
+
+/* Mobile Sidebar (Slide-out) */
+@media (max-width: 768px) {
+    .sidebar {
+        transform: translateX(-100%);
+        box-shadow: 0 0 50px rgba(0,0,0,0.8);
+    }
+    
+    .sidebar.show {
+        transform: translateX(0);
+    }
 }
 
 .sidebar-header {
@@ -176,6 +197,7 @@ body {
     flex-direction: column;
     min-height: 100vh;
     transition: margin-left 0.3s ease;
+    overflow-x: hidden; /* Strict Overflow Protection */
 }
 
 .header {
@@ -200,11 +222,22 @@ body {
 
 .menu-toggle {
     display: none;
-    font-size: 1.25rem;
-    background: transparent;
-    border: none;
+    font-size: 1.5rem;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--glass-border);
     color: var(--text-primary);
     cursor: pointer;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    align-items: center;
+    justify-content: center;
+}
+
+@media (max-width: 768px) {
+    .menu-toggle {
+        display: flex;
+    }
 }
 
 .header h2 {
@@ -276,7 +309,10 @@ body {
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow);
     border-radius: var(--radius-lg);
-    padding: 24px;
+    padding: var(--padding-card);
+    width: 100%;
+    position: relative;
+    overflow-x: hidden; /* Defensive Layout */
 }
 
 /* ── Grid & Flex Helpers ───────────────────────────────────────────────────── */
@@ -334,6 +370,38 @@ body {
     padding: 16px;
     border-bottom: 1px solid var(--border-color);
     font-size: 0.875rem;
+    color: var(--text-secondary);
+    white-space: nowrap; /* Prevent messy wrapping in tables */
+}
+
+/* Utilities requested by user */
+.truncate {
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.break-words {
+    white-space: normal !important;
+    word-break: break-word;
+}
+
+.table-container {
+    width: 100%;
+    overflow-x: auto;
+    border-radius: var(--radius-md);
+    position: relative;
+    padding-bottom: 10px; /* Space for scrollbar */
+}
+
+.table-container::-webkit-scrollbar {
+    height: 6px;
+}
+
+.table-container::-webkit-scrollbar-thumb {
+    background: var(--glass-border);
+    border-radius: 10px;
 }
 
 .data-table tr:last-child td {
@@ -480,8 +548,22 @@ body {
 }
 
 @keyframes modalSlide {
-    from { opacity: 0; transform: translateY(20px); }
+    from { opacity: 0; transform: translateY(40px); }
     to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 640px) {
+    .modal {
+        max-width: 100% !important;
+        margin: 0;
+        border-radius: 0;
+        height: 100vh;
+        max-height: 100vh;
+    }
+    
+    .modal-body {
+        max-height: calc(100vh - 140px);
+    }
 }
 
 .modal-header {
@@ -511,6 +593,17 @@ body {
     font-size: 1.5rem;
     cursor: pointer;
     transition: color 0.2s;
+    width: 44px; /* Accessible touch target */
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+@media (max-width: 640px) {
+    .modal-header {
+        padding: 16px 20px;
+    }
 }
 
 .close-modal:hover { color: var(--text-primary); }
