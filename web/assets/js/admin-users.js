@@ -140,13 +140,15 @@ window.deleteUser = async (id) => {
     }
 };
 
-const createUserBtn = document.getElementById('createUserBtn');
-if (createUserBtn) {
-    createUserBtn.onclick = () => {
+const addUserBtn = document.getElementById('addUserBtn');
+if (addUserBtn) {
+    addUserBtn.onclick = () => {
         const adminRole = currentUserData?.role || currentUserData?.user_type || 'admin';
-        
+        const isSuperAdmin = adminRole === 'super_admin';
+
+        // Role options: Super Admin can create any role. Admin can ONLY create Drivers.
         let roleOptions = '<option value="driver" selected>Driver</option>';
-        if (adminRole === 'super_admin') {
+        if (isSuperAdmin) {
             roleOptions = `
                 <option value="super_admin">Super Admin</option>
                 <option value="admin">Admin</option>
@@ -182,6 +184,11 @@ if (createUserBtn) {
 
             if (!email) return alert("Email is required.");
 
+            // Security guard: prevent non-super_admins from creating admin accounts
+            if (!isSuperAdmin && type !== 'driver') {
+                return alert("Access Denied: You can only create Driver accounts.");
+            }
+
             try {
                 // Check if email already exists
                 const q = query(collection(db, "users"), where("email", "==", email));
@@ -209,6 +216,7 @@ if (createUserBtn) {
         });
     };
 }
+
 
 
 

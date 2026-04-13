@@ -49,6 +49,14 @@ onAuthStateChanged(auth, async (user) => {
 
     currentUserData = userData;
     const name = userData.full_name || user.email.split('@')[0];
+
+    // Admins (non-super_admin) do not have access to the Dashboard Map.
+    // Their primary workspace is Bookings and Driver registration.
+    if (role === 'admin') {
+        window.location.href = 'bookings.html';
+        return;
+    }
+
     initLayout('Dashboard', name);
 
     const welcomeMsg = document.getElementById('welcomeMessage');
