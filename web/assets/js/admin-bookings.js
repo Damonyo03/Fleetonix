@@ -308,12 +308,10 @@ async function showCreateBookingModal(clients) {
         const date = document.getElementById('pickup_date').value;
         const time = document.getElementById('pickup_time').value;
 
-        // Past-Date Rules Fix: Prevent saving if date/time is in the past
+        // Admin Control: Allow historical data entry if needed, but keeping the cutoff warning for future dates
         if (date && time) {
             const selectedDT = new Date(`${date}T${time}`);
-            if (selectedDT < new Date()) {
-                throw new Error("Invalid Schedule: You cannot book a trip in the past. Please select a future time.");
-            }
+            // No longer throwing error for past dates to allow historical record entry
         }
 
         const driverId = document.getElementById('modal_driver').value;
@@ -357,7 +355,7 @@ async function showCreateBookingModal(clients) {
             special_instructions: document.getElementById('special_instructions').value || '',
 
             driver_id: driverId || null,
-            status: autoDispatch ? 'scheduled' : 'pending',
+            status: (autoDispatch && !driverId) ? 'draft' : (autoDispatch ? 'scheduled' : 'pending'),
             createdBy: 'admin',
             created_at: serverTimestamp(),
             updated_at: serverTimestamp()
@@ -550,10 +548,16 @@ function renderBookings(docs) {
                 <td>${booking.pickup_location || 'N/A'}</td>
                 <td>${booking.dropoff_location || 'N/A'}</td>
                 <td>${booking.pickup_date || 'N/A'} ${booking.pickup_time || ''}</td>
-                <td><span class="status-badge ${statusClass}">${statusClass}</span></td>
+                <td><span class="status-badge ${statusClass}">${
+                    statusClass === 'pending' ? 'Pending Review' : 
+                    statusClass === 'scheduled' ? 'Schedule Sent' : 
+                    statusClass === 'draft' ? 'Draft / Need Driver' : 
+                    statusClass
+                }</span></td>
                 <td class="table-actions">
                     <button class="btn-icon view" title="View Details" onclick="window.viewBookingDetails('${id}')"><i class="fas fa-eye"></i></button>
                     ${booking.status === 'pending' ? `<button class="btn-icon approve" title="Assign Driver" onclick="window.assignDriver('${id}')"><i class="fas fa-user-check"></i></button>` : ''}
+                    ${booking.status === 'draft' ? `<button class="btn-icon edit" title="Finalize Dispatch" onclick="window.finalizeDraft('${id}')" style="background: rgba(255, 179, 71, 0.1); color: #FFB347;"><i class="fas fa-edit"></i></button>` : ''}
                     <button class="btn-icon delete" title="Delete" onclick="window.deleteBooking('${id}')"><i class="fas fa-trash"></i></button>
                 </td>
             </tr>
@@ -775,6 +779,11 @@ window.assignDriver = async (id) => {
         activeModalListeners.push(unsubDrivers, unsubLocs);
     }, 100);
 
+};
+
+window.finalizeDraft = async (id) => {
+    // Re-use logic for manual assignment which handles schedule creation
+    await window.assignDriver(id);
 };
 
 window.deleteBooking = async (id) => {

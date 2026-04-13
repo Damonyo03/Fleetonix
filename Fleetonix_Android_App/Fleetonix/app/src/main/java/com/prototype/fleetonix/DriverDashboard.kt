@@ -577,6 +577,25 @@ fun DriverDashboard(
     var currentAccuracy by remember { mutableStateOf(0f) }
     var currentHeading by remember { mutableStateOf(0f) }
 
+    // --- System Notification Helper ---
+    val logSystemNotification: suspend (String, String, String) -> Unit = { title, message, type ->
+        try {
+            val uid = auth.currentUser?.uid ?: ""
+            val email = auth.currentUser?.email ?: ""
+            val notificationData = hashMapOf(
+                "title" to title,
+                "message" to "$liveDriverName: $message",
+                "type" to type,
+                "driver_uid" to uid,
+                "driver_email" to email,
+                "timestamp" to FieldValue.serverTimestamp()
+            )
+            db.collection("notifications").add(notificationData).await()
+        } catch (e: Exception) {
+            Log.e("NotificationLog", "Failed to log system notification: ${e.message}")
+        }
+    }
+
     // Logic: Auto Time-In Helper to ensure drivers are on-duty before trip actions
     val triggerAutoTimeIn: suspend () -> Unit = {
         if (!isTimedIn) {
@@ -1640,6 +1659,9 @@ fun DriverDashboard(
                                             isTimedIn = true
                                             lastTimeInObj = nowVal
                                             tripActionSuccess = "Successfully Timed-In!"
+                                            
+                                            // Admin Event
+                                            logSystemNotification("🕒 Driver Clock-In", "is now ON DUTY", "success")
                                         } catch (e: Exception) {
                                             tripActionError = "Time-In Error: ${e.message}"
                                         } finally {
@@ -1701,6 +1723,9 @@ fun DriverDashboard(
                                             
                                             isTimedIn = false
                                             tripActionSuccess = if (qualifiedForOT) "Timed-Out with Overtime!" else "Timed-Out Successfully"
+                                            
+                                            // Admin Event
+                                            logSystemNotification("🕓 Driver Clock-Out", "is now OFF DUTY ${if (qualifiedForOT) "(with OT)" else ""}", "warning")
                                         } catch (e: Exception) {
                                             tripActionError = "Time-Out Error: ${e.message}"
                                         } finally {
@@ -2260,6 +2285,9 @@ val phase = tripPhase ?: "pending"
                                                          )
                                                      }
                                                      tripActionSuccess = "Passenger marked as picked up!"
+                                                     
+                                                     // Admin Event
+                                                     logSystemNotification("🚖 Passenger Picked-Up", "has picked up passenger for ticket #${activeTicketId ?: 'N/A'}", "info")
                                                  } catch (e: Exception) {
                                                      tripActionError = "Failed: ${e.message}"
                                                  } finally {
@@ -2301,6 +2329,9 @@ val phase = tripPhase ?: "pending"
                                                          )
                                                      }
                                                      tripActionSuccess = "Routing to Drop-off point..."
+                                                     
+                                                     // Admin Event
+                                                     logSystemNotification("🛣️ En-Route to Dropoff", "is now heading to the destination", "info")
                                                  } catch (e: Exception) {
                                                      tripActionError = "Failed: ${e.message}"
                                                  } finally {
@@ -2343,6 +2374,9 @@ val phase = tripPhase ?: "pending"
                                                          )
                                                      }
                                                      tripActionSuccess = "Arrived at destination!"
+                                                     
+                                                     // Admin Event
+                                                     logSystemNotification("🏁 Arrival at Destination", "has arrived at the drop-off point", "success")
                                                  } catch (e: Exception) {
                                                      tripActionError = "Failed: ${e.message}"
                                                  } finally {
@@ -2488,6 +2522,9 @@ val phase = tripPhase ?: "pending"
                                                 ).await()
 
                                                 acceptedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+                                                
+                                                // Admin Event
+                                                logSystemNotification("📋 Job Accepted", "has accepted an assignment for ${nextSchedule?.passenger_name ?: 'Passenger'}", "success")
                                                 
                                                 // Create initial real-time Trip Ticket
                                                 val initialTicketData = hashMapOf(
@@ -2732,6 +2769,11 @@ val phase = tripPhase ?: "pending"
                                 
                                 db.collection("drivers").document(uid).update(driverUpdate).await()
                                 tripActionSuccess = if (tripPhase == "accepted") "Trip started! Routing to pickup..." else "Passenger picked up! Routing to destination..."
+                                
+                                // Admin Event
+                                if (tripPhase == "accepted") {
+                                    logSystemNotification("🚀 Trip Started", "is now en-route to pickup location", "info")
+                                }
                             } else {
                                 // End odometer flow
                                 endOdometerValue = mileage
@@ -2787,6 +2829,9 @@ val phase = tripPhase ?: "pending"
                                 "actual_route_polyline", GoogleMapsService.encodePolyline(actualRoutePoints),
                                 "completed_at", FieldValue.serverTimestamp()
                             ).await()
+                            
+                            // Admin Event
+                            logSystemNotification("✅ Trip Completed", "has successfully finalized the trip for job #${dId.takeLast(6)}", "success")
                             
                             // Save ticket data and update driver status
                             // Logic moved here for direct control
@@ -2907,6 +2952,9 @@ val phase = tripPhase ?: "pending"
                             }
 
                             showCancelDialog = false
+                            
+                            // Admin Event
+                            logSystemNotification("🛑 Trip Cancelled", "has CANCELLED the trip. Reason: $cancelReason", "danger")
                             tripActionSuccess = "Trip cancelled and reported."
                             activeTicketId = null
                             actualRoutePoints.clear()

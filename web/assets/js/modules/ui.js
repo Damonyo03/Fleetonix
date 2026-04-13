@@ -166,3 +166,62 @@ export function hideModal(id) {
     const backdrop = document.getElementById(`${id}-backdrop`);
     if (backdrop) backdrop.remove();
 }
+
+// --- Toast Notification System ---
+let toastContainer = null;
+
+function ensureToastContainer() {
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.className = 'toast-container';
+        document.body.appendChild(toastContainer);
+    }
+}
+
+/**
+ * Shows a premium toast notification.
+ * @param {string} title - Title text
+ * @param {string} message - Description text
+ * @param {string} type - 'info', 'success', 'warning', 'danger'
+ * @param {number} duration - ms to show
+ */
+export function showToast(title, message, type = 'info', duration = 5000) {
+    ensureToastContainer();
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    
+    const iconMap = {
+        'info': 'fa-info-circle',
+        'success': 'fa-check-circle',
+        'warning': 'fa-exclamation-triangle',
+        'danger': 'fa-radiation-alt'
+    };
+    const icon = iconMap[type] || 'fa-bell';
+
+    toast.innerHTML = `
+        <div class="toast-icon"><i class="fas ${icon}"></i></div>
+        <div class="toast-content">
+            <div class="toast-title">${title}</div>
+            <div class="toast-message">${message}</div>
+        </div>
+        <button class="toast-close"><i class="fas fa-times"></i></button>
+    `;
+
+    toastContainer.prepend(toast);
+
+    const closeBtn = toast.querySelector('.toast-close');
+    closeBtn.onclick = () => {
+        toast.classList.add('fade-out');
+        setTimeout(() => toast.remove(), 300);
+    };
+
+    if (duration > 0) {
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.classList.add('fade-out');
+                setTimeout(() => toast.remove(), 300);
+            }
+        }, duration);
+    }
+}

@@ -5,9 +5,9 @@
 
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getAuth, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { getFirestore, collection, query, where, onSnapshot, getDoc, doc, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getFirestore, collection, query, where, onSnapshot, getDoc, doc, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { clearUserCache } from "./modules/ui.js";
+import { clearUserCache, showToast } from "./modules/ui.js";
 
 // Initialize Firebase
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
@@ -80,40 +80,73 @@ onAuthStateChanged(auth, async (user) => {
     }
 });
 
-// ── Real-time Notification Dispatcher ────────────────────────────────────────
-let accidentCount = 0;
+// ── Real-time Notification Dispatcher (Enhanced) ─────────────────────────────
+let unreadAlerts = 0;
+let lastSeenTimestamp = Date.now(); 
+let initialLoadAccidents = true;
+let initialLoadNotifs = true;
+let initialLoadBookings = true;
 
 const updateVisualBadges = () => {
-    const total = accidentCount;
-    
-    // Sidebar Counters
-    document.querySelectorAll('.notif-count').forEach(counter => {
-        counter.innerText = total > 0 ? total : '0';
-        counter.style.display = total > 0 ? 'inline-flex' : 'none';
-        
-        // Ensure proper badge classes are present
-        if (!counter.classList.contains('badge')) counter.classList.add('badge');
-        if (!counter.classList.contains('badge-error')) {
-             counter.classList.add('badge-error');
-             // Clean up any legacy inline styles from previous iterations
-             counter.style.removeProperty('background');
-             counter.style.removeProperty('color');
+    document.querySelectorAll('.notif-count, .notification-badge, .approval-count').forEach(counter => {
+        let val = 0;
+        if (counter.classList.contains('notif-count') || counter.classList.contains('notification-badge')) {
+            val = unreadAlerts;
         }
+        
+        counter.innerText = val > 0 ? val : '0';
+        counter.style.display = val > 0 ? 'inline-flex' : 'none';
+        if (counter.classList.contains('notification-badge')) counter.style.display = val > 0 ? 'flex' : 'none';
     });
-
-    // Header Bell Badge
-    const headerBadge = document.querySelector('.notification-badge');
-    if (headerBadge) {
-        headerBadge.innerText = total > 0 ? total : '0';
-        headerBadge.style.display = total > 0 ? 'flex' : 'none';
-    }
 };
 
+// 1. Monitor Accidents (Urgent)
 onSnapshot(query(collection(db, "accidents"), where("status", "!=", "acknowledged")), (snap) => {
-    accidentCount = snap.size;
+    unreadAlerts = snap.size;
     updateVisualBadges();
+    
+    if (!initialLoadAccidents) {
+        snap.docChanges().forEach(change => {
+            if (change.type === "added") {
+                const data = change.doc.data();
+                showToast("🚨 EMERGENCY ALERT", data.description || "Driver reported an accident!", "danger", 10000);
+            }
+        });
+    }
+    initialLoadAccidents = false;
 });
 
+// 2. Monitor System Notifications & Driver Actions
+onSnapshot(query(collection(db, "notifications"), orderBy("timestamp", "desc")), (snap) => {
+    if (initialLoadNotifs) {
+        initialLoadNotifs = false;
+        return;
+    }
+
+    snap.docChanges().forEach(change => {
+        if (change.type === "added") {
+            const data = change.doc.data();
+            const ts = data.timestamp?.toMillis ? data.timestamp.toMillis() : Date.now();
+            
+            if (ts > lastSeenTimestamp - 5000) {
+                showToast(data.title || "System Update", data.message || "New activity detected.", data.type || "info");
+            }
+        }
+    });
+});
+
+// 3. Monitor New Bookings
+onSnapshot(query(collection(db, "bookings"), where("status", "==", "pending")), (snap) => {
+    if (!initialLoadBookings) {
+        snap.docChanges().forEach(change => {
+            if (change.type === "added") {
+                const data = change.doc.data();
+                showToast("📅 New Booking Request", `From: ${data.client_name || 'Guest User'}`, "info");
+            }
+        });
+    }
+    initialLoadBookings = false;
+});
 
 // ── Global Session Management ────────────────────────────────────────────────
 document.addEventListener('click', (e) => {
