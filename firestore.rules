@@ -39,7 +39,7 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
              'current_status', 'current_trip_id', 'current_trip_phase', 
              'current_mileage', 'active_ticket_id', 'last_updated', 'on_break',
-             'profile_image_url', 'incident_active'
+             'profile_image_url', 'incident_active', 'isFirstLogin'
            ]);
       allow write: if isSignedIn() && isAdmin();
     }
@@ -90,7 +90,11 @@ service cloud.firestore {
       allow update, delete: if isSignedIn() && isAdmin();
     }
     match /accidents/{docId} {
-      allow read: if isSignedIn() && (resource.data.driver_uid == request.auth.uid || isAdmin());
+      allow read: if isSignedIn() && (
+        resource.data.driver_uid == request.auth.uid || 
+        resource.data.driver_email.lower() == request.auth.token.email.lower() ||
+        isAdmin()
+      );
       allow create: if isSignedIn() && request.resource.data.driver_email.lower() == request.auth.token.email.lower();
       allow update, delete: if isSignedIn() && isAdmin();
     }
@@ -112,7 +116,7 @@ service cloud.firestore {
       allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
       allow update: if isSignedIn() && isOwner(userId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-             'profile_image_url', 'full_name', 'phone', 'updated_at'
+             'profile_image_url', 'full_name', 'phone', 'updated_at', 'isFirstLogin'
            ]);
       allow write: if isSignedIn() && isAdmin();
     }
@@ -127,7 +131,12 @@ service cloud.firestore {
 
     // ── notifications: users read own; admins full access ─────────
     match /notifications/{docId} {
-      allow read: if isSignedIn() && (resource.data.user_id == request.auth.uid || isAdmin() || resource.data.user_id == 'guest');
+      allow read: if isSignedIn() && (
+        resource.data.user_id == request.auth.uid || 
+        resource.data.user_email.lower() == request.auth.token.email.lower() ||
+        isAdmin() || 
+        resource.data.user_id == 'guest'
+      );
       allow create, update: if isSignedIn() && isAdmin();
       allow delete: if isSignedIn() && isAdmin();
     }

@@ -835,6 +835,7 @@ fun DriverDashboard(
 
                 val accidentData = hashMapOf(
                     "driver_email" to user?.email?.lowercase()?.trim(),
+                    "driver_uid" to (user?.uid ?: ""), // Add UID for rule matching
                     "schedule_id" to (schedule?.scheduleId ?: 0),
                     "firebase_schedule_id" to schedule?.docId,
                     "latitude" to lat,
