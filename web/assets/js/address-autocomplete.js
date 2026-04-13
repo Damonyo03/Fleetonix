@@ -65,8 +65,9 @@ class AddressAutocomplete {
             this.latInput.value = place.geometry.location.lat();
             this.lngInput.value = place.geometry.location.lng();
             
-            // Extract City/Area for multi-tenant segment filtering
+            // Extract City/Area and Province for multi-tenant segment filtering
             let city = "";
+            let province = "";
             if (place.address_components) {
                 const cityComp = place.address_components.find(c => 
                     c.types.includes("locality") || 
@@ -74,8 +75,14 @@ class AddressAutocomplete {
                     c.types.includes("sublocality_level_1")
                 );
                 if (cityComp) city = cityComp.long_name;
+
+                const provComp = place.address_components.find(c => 
+                    c.types.includes("administrative_area_level_1")
+                );
+                if (provComp) province = provComp.long_name;
             }
             this.input.dataset.city = city;
+            this.input.dataset.province = province;
 
             // Trigger events
             this.input.dispatchEvent(new Event('change', { bubbles: true }));

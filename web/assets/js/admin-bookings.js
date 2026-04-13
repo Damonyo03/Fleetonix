@@ -84,9 +84,34 @@ let allBookings = [];
 
 // Phase 5: Geographic Sector Groups
 const SECTORS = {
-    NORTH: ['Baguio', 'Laoag', 'Vigan', 'Tuguegarao', 'Santiago', 'San Fernando'],
-    SOUTH: ['Batangas', 'Lucena', 'Naga', 'Legazpi', 'Calamba', 'Santa Rosa']
+    NORTH: [
+        'Baguio', 'Laoag', 'Vigan', 'Tuguegarao', 'Santiago', 'San Fernando', 'Angeles', 'Mabalacat', 'Malolos', 'San Jose del Monte',
+        'Pampanga', 'Bulacan', 'Tarlac', 'Pangasinan', 'Zambales', 'Bataan', 'Nueva Ecija', 'Aurora', 'Ilocos', 'Cagayan', 'Isabela', 
+        'Nueva Vizcaya', 'Quirino', 'Benguet', 'Kalinga', 'Ifugao', 'Abra', 'Apayao', 'Mountain Province', 'La Union'
+    ],
+    SOUTH: [
+        'Batangas', 'Lucena', 'Naga', 'Legazpi', 'Calamba', 'Santa Rosa', 'Dasmariñas', 'San Pedro', 'Biñan', 'Cabuyao', 'Lipa', 'Tanauan',
+        'Cavite', 'Laguna', 'Rizal', 'Quezon', 'Mindoro', 'Marinduque', 'Romblon', 'Palawan', 'Camarines', 'Albay', 'Sorsogon', 'Masbate', 'Catanduanes'
+    ]
 };
+
+/**
+ * Automagically detects the operating area based on address keywords and coordinates.
+ */
+function detectArea(address, city, province, lat) {
+    const fullText = (address + " " + city + " " + province).toLowerCase();
+    
+    // 1. Keyword Check
+    if (SECTORS.NORTH.some(k => fullText.includes(k.toLowerCase()))) return "North";
+    if (SECTORS.SOUTH.some(k => fullText.includes(k.toLowerCase()))) return "South";
+
+    // 2. Latitude Check (Fallback for missing keywords)
+    if (lat > 14.8) return "North";
+    if (lat > 0 && lat < 14.3) return "South";
+
+    // 3. Default to NCR
+    return "NCR";
+}
 
 // Attach the button right away (don't wait for auth)
 if (newAdminBookingBtn) {
@@ -204,7 +229,10 @@ async function showCreateBookingModal(clients) {
 
         <!-- Single Pickup & Dropoff -->
         <div class="form-group pickup-point" style="position: relative;">
-            <label>Pickup Location</label>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <label>Pickup Location</label>
+                <div id="area_indicator" style="font-size: 0.75em; font-weight: 700; padding: 2px 8px; border-radius: 4px; display: none;"></div>
+            </div>
             <input type="text" id="modal_pickup" class="form-control pickup-input" placeholder="Search for pickup..." required autocomplete="off">
             <input type="hidden" id="modal_lat" class="lat-input" value="0">
             <input type="hidden" id="modal_lng" class="lng-input" value="0">
@@ -332,13 +360,8 @@ async function showCreateBookingModal(clients) {
         // Auto-Area Detection Logic (Phase 5 Alignment)
         const pickupEl = document.getElementById('modal_pickup');
         const cityName = pickupEl.dataset.city || "";
-        let detectedArea = "NCR"; // Default
-        
-        if (SECTORS.NORTH.some(c => cityName.includes(c))) {
-            detectedArea = "North";
-        } else if (SECTORS.SOUTH.some(c => cityName.includes(c))) {
-            detectedArea = "South";
-        }
+        const provinceName = pickupEl.dataset.province || "";
+        const detectedArea = detectArea(pickup, cityName, provinceName, pickup_lat);
 
         const data = sanitizeFirestoreData({
             booking_id: bookingId,
@@ -504,7 +527,37 @@ async function showCreateBookingModal(clients) {
         if (window.initAutocompleteForInput) {
             const pickupEl = document.getElementById('modal_pickup');
             const dropoffEl = document.getElementById('modal_dropoff');
-            if (pickupEl) window.initAutocompleteForInput(pickupEl);
+            if (pickupEl) {
+                window.initAutocompleteForInput(pickupEl);
+                
+                // Real-time Area Detection Listener
+                pickupEl.addEventListener('change', () => {
+                    const indicator = document.getElementById('area_indicator');
+                    if (!indicator) return;
+
+                    const address = pickupEl.value;
+                    const city = pickupEl.dataset.city || "";
+                    const province = pickupEl.dataset.province || "";
+                    const lat = parseFloat(document.getElementById('modal_lat').value) || 0;
+
+                    const area = detectArea(address, city, province, lat);
+                    
+                    indicator.textContent = area.toUpperCase();
+                    indicator.style.display = 'block';
+                    
+                    // Style based on area
+                    if (area === 'North') {
+                        indicator.style.background = 'rgba(0, 212, 255, 0.2)';
+                        indicator.style.color = 'var(--accent-blue)';
+                    } else if (area === 'South') {
+                        indicator.style.background = 'rgba(255, 179, 71, 0.2)';
+                        indicator.style.color = 'var(--accent-orange)';
+                    } else {
+                        indicator.style.background = 'rgba(148, 163, 184, 0.2)';
+                        indicator.style.color = 'var(--text-muted)';
+                    }
+                });
+            }
             if (dropoffEl) window.initAutocompleteForInput(dropoffEl);
         }
     }, 200);
