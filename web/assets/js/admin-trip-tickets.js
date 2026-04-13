@@ -83,7 +83,8 @@ function loadTickets() {
     unsubTripTickets = onSnapshot(tripTicketsQuery, (snapshot) => {
         rawTripTickets = snapshot.docs.map(d => {
             const data = d.data();
-            const driverId = data.driver_id || data.driver_uid || '';
+            let driverId = data.driver_id || data.driver_uid || '';
+            if (driverId === "undefined") driverId = "";
             const rawName = data.driver_name || data.driverName || '—';
             return {
                 id: d.id,
