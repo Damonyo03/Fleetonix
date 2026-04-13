@@ -26,21 +26,23 @@ service cloud.firestore {
 
     // ── driver_locations: owner-only write, admins-only read ──────────────
     match /driver_locations/{docId} {
-      allow read: if isSignedIn() && (isOwner(docId) || isAdmin());
-      allow write: if isSignedIn() && isOwner(docId)
+      allow read: if isSignedIn() && (isOwner(docId) || resource.data.get('driver_uid', '') == request.auth.uid || isAdmin());
+      allow write: if isSignedIn() && (isOwner(docId) || request.resource.data.get('driver_uid', '') == request.auth.uid)
         && request.resource.data.current_latitude is number
         && request.resource.data.current_longitude is number;
     }
 
     // ── drivers: self-update status/telemetry, admins full CRUD ────────────
     match /drivers/{userId} {
-      allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
-      allow update: if isSignedIn() && isOwner(userId)
+      allow read: if isSignedIn() && (isOwner(userId) || resource.data.get('driver_uid', '') == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() 
+        && (isOwner(userId) || resource.data.get('driver_uid', '') == request.auth.uid || getAuthEmail() == resource.data.get('driver_email', '').lower() || isAdmin())
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
              'current_status', 'current_trip_id', 'current_trip_phase', 
              'current_mileage', 'active_ticket_id', 'last_updated', 'on_break',
              'profile_image_url', 'incident_active', 'isFirstLogin', 'updated_at',
-             'is_currently_timed_in', 'last_time_in', 'last_time_out'
+             'is_currently_timed_in', 'last_time_in', 'last_time_out',
+             'location', 'current_location_name', 'current_city', 'status', 'lastSeen', 'command'
            ]);
       allow write: if isSignedIn() && isAdmin();
     }
@@ -48,12 +50,13 @@ service cloud.firestore {
     // ── schedules: assigned driver update phase/status; admins full write ────
     match /schedules/{docId} {
       allow read: if isSignedIn() && (
+        resource.data.get('driver_uid', '') == request.auth.uid ||
         getAuthEmail() == resource.data.get('driver_email', '').lower() || 
         isAdmin()
       );
       allow write: if isSignedIn() && isAdmin();
       allow update: if isSignedIn()
-        && (getAuthEmail() == resource.data.get('driver_email', '').lower() || isAdmin())
+        && (resource.data.get('driver_uid', '') == request.auth.uid || getAuthEmail() == resource.data.get('driver_email', '').lower() || isAdmin())
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
              'status', 'trip_phase', 'accepted_at', 'started_at', 'picked_up_at', 
              'dropped_off_at', 'completed_at', 'driver_viewed_at', 'total_km_travelled', 
@@ -61,7 +64,8 @@ service cloud.firestore {
              'odometer_start', 'odometer_end', 'refusal_reason', 
              'vehicle_type', 'plate_number', 'actual_route_polyline', 
              'time_of_departure', 'time_of_arrival', 'last_updated',
-             'cancellation_reason', 'cancelled_at', 'route_polyline'
+             'cancellation_reason', 'cancelled_at', 'route_polyline', 'updated_at',
+             'driver_uid', 'driver_email'
            ]);
     }
 

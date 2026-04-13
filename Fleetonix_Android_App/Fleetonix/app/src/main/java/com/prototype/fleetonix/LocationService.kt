@@ -136,32 +136,45 @@ class LocationService : Service() {
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
                 locationResult.lastLocation?.let { location ->
-                    // 1. Telematics Processing (Kalman Filter for Speed Smoothing)
+                    // 1. Telematics Processing (Kalman Filter for Speed & Position Smoothing)
                     smoothedSpeed = telematicsProcessor.getSmoothedSpeed(location.speed)
+                    val smoothedLatLng = telematicsProcessor.getSmoothedLocation(location.latitude, location.longitude, location.accuracy)
+                    val smoothedLoc = Location("smoothed").apply {
+                        latitude = smoothedLatLng.latitude
+                        longitude = smoothedLatLng.longitude
+                        accuracy = location.accuracy
+                        speed = location.speed
+                        bearing = location.bearing
+                        time = location.time
+                    }
                     updateWifiContext()
 
                     // 2. Calculate distance since last update
                     lastLocation?.let { last ->
-                        val distance = last.distanceTo(location)
-                        if (location.accuracy < 150) { // Relaxed to 150m for urban reliability
-                            totalDistanceMetres += distance
+                        val distance = last.distanceTo(smoothedLoc)
+                        // Tighten threshold: points with > 35m error are discarded for distance/route logic
+                        if (location.accuracy <= 35) { 
+                            // Drift check: Only accumulate if we moved significantly or are moving (speed > 0.5m/s)
+                            if (distance > 2.0 || smoothedSpeed > 0.5) {
+                                totalDistanceMetres += distance
+                            }
                             
                             // Accumulate points for route visualization if trip is active
                             if (isTripActive) {
                                 val distanceKm = distance / 1000.0
-                                val newPoint = com.google.android.gms.maps.model.LatLng(location.latitude, location.longitude)
                                 if (actualRoutePoints.isEmpty() || 
-                                    GoogleMapsService.calculateDistance(actualRoutePoints.last(), newPoint) >= 10f) {
-                                    actualRoutePoints.add(newPoint)
+                                    GoogleMapsService.calculateDistance(actualRoutePoints.last(), smoothedLatLng) >= 8f) {
+                                    actualRoutePoints.add(smoothedLatLng)
                                 }
 
                                 // REAL-TIME ODOMETER SYNC: Update active schedule
-                                if (activeScheduleId.isNotEmpty() && distanceKm > 0.001) {
+                                if (activeScheduleId.isNotEmpty() && distanceKm > 0.0001) {
                                     serviceScope.launch {
                                         try {
                                             val db = FirebaseFirestore.getInstance()
                                             db.collection("schedules").document(activeScheduleId).update(
-                                                "total_km_travelled", FieldValue.increment(distanceKm)
+                                                "total_km_travelled", FieldValue.increment(distanceKm),
+                                                "updated_at", FieldValue.serverTimestamp()
                                             )
                                         } catch (e: Exception) {
                                             Log.e("LocationService", "Failed to sync real-time odometer", e)
@@ -171,27 +184,25 @@ class LocationService : Service() {
                             }
                         }
                     }
-                    // lastLocation = location // Removed here, moved to end of outer block
-
 
                     // 3. Push to Firestore for Admin Dashboard (Real-time tracking)
                     if (driverEmail.isNotEmpty()) {
-                        updateLocationInFirestore(driverEmail, location)
+                        updateLocationInFirestore(driverEmail, smoothedLoc)
                         
                         // A5: Throttle vehicle_logs to save battery/data
-                        if (shouldLogTelemetry(location)) {
-                            pushToVehicleLogs(driverEmail, location)
-                            lastLoggedLocation = location
+                        if (shouldLogTelemetry(smoothedLoc)) {
+                            pushToVehicleLogs(driverEmail, smoothedLoc)
+                            lastLoggedLocation = smoothedLoc
                             lastLogTimestamp = System.currentTimeMillis()
                         }
                     }
 
                     // 4. Broadcast for internal UI (DriverDashboard)
                     val intent = Intent(ACTION_LOCATION_UPDATE).apply {
-                        setPackage(packageName) // REQUIRED for RECEIVER_NOT_EXPORTED
-                        putExtra(EXTRA_LATITUDE, location.latitude)
-                        putExtra(EXTRA_LONGITUDE, location.longitude)
-                        putExtra(EXTRA_SPEED, smoothedSpeed.toFloat()) // Use smoothed speed
+                        setPackage(packageName)
+                        putExtra(EXTRA_LATITUDE, smoothedLoc.latitude)
+                        putExtra(EXTRA_LONGITUDE, smoothedLoc.longitude)
+                        putExtra(EXTRA_SPEED, smoothedSpeed.toFloat())
                         putExtra(EXTRA_ACCURACY, location.accuracy)
                         putExtra(EXTRA_BEARING, location.bearing)
                         putExtra(EXTRA_TOTAL_DISTANCE, totalDistanceMetres)
@@ -199,10 +210,11 @@ class LocationService : Service() {
                         putExtra("wifi_ssid", currentWifiSsid)
                     }
                     sendBroadcast(intent)
+                    
                     if (BuildConfig.DEBUG) {
-                        Log.d("LocationService", "Processed Telematics: Speed=$smoothedSpeed G=$currentGForce Network=$currentWifiSsid")
+                        Log.d("LocationService", "Smoothed Telematics: Lat=${smoothedLoc.latitude} Lng=${smoothedLoc.longitude} Speed=$smoothedSpeed")
                     }
-                    lastLocation = location // Set after all calculations using the delta
+                    lastLocation = smoothedLoc
                 }
             }
         }
@@ -697,13 +709,9 @@ class LocationService : Service() {
                         "last_updated" to FieldValue.serverTimestamp()
                     )
                     
-                    // Update internal point list
-                    val newLatLng = LatLng(location.latitude, location.longitude)
-                    actualRoutePoints.add(newLatLng)
-                    
                     // High-Accuracy Deviation Tracking & Rerouting
                     if (isTripActive && currentPlannedRoute.isNotEmpty() && destinationLatLng != null) {
-                        checkDeviationAndReroute(newLatLng)
+                        checkDeviationAndReroute(LatLng(location.latitude, location.longitude))
                     }
 
                     // Periodic Breadcrumb Persistence (Every 30 seconds)

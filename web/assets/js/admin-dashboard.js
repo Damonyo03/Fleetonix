@@ -12,7 +12,7 @@ let driversMap = null;
 let driverMarkers = {}; // UID -> { marker: L.Marker, data: Object }
 let allDriversData = {}; // combined metadata + live location
 let authorizedDriverIds = new Set(); // Source of truth for authorized assets
-let emailToUidMap = {}; 
+let emailToUidMap = {};
 let currentUserData = null;
 let activeQuickInfoDriverId = null;
 let heartbeatInterval = null;
@@ -32,7 +32,7 @@ onAuthStateChanged(auth, async (user) => {
     // Role Verification
     const userDoc = await getDoc(doc(db, "users", user.uid));
     let userData = userDoc.exists() ? userDoc.data() : null;
-    
+
     if (!userData) {
         const q = query(collection(db, "users"), where("email", "==", user.email));
         const snap = await getDocs(q);
@@ -50,19 +50,19 @@ onAuthStateChanged(auth, async (user) => {
     currentUserData = userData;
     const name = userData.full_name || user.email.split('@')[0];
     initLayout('Dashboard', name);
-    
+
     const welcomeMsg = document.getElementById('welcomeMessage');
     if (welcomeMsg) welcomeMsg.innerText = `Welcome back, ${name}! Here's your fleet overview.`;
 
     // Map & Tracking Init
     initMap();
     startRealtimeDriverTracking();
-    
+
     // Feature Init
     initGlobalStats();
     initGlobalAdminListeners();
     initDispatchFeature();
-    
+
     // Phase 2: Incident Listener
     startIncidentMonitoring();
 });
@@ -92,13 +92,13 @@ function initMap() {
  */
 function startRealtimeDriverTracking() {
     console.log("[Dashboard] Tracking drivers...");
-    
+
     // 1. Live Locations
     onSnapshot(collection(db, "driver_locations"), (snapshot) => {
         snapshot.docChanges().forEach(change => {
             const docId = change.doc.id; // Could be email or UID
             const data = change.doc.data();
-            
+
             // AUTHORIZATION SYNC: Skip ghost users not in 'drivers' collection
             if (!authorizedDriverIds.has(docId) && !emailToUidMap[docId.toLowerCase()]) {
                 // If it's a ghost, ignore it and ensure its marker is removed
@@ -107,7 +107,7 @@ function startRealtimeDriverTracking() {
             }
 
             const id = emailToUidMap[docId.toLowerCase()] || docId;
-            
+
             if (change.type === "added" || change.type === "modified") {
                 const lat = data.current_latitude || data.latitude || 0;
                 const lng = data.current_longitude || data.longitude || 0;
@@ -133,7 +133,7 @@ function startRealtimeDriverTracking() {
             const data = doc.data();
             authorizedDriverIds.add(doc.id);
             if (data.driver_email) emailToUidMap[data.driver_email.toLowerCase()] = doc.id;
-            
+
             updateDriverState(doc.id, {
                 ...data,
                 driver_name: data.driver_name || 'Fleet Driver'
@@ -164,7 +164,7 @@ function checkHeartbeats() {
     Object.keys(allDriversData).forEach(id => {
         const d = allDriversData[id];
         if (!d.last_updated) return;
-        
+
         const lastSeen = d.last_updated.toDate ? d.last_updated.toDate() : new Date(d.last_updated);
         if (now - lastSeen.getTime() > HEARTBEAT_EXPIRY_MS) {
             console.log(`[Heartbeat] Driver ${id} is stale. Moving to offline.`);
@@ -184,12 +184,12 @@ function startIncidentMonitoring() {
             if (change.type === "added") {
                 const data = change.doc.data();
                 const driverId = data.driver_id;
-                
+
                 // Alert Action: Auto-focus and notify
                 if (driverMarkers[driverId]) {
                     const marker = driverMarkers[driverId].marker;
                     driversMap.setView(marker.getLatLng(), 18);
-                    
+
                     // Trigger sound indicator or visual toast if needed
                     console.warn(`[ACCIDENT] High Priority Incident for ${data.driver_email}`);
                 }
@@ -203,9 +203,9 @@ function updateDriverState(id, data, source) {
     const d = allDriversData[id];
 
     Object.assign(d, data);
-    
+
     if (source === 'realtime') refreshMarker(id);
-    
+
     // Throttled Sidebar Update
     if (!window.sidebarUpdateTimer) {
         window.sidebarUpdateTimer = setTimeout(() => {
@@ -235,12 +235,12 @@ function refreshMarker(id) {
         const marker = L.marker(latlng, {
             icon: createDotIcon(d, isMoving)
         }).addTo(driversMap);
-        
+
         marker.on('click', () => {
             driversMap.setView(latlng, 17);
             showQuickInfoPanel(id, d);
         });
-        
+
         driverMarkers[id] = { marker, data: d };
     }
 }
@@ -264,7 +264,7 @@ function createDotIcon(d, isMoving) {
     const statusClass = getDriverStatusClass(d, isMoving);
     const pulseHtml = isMoving || statusClass === 'accident' || statusClass === 'available' ? '<div class="dot-pulse"></div>' : '';
     const glowClass = statusClass === 'available' ? 'pulse-glow' : '';
-    
+
     return L.divIcon({
         className: 'custom-driver-marker',
         html: `<div class="driver-dot ${statusClass} ${glowClass}">${pulseHtml}</div>`,
@@ -279,15 +279,15 @@ function createDotIcon(d, isMoving) {
 function getDriverStatusClass(d, isMoving) {
     const lastSeen = d.last_updated?.toDate ? d.last_updated.toDate() : new Date(d.last_updated || Date.now());
     const isStale = (new Date() - lastSeen) > HEARTBEAT_EXPIRY_MS;
-    
+
     if (d.incident_active) return 'accident';
     if (isStale) return 'stale';
 
     const tripPhase = d.current_trip_phase || 'none';
     const status = d.current_status || 'offline';
 
-    switch(tripPhase) {
-        case 'accepted': 
+    switch (tripPhase) {
+        case 'accepted':
         case 'on_schedule':
         case 'en_route_pickup':
         case 'pickup':
@@ -309,7 +309,7 @@ function getDriverStatusClass(d, isMoving) {
  * Returns human-readable status text based on status class
  */
 function getDriverStatusLabel(statusClass) {
-    switch(statusClass) {
+    switch (statusClass) {
         case 'available': return 'Available';
         case 'pickup': return 'On Route to Pickup';
         case 'dropoff': return 'On Route to Drop-off';
@@ -338,7 +338,7 @@ function updateOnlineDriversList() {
     const activeDrivers = Object.values(allDriversData).filter(d => {
         if (!authorizedDriverIds.has(d.id)) return false;
         if (!d.current_latitude || !d.current_longitude) return false;
-        
+
         const lastSeen = d.last_updated?.toDate ? d.last_updated.toDate() : new Date(d.last_updated || 0);
         return (now - lastSeen.getTime()) < HEARTBEAT_EXPIRY_MS;
     }).sort((a, b) => a.driver_name.localeCompare(b.driver_name));
@@ -350,7 +350,7 @@ function updateOnlineDriversList() {
         const lastSeen = d.last_updated?.toDate ? d.last_updated.toDate() : new Date(d.last_updated || 0);
         const isRecent = (now - lastSeen.getTime()) < 45000;
         const isSelected = activeQuickInfoDriverId === d.id;
-        
+
         return `
             <div class="group relative bg-slate-800/40 hover:bg-slate-700/60 border border-slate-700/50 rounded-2xl p-4 mb-3 cursor-pointer transition-all duration-300 hover:translate-x-1 ${isSelected ? 'ring-2 ring-accent-blue bg-accent-blue/5' : ''}" 
                  onclick="focusDriverOnMap('${d.id}')">
@@ -408,7 +408,7 @@ function updateOnlineDriversList() {
     }).join('') || '<div class="p-10 text-center flex flex-col items-center gap-3"> <i class="fas fa-radar text-3xl text-slate-700 animate-pulse"></i> <p class="text-slate-500 text-sm">No authorized drivers online.</p></div>';
 }
 
-window.focusDriverOnMap = function(id) {
+window.focusDriverOnMap = function (id) {
     const d = allDriversData[id];
     if (!d) return;
     driversMap.setView([d.current_latitude, d.current_longitude], 17);
@@ -478,7 +478,7 @@ function showQuickInfoPanel(id, d) {
     updateOnlineDriversList();
 }
 
-window.closeQuickInfoPanel = function() {
+window.closeQuickInfoPanel = function () {
     activeQuickInfoDriverId = null;
     document.getElementById('quickInfoPanel').style.display = 'none';
     updateOnlineDriversList();

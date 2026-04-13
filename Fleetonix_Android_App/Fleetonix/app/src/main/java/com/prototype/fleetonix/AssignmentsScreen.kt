@@ -759,6 +759,7 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                                                         "status", "accepted",
                                                         "trip_phase", "accepted",
                                                         "odometer_start", odo,
+                                                        "driver_uid", auth.currentUser?.uid,
                                                         "accepted_at", com.google.firebase.firestore.FieldValue.serverTimestamp()
                                                     ).await()
 

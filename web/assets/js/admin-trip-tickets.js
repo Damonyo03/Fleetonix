@@ -43,7 +43,7 @@ onAuthStateChanged(auth, async (user) => {
     initLayout('Trip Tickets', name);
 
     const role = userData?.role || userData?.user_type;
-    
+
     loadTickets();
 });
 
@@ -146,7 +146,7 @@ function loadTickets() {
 
 function mergeAndRender() {
     const existingTrips = new Map();
-    
+
     // First pass: add trip_tickets (Real-time data from Android)
     rawTripTickets.forEach(t => {
         // Normalize IDs to prevent "TKT_..." and "..." from being treated as different trips
@@ -157,7 +157,7 @@ function mergeAndRender() {
     // Second pass: add schedules if not already represented/enrich existing
     rawSchedTickets.forEach(s => {
         const key = getNormalizedId(s.schedule_id || s.id);
-        
+
         // Normalize name from schedules too
         if (s.driver_name) s.driver_name = getNormalizedDriverName(s.driver_name);
 
@@ -172,7 +172,7 @@ function mergeAndRender() {
 
 
     allTickets = Array.from(existingTrips.values());
-    
+
     // Sort by primary time indicator
     allTickets.sort((a, b) => {
         const getTime = (val) => {
@@ -188,7 +188,7 @@ function mergeAndRender() {
     populateDriverFilter();
     renderTickets(allTickets);
     updateSummaryStats(allTickets);
-    
+
     // Focus on specific trip if requested via URL
     setTimeout(checkTripFocus, 800);
 }
@@ -242,7 +242,7 @@ function renderTickets(tickets) {
         const completedAt = formatTimestamp(ticket.completed_at);
         const startTime = (ticket.time_of_departure && ticket.time_of_departure !== '—') ? ticket.time_of_departure : (ticket.accepted_at || '—');
         const arrivalAt = ticket.time_of_arrival || ticket.timeOfArrival || '—';
-        
+
         const totalKmVal = calculateTripKm(ticket);
         const totalKm = totalKmVal.toFixed(2);
         const vehicleType = ticket.vehicle_type || ticket.vehicle_assigned || '—';
@@ -271,10 +271,10 @@ function renderTickets(tickets) {
                     </div>
                     <div style="text-align: right;">
                         <span class="status-badge completed">Completed</span>
-                        ${ticket.isValidated ? 
-                            `<div class="status-badge verified"><i class="fas fa-check-double"></i> VERIFIED & LOCKED</div>` : 
-                            ''
-                        }
+                        ${ticket.isValidated ?
+                `<div class="status-badge verified"><i class="fas fa-check-double"></i> VERIFIED & LOCKED</div>` :
+                ''
+            }
                         <div style="font-size:0.75rem; color:var(--text-muted); margin-top:8px;">
                             <i class="fas fa-calendar-check"></i> ${completedAt}
                         </div>
@@ -326,7 +326,7 @@ function renderTickets(tickets) {
 
 window.verifyAndLockTrip = async (id, source) => {
     if (!confirm("Are you sure you want to verify and lock this trip? This will mark it as official for payroll audit and it cannot be reverted.")) return;
-    
+
     try {
         const docRef = doc(db, source === 'trip_tickets' ? 'trip_tickets' : 'schedules', id);
         await updateDoc(docRef, {
@@ -368,7 +368,7 @@ function checkTripFocus() {
         target.style.transition = 'all 0.5s ease';
         target.style.border = '2px solid var(--accent-blue)';
         target.style.boxShadow = '0 0 30px rgba(0, 212, 255, 0.4)';
-        
+
         // Pulse effect
         setTimeout(() => {
             target.style.transform = 'scale(1.02)';
@@ -423,7 +423,7 @@ window.exportTripTickets = function () {
     }
 
     let filtered = allTickets.filter(t => t.driver_name === selectedDriverName);
-    
+
     if (fromDate) {
         const from = new Date(fromDate);
         filtered = filtered.filter(t => {
@@ -449,7 +449,7 @@ window.exportTripTickets = function () {
     const firstTicket = filtered[0];
     const vehicle = firstTicket.vehicle_assigned || firstTicket.vehicle_type || 'N/A';
     const plate = firstTicket.plate_number || 'N/A';
-    
+
     // Extract month and year parts for specific template cells
     let monthName = "—";
     let yearStr = "—";
@@ -460,7 +460,7 @@ window.exportTripTickets = function () {
     }
 
     const exportData = mapTicketsForExport(filtered);
-    
+
     exportGCRTripTicket(exportData, {
         vehicle: vehicle,
         plate: plate,
@@ -551,7 +551,7 @@ window.viewTripRoute = function (id) {
     }
 
     // 3. Add 3-Point Markers (Telemetry Verification)
-    
+
     // A. Start Trip
     if (t.start_latitude && t.start_longitude) {
         const startPos = { lat: t.start_latitude, lng: t.start_longitude };
