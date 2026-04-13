@@ -583,7 +583,7 @@ fun DriverDashboard(
     val logSystemNotification: suspend (String, String, String) -> Unit = { title, message, type ->
         try {
             val uid = auth.currentUser?.uid ?: ""
-            val email = auth.currentUser?.email ?: ""
+            val email = auth.currentUser?.email?.lowercase()?.trim() ?: ""
             val notificationData = hashMapOf(
                 "title" to title,
                 "message" to "$liveDriverName: $message",
@@ -608,7 +608,7 @@ fun DriverDashboard(
                     val nowVal = LocalDateTime.now()
                     val logData = hashMapOf(
                         "driver_uid" to uid,
-                        "driver_email" to (FirebaseAuth.getInstance().currentUser?.email ?: ""),
+                        "driver_email" to (FirebaseAuth.getInstance().currentUser?.email?.lowercase()?.trim() ?: ""),
                         "driver_name" to liveDriverName,
                         "accredited_company_id" to accreditedCompanyId,
                         "action" to "time_in",

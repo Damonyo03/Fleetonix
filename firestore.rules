@@ -56,7 +56,9 @@ service cloud.firestore {
       );
       allow write: if isSignedIn() && isAdmin();
       allow update: if isSignedIn()
-        && (resource.data.get('driver_uid', '') == request.auth.uid || getAuthEmail() == resource.data.get('driver_email', '').lower() || isAdmin())
+        && (resource.data.get('driver_uid', '') == request.auth.uid || 
+            (resource.data.get('driver_uid', '') == '' && getAuthEmail() == resource.data.get('driver_email', '').lower()) || 
+            isAdmin())
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
              'status', 'trip_phase', 'accepted_at', 'started_at', 'picked_up_at', 
              'dropped_off_at', 'completed_at', 'driver_viewed_at', 'total_km_travelled', 
@@ -65,7 +67,7 @@ service cloud.firestore {
              'vehicle_type', 'plate_number', 'actual_route_polyline', 
              'time_of_departure', 'time_of_arrival', 'last_updated',
              'cancellation_reason', 'cancelled_at', 'route_polyline', 'updated_at',
-             'driver_uid', 'driver_email'
+             'driver_uid', 'driver_email', 'actualRoutePoints'
            ]);
     }
 
@@ -129,11 +131,16 @@ service cloud.firestore {
     match /notifications/{docId} {
       allow read: if isSignedIn() && (
         resource.data.get('user_id', '') == request.auth.uid || 
+        resource.data.get('driver_uid', '') == request.auth.uid ||
         resource.data.get('user_email', '').lower() == getAuthEmail() ||
         isAdmin() || 
         resource.data.get('user_id', '') == 'guest'
       );
-      allow create, update, delete: if isSignedIn() && isAdmin();
+      allow create: if isSignedIn() && (
+        request.resource.data.get('driver_uid', '') == request.auth.uid ||
+        isAdmin()
+      );
+      allow update, delete: if isSignedIn() && isAdmin();
     }
 
     // ── bookings: admins only ─────────
@@ -146,7 +153,9 @@ service cloud.firestore {
       allow read, write: if isSignedIn() && isAdmin();
     }
     match /driver_activity/{docId} {
-      allow read, write: if isSignedIn() && isAdmin();
+      allow read: if isSignedIn() && (resource.data.get('driver_uid', '') == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (request.resource.data.get('driver_uid', '') == request.auth.uid || isAdmin());
+      allow update, delete: if isSignedIn() && isAdmin();
     }
 
     // ── Everything else: Default Deny ───────────────────────────────
