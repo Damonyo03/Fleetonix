@@ -152,7 +152,7 @@ export function mapTicketsForExport(tickets) {
             "ARRIVAL TIME": arrivalAt,
             "DROP-OFF PLACE": dropoffLocation,
             "PASSENGER'S NAME": t.passenger_name || t.client_name || '—',
-            "PURPOSE": t.isOfficial !== false ? "OFFICIAL" : "PERSONAL",
+            "PURPOSE": t.trip_purpose || (t.isOfficial !== false ? "OFFICIAL" : "PERSONAL"),
             "ODOMETER": formatValue(t.odometer_reading_end || t.odometer_end || 0, 'number'),
             "OVERTIME": (t.is_overtime || t.isOvertime) ? "YES" : "NO"
         };

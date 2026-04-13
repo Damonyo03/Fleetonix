@@ -232,11 +232,24 @@ async function showCreateBookingModal(clients) {
                 <label for="passengers">Passengers (Pax)</label>
                 <input type="number" id="passengers" class="form-control" value="1" min="1" required>
             </div>
-            <div class="form-group" style="display: flex; align-items: center; padding-top: 25px;">
-                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9em;">
-                    <input type="checkbox" id="return_to_pickup" style="width: auto;"> Return to Pickup
-                </label>
+            <div class="form-group">
+                <label for="modal_trip_purpose">Purpose of Trip</label>
+                <select id="modal_trip_purpose" class="form-select" required>
+                    <option value="">-- Select Purpose --</option>
+                    <option value="Commute- Pro A">Commute- Pro A (Shuttle Service)</option>
+                    <option value="OB- Fieldwork">OB- Fieldwork (Construction Site)</option>
+                    <option value="Document">Document (Office Delivery)</option>
+                    <option value="Standby">Standby (Relief/Backup)</option>
+                    <option value="Others- Dinner">Others- Dinner (Team Eat Out)</option>
+                    <option value="Others- Golf">Others- Golf (Unofficial Activity)</option>
+                </select>
             </div>
+        </div>
+
+        <div class="form-group" style="padding-top: 5px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9em;">
+                <input type="checkbox" id="return_to_pickup" style="width: auto;"> Return to Pickup
+            </label>
         </div>
 
         <div class="form-group">
@@ -317,6 +330,9 @@ async function showCreateBookingModal(clients) {
         const driverId = document.getElementById('modal_driver').value;
         const autoDispatch = document.getElementById('modal_auto_dispatch').checked;
         const isOfficial = document.getElementById('modal_is_official').checked;
+        const tripPurpose = document.getElementById('modal_trip_purpose').value;
+
+        if (!tripPurpose) throw new Error("Please select a Purpose of Trip.");
 
         // Auto-Area Detection Logic (Phase 5 Alignment)
         const pickupEl = document.getElementById('modal_pickup');
@@ -351,6 +367,7 @@ async function showCreateBookingModal(clients) {
             pickup_date: date,
             pickup_time: time,
             passengers: parseInt(document.getElementById('passengers').value) || 1,
+            trip_purpose: tripPurpose,
             return_to_pickup: document.getElementById('return_to_pickup').checked,
             special_instructions: document.getElementById('special_instructions').value || '',
 
@@ -396,6 +413,7 @@ async function showCreateBookingModal(clients) {
                 schedule_date: date,
                 schedule_time: time,
                 passengers: parseInt(document.getElementById('passengers').value) || 1,
+                trip_purpose: tripPurpose,
                 return_to_pickup: document.getElementById('return_to_pickup').checked,
                 special_instructions: document.getElementById('special_instructions').value || '',
                 operating_area: detectedArea,
@@ -579,6 +597,7 @@ window.viewBookingDetails = async (id) => {
             <div><strong>Pax:</strong> ${b.pax || 1}</div>
             <div><strong>Return?:</strong> ${b.return_to_pickup ? 'Yes' : 'No'}</div>
             <div><strong>Status:</strong> <span class="status-badge ${b.status}">${b.status}</span></div>
+            <div><strong>Purpose:</strong> <span style="color:var(--accent-blue); font-weight:700;">${b.trip_purpose || 'Not Specified'}</span></div>
             <div><strong>Notes:</strong> ${b.special_instructions || '-'}</div>
         </div>
     `, async () => { /* read-only */ });
@@ -706,6 +725,7 @@ window.assignDriver = async (id) => {
             client_name: booking.client_name || '',
             return_to_pickup: booking.return_to_pickup || false,
             special_instructions: booking.special_instructions || '',
+            trip_purpose: booking.trip_purpose || '',
             isOfficial: booking.isOfficial || false,
             is_published: false, // Core Stability Refactor: Start as Draft
             created_at: serverTimestamp(),

@@ -76,6 +76,7 @@ fun TripTicketDialog(
     odometerEnd: Double,
     pickupLocation: String,
     dropoffLocation: String,
+    tripPurpose: String,
     routePoints: List<LatLng>,
     isSubmitting: Boolean,
     onConfirm: () -> Unit
@@ -165,6 +166,7 @@ fun TripTicketDialog(
                         DetailRow("Vehicle Unit", vehicleUnit)
                         DetailRow("Plate Number", vehiclePlate)
                         DetailRow("Unit Color", vehicleColor)
+                        DetailRow("Purpose", tripPurpose)
                         Divider(color = Color.White.copy(alpha = 0.1f))
                         DetailRow("Departure", timeOfDeparture)
                         DetailRow("Arrival", timeOfArrival)
@@ -2812,6 +2814,7 @@ val phase = tripPhase ?: "pending"
                 odometerEnd = endOdometerValue,
                 pickupLocation = nextSchedule?.pickup_location?.address ?: nextSchedule?.pickup_location?.text ?: "Start",
                 dropoffLocation = nextSchedule?.dropoff_location?.address ?: nextSchedule?.dropoff_location?.text ?: "End",
+                tripPurpose = nextSchedule?.trip_purpose ?: "OFFICIAL",
                 routePoints = actualRoutePoints,
                 isSubmitting = isCompletingTrip,
                 onConfirm = {
@@ -2868,6 +2871,7 @@ val phase = tripPhase ?: "pending"
                                 "pickup_longitude" to (tripPickupLng ?: 0.0),
                                 "dropoff_latitude" to (tripDropoffLat ?: (if (actualRoutePoints.isNotEmpty()) actualRoutePoints.last().latitude else 0.0)),
                                 "dropoff_longitude" to (tripDropoffLng ?: (if (actualRoutePoints.isNotEmpty()) actualRoutePoints.last().longitude else 0.0)),
+                                "trip_purpose" to (nextSchedule?.trip_purpose ?: "OFFICIAL"),
                                 "created_at" to FieldValue.serverTimestamp(), // Fallback if recovered
                                 "completed_at" to FieldValue.serverTimestamp()
                             )
