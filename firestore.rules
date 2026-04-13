@@ -18,133 +18,125 @@ service cloud.firestore {
     function isOwner(userId) {
       return request.auth.uid == userId;
     }
+    
+    // Safer email access that won't crash the rule if token email is null
+    function getAuthEmail() {
+      return request.auth.token.get('email', '').lower();
+    }
 
     // ── driver_locations: owner-only write, admins-only read ──────────────
     match /driver_locations/{docId} {
       allow read: if isSignedIn() && (isOwner(docId) || isAdmin());
       allow write: if isSignedIn() && isOwner(docId)
-        // Coordinate plausibility guard
         && request.resource.data.current_latitude is number
-        && request.resource.data.current_latitude >= -90
-        && request.resource.data.current_latitude <= 90
-        && request.resource.data.current_longitude is number
-        && request.resource.data.current_longitude >= -180
-        && request.resource.data.current_longitude <= 180;
+        && request.resource.data.current_longitude is number;
     }
 
-    // ── drivers: admins full access; self-read/update ────────────
+    // ── drivers: self-update status/telemetry, admins full CRUD ────────────
     match /drivers/{userId} {
       allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
       allow update: if isSignedIn() && isOwner(userId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
              'current_status', 'current_trip_id', 'current_trip_phase', 
              'current_mileage', 'active_ticket_id', 'last_updated', 'on_break',
-             'profile_image_url', 'incident_active', 'isFirstLogin'
+             'profile_image_url', 'incident_active', 'isFirstLogin', 'updated_at'
            ]);
       allow write: if isSignedIn() && isAdmin();
     }
 
-    // ── bookings: admins full access (Drivers never read these) ─────────
-    match /bookings/{docId} {
-      allow read, write: if isSignedIn() && isAdmin();
-    }
-
-    // ── schedules: assigned driver read/update; admins full write ────
+    // ── schedules: assigned driver update phase/status; admins full write ────
     match /schedules/{docId} {
-      // Drivers can read if they are the assigned driver
       allow read: if isSignedIn() && (
-        request.auth.token.email.lower() == resource.data.driver_email.lower() || 
+        getAuthEmail() == resource.data.get('driver_email', '').lower() || 
         isAdmin()
       );
       allow write: if isSignedIn() && isAdmin();
       allow update: if isSignedIn()
-        && request.auth.token.email.lower() == resource.data.driver_email.lower()
+        && (getAuthEmail() == resource.data.get('driver_email', '').lower() || isAdmin())
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
              'status', 'trip_phase', 'accepted_at', 'started_at', 'picked_up_at', 
              'dropped_off_at', 'completed_at', 'driver_viewed_at', 'total_km_travelled', 
              'current_segment_index', 'total_segments_completed', 'segments', 
              'odometer_start', 'odometer_end', 'refusal_reason', 
-             'vehicle_type', 'plate_number', 
-             'route_polyline', 'actual_route_polyline', 'time_of_departure', 'time_of_arrival', 'last_updated',
-             'cancellation_reason', 'cancelled_at'
+             'vehicle_type', 'plate_number', 'actual_route_polyline', 
+             'time_of_departure', 'time_of_arrival', 'last_updated',
+             'cancellation_reason', 'cancelled_at', 'route_polyline'
            ]);
+    }
+
+    // ── accidents/incidents/issues: createable by owner/email ──────
+    match /accidents/{docId} {
+      allow read: if isSignedIn() && (
+        resource.data.get('driver_uid', '') == request.auth.uid || 
+        resource.data.get('driver_email', '').lower() == getAuthEmail() ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && (
+        request.resource.data.get('driver_uid', '') == request.auth.uid ||
+        request.resource.data.get('driver_email', '').lower() == getAuthEmail()
+      );
+      allow update, delete: if isSignedIn() && isAdmin();
+    }
+
+    match /incidents/{docId} {
+      allow read: if isSignedIn() && (resource.data.get('driver_uid', '') == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (request.resource.data.get('driver_uid', '') == request.auth.uid || request.resource.data.get('driver_email', '').lower() == getAuthEmail());
+      allow update, delete: if isSignedIn() && isAdmin();
+    }
+
+    match /vehicle_issues/{docId} {
+      allow read: if isSignedIn() && (resource.data.get('driver_uid', '') == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (request.resource.data.get('driver_uid', '') == request.auth.uid || request.resource.data.get('driver_email', '').lower() == getAuthEmail());
+      allow update, delete: if isSignedIn() && isAdmin();
     }
 
     // ── trip_tickets: drivers create/read own; admins full access ──────
     match /trip_tickets/{docId} {
       allow read: if isSignedIn() && (
-        resource.data.driver_uid == request.auth.uid || 
-        resource.data.driver_email.lower() == request.auth.token.email.lower() ||
+        resource.data.get('driver_uid', '') == request.auth.uid || 
+        resource.data.get('driver_email', '').lower() == getAuthEmail() ||
         isAdmin()
       );
       allow create, update: if isSignedIn()
-        && (request.resource.data.driver_email.lower() == request.auth.token.email.lower()
-            || request.resource.data.driver_uid == request.auth.uid);
+        && (request.resource.data.get('driver_email', '').lower() == getAuthEmail()
+            || request.resource.data.get('driver_uid', '') == request.auth.uid);
       allow delete: if isSignedIn() && isAdmin();
     }
 
-    // ── incidents/accidents/vehicle_issues: drivers create own; admin full access ─
-    match /incidents/{docId} {
-      allow read: if isSignedIn() && (resource.data.driver_uid == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && request.resource.data.driver_email.lower() == request.auth.token.email.lower();
-      allow update, delete: if isSignedIn() && isAdmin();
-    }
-    match /accidents/{docId} {
-      allow read: if isSignedIn() && (
-        resource.data.get('driver_uid', '') == request.auth.uid || 
-        resource.data.get('driver_email', '').lower() == request.auth.token.email.lower() ||
-        isAdmin()
-      );
-      allow create: if isSignedIn() && (
-        request.resource.data.get('driver_uid', '') == request.auth.uid ||
-        request.resource.data.get('driver_email', '').lower() == request.auth.token.email.lower()
-      );
-      allow update, delete: if isSignedIn() && isAdmin();
-    }
-    match /vehicle_issues/{docId} {
-      allow read: if isSignedIn() && (resource.data.driver_uid == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && request.resource.data.driver_email.lower() == request.auth.token.email.lower();
-      allow update, delete: if isSignedIn() && isAdmin();
-    }
-
-    // ── dtr_logs: drivers write/read own records; admins full access ──────
+    // ── dtr_logs: owners read/write; admins full access ──────
     match /dtr_logs/{docId} {
-      allow read: if isSignedIn() && (resource.data.driver_email.lower() == request.auth.token.email.lower() || isAdmin());
-      allow create: if isSignedIn() && request.resource.data.driver_email.lower() == request.auth.token.email.lower();
+      allow read: if isSignedIn() && (resource.data.get('driver_email', '').lower() == getAuthEmail() || isAdmin());
+      allow create: if isSignedIn() && (request.resource.data.get('driver_email', '').lower() == getAuthEmail() || isAdmin());
       allow update, delete: if isSignedIn() && isAdmin();
     }
 
-    // ── users: users read/update own profile; admins full CRUD ───────
+    // ── users: owners profile read/update; admins full CRUD ───────
     match /users/{userId} {
       allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
-      allow update: if isSignedIn() && isOwner(userId)
+      allow update: if isSignedIn() && (isOwner(userId) || isAdmin())
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-             'profile_image_url', 'full_name', 'phone', 'updated_at', 'isFirstLogin'
+             'profile_image_url', 'full_name', 'phone', 'updated_at', 'isFirstLogin', 'status', 'role'
            ]);
       allow write: if isSignedIn() && isAdmin();
     }
 
-    // ── SECURITY: OTP Collections - CLOUD FUNCTIONS ONLY ────────────────
-    match /otps/{docId} {
-      allow read, write: if false; 
-    }
-    match /registration_otps/{docId} {
-      allow read, write: if false;
-    }
-
-    // ── notifications: users read own; admins full access ─────────
+    // ── notifications: targeted users read; admins full CRUD ───────
     match /notifications/{docId} {
       allow read: if isSignedIn() && (
-        resource.data.user_id == request.auth.uid || 
-        resource.data.user_email.lower() == request.auth.token.email.lower() ||
+        resource.data.get('user_id', '') == request.auth.uid || 
+        resource.data.get('user_email', '').lower() == getAuthEmail() ||
         isAdmin() || 
-        resource.data.user_id == 'guest'
+        resource.data.get('user_id', '') == 'guest'
       );
-      allow create, update: if isSignedIn() && isAdmin();
-      allow delete: if isSignedIn() && isAdmin();
+      allow create, update, delete: if isSignedIn() && isAdmin();
     }
 
-    // ── activity & driver_activity: admins full access ──────────────────────────
+    // ── bookings: admins only ─────────
+    match /bookings/{docId} {
+      allow read, write: if isSignedIn() && isAdmin();
+    }
+
+    // ── activity logs: admins only ─────────
     match /activity/{docId} {
       allow read, write: if isSignedIn() && isAdmin();
     }
@@ -154,7 +146,7 @@ service cloud.firestore {
 
     // ── Everything else: Default Deny ───────────────────────────────
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if isSignedIn() && isAdmin();
     }
   }
 }
