@@ -45,7 +45,7 @@ onAuthStateChanged(auth, async (user) => {
 
     currentUserData = userData;
     const name = userData.full_name || user.email.split('@')[0];
-    initLayout('Trip Schedules', name);
+    initLayout('Trip Schedules', name, 0, userRoleType);
 
     initScheduleList();
     initPublishFeature();

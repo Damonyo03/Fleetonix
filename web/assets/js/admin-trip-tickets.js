@@ -40,9 +40,8 @@ onAuthStateChanged(auth, async (user) => {
     currentUserData = userData;
     currentUserData.uid = user.uid;
     const name = userData.full_name || user.email.split('@')[0];
-    initLayout('Trip Tickets', name);
-
     const role = userData?.role || userData?.user_type;
+    initLayout('Trip Tickets', name, 0, role);
 
     loadTickets();
 });

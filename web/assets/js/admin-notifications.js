@@ -19,8 +19,10 @@ let isInitialLoad = true;
 onAuthStateChanged(auth, async (user) => {
     if (!user) { window.location.href = '../login.html'; return; }
     const userDoc = await getDoc(doc(db, "users", user.uid));
-    const name = userDoc.exists() ? (userDoc.data().full_name || user.email.split('@')[0]) : user.email.split('@')[0];
-    initLayout('System Notification', name);
+    const userData = userDoc.exists() ? userDoc.data() : {};
+    const name = userData.full_name || user.email.split('@')[0];
+    const role = userData.role || userData.user_type || '';
+    initLayout('System Notification', name, 0, role);
 
     // Start Listeners
     listenToSystemLogs();

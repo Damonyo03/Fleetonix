@@ -12,7 +12,8 @@ onAuthStateChanged(auth, async (user) => {
     const userDoc = await getDoc(doc(db, "users", user.uid));
     const userData = userDoc.exists() ? userDoc.data() : { role: 'admin' };
     const name = userData.full_name || user.email.split('@')[0];
-    initLayout('Settings', name);
+    const role = userData.role || userData.user_type || '';
+    initLayout('Settings', name, 0, role);
 
     // Super Admin restriction for Maintenance
     const maintenanceSection = document.getElementById('maintenanceSection');

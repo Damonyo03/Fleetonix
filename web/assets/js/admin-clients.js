@@ -28,7 +28,8 @@ onAuthStateChanged(auth, async (user) => {
     const userDoc = await getDoc(doc(db, "users", user.uid));
     currentUserData = userDoc.exists() ? userDoc.data() : { role: 'admin' };
     const name = currentUserData.full_name || user.email.split('@')[0];
-    initLayout('Client Management', name);
+    const role = currentUserData.role || currentUserData.user_type || '';
+    initLayout('Client Management', name, 0, role);
 
     // Client list initialized for NSCRP
 

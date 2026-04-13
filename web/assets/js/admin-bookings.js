@@ -130,7 +130,7 @@ onAuthStateChanged(auth, async (user) => {
     
     // Only set layout title to 'Bookings' if we are on the bookings page
     if (window.location.pathname.includes('bookings.html')) {
-        initLayout('Bookings', name);
+        initLayout('Bookings', name, 0, role);
         initBookingList();
 
         // Handle dashboard triggers

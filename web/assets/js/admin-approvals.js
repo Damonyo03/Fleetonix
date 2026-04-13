@@ -31,7 +31,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     const name = userData.full_name || user.email.split('@')[0];
-    initLayout('Enrollment Approvals', name);
+    initLayout('Enrollment Approvals', name, 0, role);
     
     // Load Pending Approvals
     initPendingApprovals();

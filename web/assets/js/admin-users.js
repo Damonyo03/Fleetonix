@@ -24,7 +24,8 @@ onAuthStateChanged(auth, async (user) => {
     const userDoc = await getDoc(doc(db, "users", user.uid));
     currentUserData = userDoc.exists() ? userDoc.data() : { role: 'admin' };
     const name = currentUserData.full_name || user.email.split('@')[0];
-    initLayout('User Management', name);
+    const role = currentUserData.role || currentUserData.user_type || '';
+    initLayout('User Management', name, 0, role);
 
     initUserList();
 });

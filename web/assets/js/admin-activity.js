@@ -18,8 +18,10 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     const userDoc = await getDoc(doc(db, "users", user.uid));
-    const name = userDoc.exists() ? userDoc.data().full_name : user.email.split('@')[0];
-    initLayout('Activity Logs', name);
+    const userData = userDoc.exists() ? userDoc.data() : {};
+    const name = userData.full_name || user.email.split('@')[0];
+    const role = userData.role || userData.user_type || '';
+    initLayout('Activity Logs', name, 0, role);
 
     initActivityList();
 });

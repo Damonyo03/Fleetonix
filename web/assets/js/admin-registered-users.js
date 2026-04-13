@@ -45,7 +45,7 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     const name = userData.full_name || user.email.split('@')[0];
-    initLayout('Registered Users', name);
+    initLayout('Registered Users', name, 0, role);
 
     // Load all users from 'users' collection in real-time
     onSnapshot(query(collection(db, "users"), orderBy("full_name")), (snapshot) => {
