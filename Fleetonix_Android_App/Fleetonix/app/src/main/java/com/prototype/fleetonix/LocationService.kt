@@ -45,6 +45,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import com.google.android.gms.maps.model.LatLng
 
 /**
  * LocationService is the backbone of the Fleetonix driver-side logic.
@@ -87,6 +89,11 @@ class LocationService : Service() {
     private var driverEmail: String = ""
     private val actualRoutePoints = mutableListOf<com.google.android.gms.maps.model.LatLng>()
     private var isTripActive = false
+    private var activeScheduleId = ""
+    private var currentPlannedRoute: List<LatLng> = emptyList()
+    private var destinationLatLng: LatLng? = null
+    private var lastRerouteTime = 0L
+    private var lastBreadcrumbSyncTime = 0L
     
     // Telematics State
     private var currentGForce = 1.0 // Normalized Earth Gravity
@@ -117,7 +124,6 @@ class LocationService : Service() {
         const val EXTRA_SCHEDULE_ID = "extra_schedule_id"
     }
  
-    private var activeScheduleId: String = ""
 
 
     override fun onCreate() {
@@ -374,8 +380,33 @@ class LocationService : Service() {
                 actualRoutePoints.clear()
                 lastLocation = null
                 isTripActive = true
+                startLocationUpdates()
+                
+                // Fetch schedule details for rerouting context
+                serviceScope.launch {
+                    try {
+                        val db = FirebaseFirestore.getInstance()
+                        val doc = db.collection("schedules").document(activeScheduleId).get().await()
+                        if (doc.exists()) {
+                            val polyStr = doc.getString("route_polyline") ?: ""
+                            if (polyStr.isNotEmpty()) {
+                                currentPlannedRoute = GoogleMapsService.decodePolyline(polyStr)
+                            }
+                            
+                            val dropoff = doc.get("dropoff_location") as? Map<*, *>
+                            if (dropoff != null) {
+                                val lat = dropoff["lat"] as? Double ?: 0.0
+                                val lng = dropoff["lng"] as? Double ?: 0.0
+                                if (lat != 0.0) destinationLatLng = LatLng(lat, lng)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e("LocationService", "Failed to load rerouting context: ${e.message}")
+                    }
+                }
+                
                 updateDriverStatus("on_trip")
-                Log.d("LocationService", "Trip started for schedule $activeScheduleId, distance and route reset")
+                Log.d("LocationService", "Trip started: $activeScheduleId")
             }
 
         }
@@ -666,6 +697,22 @@ class LocationService : Service() {
                         "last_updated" to FieldValue.serverTimestamp()
                     )
                     
+                    // Update internal point list
+                    val newLatLng = LatLng(location.latitude, location.longitude)
+                    actualRoutePoints.add(newLatLng)
+                    
+                    // High-Accuracy Deviation Tracking & Rerouting
+                    if (isTripActive && currentPlannedRoute.isNotEmpty() && destinationLatLng != null) {
+                        checkDeviationAndReroute(newLatLng)
+                    }
+
+                    // Periodic Breadcrumb Persistence (Every 30 seconds)
+                    val now = System.currentTimeMillis()
+                    if (isTripActive && now - lastBreadcrumbSyncTime > 30000) {
+                        syncBreadcrumbsToFirestore()
+                        lastBreadcrumbSyncTime = now
+                    }
+                    
                     // Increment continuous odometer if distance changed
                     lastLocation?.let { last ->
                         val distanceKm = last.distanceTo(location) / 1000.0
@@ -767,5 +814,58 @@ class LocationService : Service() {
         )
         geofencingClient.removeGeofences(pendingIntent)
         Log.d("LocationService", "All geofences cleared")
+    }
+    private fun checkDeviationAndReroute(currentPos: LatLng) {
+        val minDistance = GoogleMapsService.findMinimumDistanceToPolyline(currentPos, currentPlannedRoute)
+        
+        // Threshold: 150 meters
+        if (minDistance > 150f) {
+            val now = System.currentTimeMillis()
+            // Throttle rerouting to once every 2 minutes to prevent API spam
+            if (now - lastRerouteTime > 120000) {
+                Log.i("LocationService", "OFF-ROUTE DETECTED ($minDistance m). Triggering Self-Healing Reroute...")
+                performReroute(currentPos)
+                lastRerouteTime = now
+            }
+        }
+    }
+
+    private fun performReroute(currentPos: LatLng) {
+        val destination = destinationLatLng ?: return
+        val originStr = "${currentPos.latitude},${currentPos.longitude}"
+        val destStr = "${destination.latitude},${destination.longitude}"
+        val apiKey = getString(R.string.google_maps_key)
+
+        serviceScope.launch {
+            try {
+                val response = GoogleMapsService.api.getDirections(originStr, destStr, apiKey)
+                if (response.status == "OK" && response.routes.isNotEmpty()) {
+                    val newPolylineChars = response.routes[0].overviewPolyline.points
+                    
+                    // Update Firestore
+                    db.collection("schedules").document(activeScheduleId)
+                        .update("route_polyline", newPolylineChars)
+                        .await()
+                    
+                    // Update Local State
+                    currentPlannedRoute = GoogleMapsService.decodePolyline(newPolylineChars)
+                    
+                    Log.i("LocationService", "Self-Healing Reroute Successful. New Path updated in Firestore.")
+                }
+            } catch (e: Exception) {
+                Log.e("LocationService", "Reroute failed: ${e.message}")
+            }
+        }
+    }
+
+    private fun syncBreadcrumbsToFirestore() {
+        if (activeScheduleId.isEmpty()) return
+        val encodedActual = GoogleMapsService.encodePolyline(actualRoutePoints)
+        
+        db.collection("schedules").document(activeScheduleId)
+            .update("actual_route_polyline", encodedActual)
+            .addOnFailureListener { e ->
+                Log.e("LocationService", "Breadcrumb sync failed: ${e.message}")
+            }
     }
 }

@@ -50,8 +50,16 @@ async function initTracking() {
     // 2. Initialize Google Map
     initMap(tripData);
 
-    // 3. Listen to Driver Location
-    if (tripData.driver_id) {
+        // 3. Keep Trip Data in Sync (Real-time for Re-routing)
+        onSnapshot(doc(db, "schedules", tripId), (tripSnap) => {
+            if (tripSnap.exists()) {
+                const updatedTripData = tripSnap.data();
+                updateRecommendedPath(updatedTripData.route_polyline || updatedTripData.recommended_route_polyline);
+                updateTripUI(updatedTripData);
+            }
+        });
+
+        // 4. Listen to Driver Location
         onSnapshot(doc(db, "driver_locations", tripData.driver_id), (locSnap) => {
             if (locSnap.exists()) {
                 const loc = locSnap.data();
@@ -59,9 +67,6 @@ async function initTracking() {
                 document.getElementById('loading-overlay').style.display = 'none';
             }
         });
-    } else {
-        showError("No driver assigned to this trip yet.");
-    }
 }
 
 let recommendedPath = null;
@@ -127,14 +132,48 @@ function initMap(tripData) {
         }
     }
 
-    // Initialize Actual Route Line
+    // Initialize Actual Route Line (With history if exists)
+    if (tripData.actual_route_polyline) {
+        try {
+            actualPathPoints = google.maps.geometry.encoding.decodePath(tripData.actual_route_polyline).map(p => ({ lat: p.lat(), lng: p.lng() }));
+        } catch (e) {
+            console.warn("Could not load historical breadcrumbs:", e);
+        }
+    }
+
     actualPathLine = new google.maps.Polyline({
-        path: [],
+        path: actualPathPoints,
         strokeColor: "#00d4ff",
         strokeOpacity: 1.0,
         strokeWeight: 6,
         map: googleMap
     });
+}
+
+function updateRecommendedPath(poly) {
+    if (!poly || !googleMap) return;
+    
+    try {
+        const decodedPath = google.maps.geometry.encoding.decodePath(poly);
+        if (recommendedPath) {
+            recommendedPath.setPath(decodedPath);
+        } else {
+            recommendedPath = new google.maps.Polyline({
+                path: decodedPath,
+                strokeColor: "#64748b",
+                strokeOpacity: 0.6,
+                strokeWeight: 4,
+                map: googleMap,
+                icons: [{
+                    icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, scale: 2 },
+                    offset: '0',
+                    repeat: '10px'
+                }]
+            });
+        }
+    } catch (e) {
+        console.error("Error updating recommended path:", e);
+    }
 }
 
 function updateDriverLocation(loc) {
