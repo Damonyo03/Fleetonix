@@ -1688,7 +1688,7 @@ fun DriverDashboard(
                                                 "latitude" to currentLatitude,
                                                 "longitude" to currentLongitude,
                                                 "location_name" to addr,
-                                                "total_hours" to totalHours,
+                                                "total_hours" to "%.2f".format(totalHours).toDouble(),
                                                 "is_overtime" to qualifiedForOT,
                                                 "device_time" to nowVal.toString()
                                             )
@@ -1729,6 +1729,32 @@ fun DriverDashboard(
                                 color = AccentOrange,
                                 style = MaterialTheme.typography.labelSmall
                             )
+                        }
+
+                        // Session Info & Warnings
+                        if (isTimedIn && lastTimeInObj != null) {
+                            val sessionStart = lastTimeInObj!!
+                            val isFromPreviousDay = sessionStart.toLocalDate().isBefore(now.toLocalDate())
+                            val timeFormatter = DateTimeFormatter.ofPattern("hh:mm a")
+                            val dateFormatter = DateTimeFormatter.ofPattern("MMM dd")
+
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    text = "Session Started: ${sessionStart.format(timeFormatter)}${if (isFromPreviousDay) " (${sessionStart.format(dateFormatter)})" else ""}",
+                                    color = AccentTeal,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                
+                                if (isFromPreviousDay) {
+                                    Text(
+                                        text = "⚠️ You are still Timed-In from a previous day. Please Time Out to reset your session.",
+                                        color = AccentOrange,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontStyle = FontStyle.Italic
+                                    )
+                                }
+                            }
                         }
                     }
                 }
