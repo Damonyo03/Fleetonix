@@ -206,7 +206,7 @@ async function copyToClipboard(text) {
 /**
  * Mandatory Backup Protocol: Enforces a JSON download before any deletion.
  */
-async function confirmWithBackup(message, data, type, id, callback) {
+window.confirmWithBackup = async function(message, data, type, id, callback) {
     if (!confirm(message + "\n\nCRITICAL: A JSON backup will be downloaded automatically before this data is purged.")) {
         return;
     }
@@ -245,6 +245,6 @@ async function confirmWithBackup(message, data, type, id, callback) {
         console.error("Backup/Delete failure:", error);
         alert("CRITICAL ERROR: Failed to generate backup. Deletion aborted for data safety. " + error.message);
     }
-}
+};
 
 
