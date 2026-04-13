@@ -186,6 +186,7 @@ fun TripHistoryScreen(
             odometerEnd = ticket.odometerEnd,
             pickupLocation = ticket.pickup,
             dropoffLocation = ticket.dropoff,
+            tripPurpose = ticket.trip_purpose,
             routePoints = routePoints,
             isSubmitting = false,
             onConfirm = { selectedTicket = null }
@@ -272,7 +273,8 @@ data class TripHistoryItem(
     val unit: String,
     val color: String,
     val odometerStart: Double,
-    val odometerEnd: Double
+    val odometerEnd: Double,
+    val trip_purpose: String
 )
 
 @RequiresApi(Build.VERSION_CODES.O)
@@ -302,7 +304,8 @@ fun buildTripItem(doc: com.google.firebase.firestore.DocumentSnapshot): TripHist
             unit = data["vehicle_unit"] as? String ?: data["vehicle_details"] as? String ?: "N/A",
             color = data["vehicle_color"] as? String ?: "N/A",
             odometerStart = (data["odometer_start"] as? Number)?.toDouble() ?: 0.0,
-            odometerEnd = (data["odometer_end"] as? Number)?.toDouble() ?: 0.0
+            odometerEnd = (data["odometer_end"] as? Number)?.toDouble() ?: 0.0,
+            trip_purpose = data["trip_purpose"] as? String ?: (if (data["isOfficial"] as? Boolean != false) "OFFICIAL" else "PERSONAL")
         )
     } catch (e: Exception) {
         null

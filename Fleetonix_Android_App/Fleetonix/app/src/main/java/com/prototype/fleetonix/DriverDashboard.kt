@@ -2289,7 +2289,7 @@ val phase = tripPhase ?: "pending"
                                                      tripActionSuccess = "Passenger marked as picked up!"
                                                      
                                                      // Admin Event
-                                                     logSystemNotification("🚖 Passenger Picked-Up", "has picked up passenger for ticket #${activeTicketId ?: 'N/A'}", "info")
+                                                      logSystemNotification("🚖 Passenger Picked-Up", "has picked up passenger for ticket #${activeTicketId ?: "N/A"}", "info")
                                                  } catch (e: Exception) {
                                                      tripActionError = "Failed: ${e.message}"
                                                  } finally {
@@ -2526,7 +2526,7 @@ val phase = tripPhase ?: "pending"
                                                 acceptedAt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
                                                 
                                                 // Admin Event
-                                                logSystemNotification("📋 Job Accepted", "has accepted an assignment for ${nextSchedule?.passenger_name ?: 'Passenger'}", "success")
+                                                logSystemNotification("📋 Job Accepted", "has accepted an assignment for ${nextSchedule?.passenger_name ?: "Passenger"}", "success")
                                                 
                                                 // Create initial real-time Trip Ticket
                                                 val initialTicketData = hashMapOf(
