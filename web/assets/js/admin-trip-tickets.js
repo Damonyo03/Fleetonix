@@ -301,7 +301,7 @@ function renderTickets(tickets) {
 
                 <div class="ticket-client" style="margin-top: 15px; font-size: 0.85rem; color: var(--text-muted); border-top: 1px solid rgba(255,255,255,0.05); padding-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                     <span><i class="fas fa-user-tie"></i> Client: ${ticket.client_name || '—'}</span>
-                    <span><i class="fas fa-bullseye"></i> Purpose: <b style="color:var(--accent-blue);">${ticket.trip_purpose || (ticket.isOfficial ? 'OFFICIAL' : 'PERSONAL')}</b></span>
+                    <span><i class="fas fa-bullseye"></i> Purpose: <b style="color:var(--accent-blue);">${ticket.trip_purpose || '—'}</b></span>
                     ${ticket.schedule_date ? `<span style="grid-column: span 2;"><i class="fas fa-calendar"></i> Requested: ${ticket.schedule_date} ${ticket.schedule_time || ''}</span>` : ''}
                 </div>
 

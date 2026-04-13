@@ -347,31 +347,47 @@ body {
     border-radius: var(--radius-lg);
     border: 1px solid var(--border-color);
     overflow: hidden;
+    width: 100%;
+    overflow-x: auto;
+    position: relative;
+    padding-bottom: 4px;
+}
+
+.table-container::-webkit-scrollbar {
+    height: 5px;
+}
+
+.table-container::-webkit-scrollbar-thumb {
+    background: var(--glass-border);
+    border-radius: 10px;
 }
 
 .data-table {
     width: 100%;
     border-collapse: collapse;
-    min-width: 800px; /* Fluid guard to prevent squashing */
+    /* No min-width: allows the table to fully fit the container without forcing scroll */
 }
 
 .data-table th {
     background: rgba(255, 255, 255, 0.02);
-    padding: 16px;
+    padding: 14px 12px;
     text-align: left;
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--text-muted);
     border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
 }
 
 .data-table td {
-    padding: 16px;
+    padding: 14px 12px;
     border-bottom: 1px solid var(--border-color);
     font-size: 0.875rem;
     color: var(--text-secondary);
-    white-space: nowrap; /* Prevent messy wrapping in tables */
+    white-space: normal;
+    word-break: break-word;
+    vertical-align: top;
 }
 
 /* Utilities requested by user */
@@ -385,23 +401,6 @@ body {
 .break-words {
     white-space: normal !important;
     word-break: break-word;
-}
-
-.table-container {
-    width: 100%;
-    overflow-x: auto;
-    border-radius: var(--radius-md);
-    position: relative;
-    padding-bottom: 10px; /* Space for scrollbar */
-}
-
-.table-container::-webkit-scrollbar {
-    height: 6px;
-}
-
-.table-container::-webkit-scrollbar-thumb {
-    background: var(--glass-border);
-    border-radius: 10px;
 }
 
 .data-table tr:last-child td {

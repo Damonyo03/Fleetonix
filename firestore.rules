@@ -24,6 +24,18 @@ service cloud.firestore {
       return request.auth.token.get('email', '').lower();
     }
 
+    // NEW: Array-Safe and Null-Safe identity check for drivers
+    function isAuthorizedDriver(data) {
+      let uid = request.auth.uid;
+      let email = getAuthEmail();
+      let d_uid = data.get('driver_uid', '');
+      let d_email = data.get('driver_email', '').lower();
+      
+      return (d_uid == uid || 
+              (d_email != '' && d_email == email) ||
+              (d_uid is list && uid in d_uid));
+    }
+
     // ── driver_locations: owner-only write, admins-only read ──────────────
     match /driver_locations/{docId} {
       allow read: if isSignedIn() && (isOwner(docId) || resource.data.get('driver_uid', '') == request.auth.uid || isAdmin());
@@ -34,20 +46,20 @@ service cloud.firestore {
 
     // ── drivers: self-update status/telemetry, admins full CRUD ────────────
     match /drivers/{userId} {
-      allow read: if isSignedIn() && (isOwner(userId) || resource.data.get('driver_uid', '') == request.auth.uid || isAdmin());
+      allow read: if isSignedIn() && (isOwner(userId) || isAuthorizedDriver(resource.data) || isAdmin());
+      allow create: if isSignedIn() && (isOwner(userId) || isAuthorizedDriver(request.resource.data) || isAdmin());
       allow update: if isSignedIn() 
-        && (isOwner(userId) || 
-            resource.data.get('driver_uid', '') == request.auth.uid || 
-            getAuthEmail() == resource.data.get('driver_email', '').lower() ||
-            isAdmin())
+        && (isOwner(userId) || isAuthorizedDriver(resource.data) || isAdmin())
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
              'current_status', 'current_trip_id', 'current_trip_phase', 
              'current_mileage', 'active_ticket_id', 'last_updated', 'on_break',
              'profile_image_url', 'incident_active', 'isFirstLogin', 'updated_at',
              'is_currently_timed_in', 'last_time_in', 'last_time_out',
-             'location', 'current_location_name', 'current_city', 'status', 'lastSeen', 'command'
-           ]);
-      allow write: if isSignedIn() && isAdmin();
+             'location', 'current_location_name', 'current_city', 'status', 'lastSeen', 'command',
+             'current_speed', 'current_heading', 'current_accuracy', 'acceleration_g',
+             'wifi_ssid', 'wifi_rssi', 'is_background', 'device_health', 'driver_email', 'driver_uid'
+            ]);
+      allow delete: if isSignedIn() && (isOwner(userId) || isAuthorizedDriver(resource.data) || isAdmin());
     }
 
     // ── schedules: assigned driver update phase/status; admins full write ────
@@ -59,19 +71,20 @@ service cloud.firestore {
       );
       allow write: if isSignedIn() && isAdmin();
       allow update: if isSignedIn()
-        && (resource.data.get('driver_uid', '') == request.auth.uid || 
-            getAuthEmail() == resource.data.get('driver_email', '').lower() || 
-            isAdmin())
+        && (isAuthorizedDriver(resource.data) || 
+            isAdmin() ||
+            (resource.data.get('driver_uid', '') == '' && request.resource.data.get('driver_uid', '') == request.auth.uid))
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-             'status', 'trip_phase', 'accepted_at', 'started_at', 'picked_up_at', 
-             'dropped_off_at', 'completed_at', 'driver_viewed_at', 'total_km_travelled', 
-             'current_segment_index', 'total_segments_completed', 'segments', 
-             'odometer_start', 'odometer_end', 'refusal_reason', 
-             'vehicle_type', 'plate_number', 'actual_route_polyline', 
-             'time_of_departure', 'time_of_arrival', 'last_updated',
-             'cancellation_reason', 'cancelled_at', 'route_polyline', 'updated_at',
-             'driver_uid', 'driver_email', 'actualRoutePoints'
-           ]);
+              'status', 'trip_phase', 'accepted_at', 'started_at', 'picked_up_at', 
+              'dropped_off_at', 'completed_at', 'driver_viewed_at', 'total_km_travelled', 
+              'current_segment_index', 'total_segments_completed', 'segments', 
+              'odometer_start', 'odometer_end', 'refusal_reason', 
+              'vehicle_type', 'plate_number', 'actual_route_polyline', 
+              'time_of_departure', 'time_of_arrival', 'last_updated',
+              'cancellation_reason', 'cancelled_at', 'route_polyline', 'updated_at',
+              'driver_uid', 'driver_email', 'actualRoutePoints', 'driver_id', 
+              'notes', 'passenger_count'
+            ]);
     }
 
     // ── accidents/incidents/issues: createable by owner/email ──────
@@ -89,34 +102,28 @@ service cloud.firestore {
     }
 
     match /incidents/{docId} {
-      allow read: if isSignedIn() && (resource.data.get('driver_uid', '') == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && (request.resource.data.get('driver_uid', '') == request.auth.uid || request.resource.data.get('driver_email', '').lower() == getAuthEmail());
+      allow read: if isSignedIn() && (isAuthorizedDriver(resource.data) || isAdmin());
+      allow create: if isSignedIn() && (isAuthorizedDriver(request.resource.data) || isAdmin());
       allow update, delete: if isSignedIn() && isAdmin();
     }
 
     match /vehicle_issues/{docId} {
-      allow read: if isSignedIn() && (resource.data.get('driver_uid', '') == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && (request.resource.data.get('driver_uid', '') == request.auth.uid || request.resource.data.get('driver_email', '').lower() == getAuthEmail());
+      allow read: if isSignedIn() && (isAuthorizedDriver(resource.data) || isAdmin());
+      allow create: if isSignedIn() && (isAuthorizedDriver(request.resource.data) || isAdmin());
       allow update, delete: if isSignedIn() && isAdmin();
     }
 
     // ── trip_tickets: drivers create/read own; admins full access ──────
     match /trip_tickets/{docId} {
-      allow read: if isSignedIn() && (
-        resource.data.get('driver_uid', '') == request.auth.uid || 
-        resource.data.get('driver_email', '').lower() == getAuthEmail() ||
-        isAdmin()
-      );
-      allow create, update: if isSignedIn()
-        && (request.resource.data.get('driver_email', '').lower() == getAuthEmail()
-            || request.resource.data.get('driver_uid', '') == request.auth.uid || isAdmin());
+      allow read: if isSignedIn() && (isAuthorizedDriver(resource.data) || isAdmin());
+      allow create, update: if isSignedIn() && (isAuthorizedDriver(request.resource.data) || isAdmin());
       allow delete: if isSignedIn() && isAdmin();
     }
 
     // ── dtr_logs: owners read/write; admins full access ──────
     match /dtr_logs/{docId} {
-      allow read: if isSignedIn() && (resource.data.get('driver_email', '').lower() == getAuthEmail() || isAdmin());
-      allow create: if isSignedIn() && (request.resource.data.get('driver_email', '').lower() == getAuthEmail() || isAdmin());
+      allow read: if isSignedIn() && (isAuthorizedDriver(resource.data) || isAdmin());
+      allow create: if isSignedIn() && (isAuthorizedDriver(request.resource.data) || isAdmin());
       allow update, delete: if isSignedIn() && isAdmin();
     }
 
@@ -134,16 +141,11 @@ service cloud.firestore {
     match /notifications/{docId} {
       allow read: if isSignedIn() && (
         resource.data.get('user_id', '') == request.auth.uid || 
-        resource.data.get('driver_uid', '') == request.auth.uid ||
+        isAuthorizedDriver(resource.data) ||
         resource.data.get('user_email', '').lower() == getAuthEmail() ||
-        resource.data.get('driver_email', '').lower() == getAuthEmail() ||
         isAdmin()
       );
-      allow create: if isSignedIn() && (
-        request.resource.data.get('driver_uid', '') == request.auth.uid ||
-        request.resource.data.get('driver_email', '').lower() == getAuthEmail() ||
-        isAdmin()
-      );
+      allow create: if isSignedIn() && (isAuthorizedDriver(request.resource.data) || isAdmin());
       allow update, delete: if isSignedIn() && isAdmin();
     }
 

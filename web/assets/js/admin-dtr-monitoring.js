@@ -75,7 +75,7 @@ window.initDTRLogs = function() {
 
 function renderLogs(docs) {
     if (docs.length === 0) {
-        dtrLogsBody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 40px;">No records found for this date range.</td></tr>';
+        dtrLogsBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px;">No records found for this date range.</td></tr>';
         document.getElementById('countClockIn').textContent = 0;
         document.getElementById('countClockOut').textContent = 0;
         document.getElementById('countUniqueDrivers').textContent = 0;
@@ -136,7 +136,6 @@ function renderLogs(docs) {
                 </td>
                 <td>${timeString}</td>
                 <td style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${typeof gpsText === 'string' && !gpsText.includes('<a') ? gpsText : ''}">${gpsText}</td>
-                <td><span style="font-size: 0.85em;">${log.notes || '-'}</span></td>
             </tr>
         `;
     }).join('');

@@ -246,11 +246,6 @@ async function showCreateBookingModal(clients) {
             </div>
         </div>
 
-        <div class="form-group" style="padding-top: 5px;">
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9em;">
-                <input type="checkbox" id="return_to_pickup" style="width: auto;"> Return to Pickup
-            </label>
-        </div>
 
         <div class="form-group">
             <label for="special_instructions">Special Instructions (Optional)</label>
@@ -368,7 +363,6 @@ async function showCreateBookingModal(clients) {
             pickup_time: time,
             passengers: parseInt(document.getElementById('passengers').value) || 1,
             trip_purpose: tripPurpose,
-            return_to_pickup: document.getElementById('return_to_pickup').checked,
             special_instructions: document.getElementById('special_instructions').value || '',
 
             driver_id: driverId || null,
@@ -417,7 +411,6 @@ async function showCreateBookingModal(clients) {
                 schedule_time: time,
                 passengers: parseInt(document.getElementById('passengers').value) || 1,
                 trip_purpose: tripPurpose,
-                return_to_pickup: document.getElementById('return_to_pickup').checked,
                 special_instructions: document.getElementById('special_instructions').value || '',
                 operating_area: detectedArea,
                 isOfficial: isOfficial,
@@ -566,8 +559,8 @@ function renderBookings(docs) {
             <tr>
                 <td>${displayName}</td>
                 <td>${areaLabel}</td>
-                <td>${booking.pickup_location || 'N/A'}</td>
-                <td>${booking.dropoff_location || 'N/A'}</td>
+                <td title="${booking.pickup_location || ''}">${(booking.pickup_location || 'N/A').length > 35 ? (booking.pickup_location || '').substring(0,35)+'...' : (booking.pickup_location || 'N/A')}</td>
+                <td title="${booking.dropoff_location || ''}">${(booking.dropoff_location || 'N/A').length > 35 ? (booking.dropoff_location || '').substring(0,35)+'...' : (booking.dropoff_location || 'N/A')}</td>
                 <td>${booking.pickup_date || 'N/A'} ${booking.pickup_time || ''}</td>
                 <td><span class="status-badge ${statusClass}">${
                     statusClass === 'pending' ? 'Pending Review' : 
@@ -597,8 +590,7 @@ window.viewBookingDetails = async (id) => {
             ${b.passenger_phone ? `<div><strong>Phone:</strong> ${b.passenger_phone}</div>` : ''}
             <div><strong>Contractor:</strong> ${b.client_name || 'Jettsan'}</div>
             <div><strong>Date/Time:</strong> ${b.pickup_date || ''} ${b.pickup_time || ''}</div>
-            <div><strong>Pax:</strong> ${b.pax || 1}</div>
-            <div><strong>Return?:</strong> ${b.return_to_pickup ? 'Yes' : 'No'}</div>
+            <div><strong>Pax:</strong> ${b.pax || b.passengers || 1}</div>
             <div><strong>Status:</strong> <span class="status-badge ${b.status}">${b.status}</span></div>
             <div><strong>Purpose:</strong> <span style="color:var(--accent-blue); font-weight:700;">${b.trip_purpose || 'Not Specified'}</span></div>
             <div><strong>Notes:</strong> ${b.special_instructions || '-'}</div>
