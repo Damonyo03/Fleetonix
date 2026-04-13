@@ -857,14 +857,26 @@ window.finalizeDraft = async (id) => {
 };
 
 window.deleteBooking = async (id) => {
-    if (confirm("Are you sure you want to delete this booking request?")) {
-        await deleteDoc(doc(db, "bookings", id));
-        
-        await addDoc(collection(db, "activity"), {
-            type: 'system',
-            title: 'Booking Deleted',
-            message: `Admin deleted Booking #${id}`,
-            timestamp: serverTimestamp()
-        });
-    }
+    const snap = await getDoc(doc(db, "bookings", id));
+    if (!snap.exists()) return;
+    const bookingData = snap.data();
+
+    await confirmWithBackup(
+        "Are you sure you want to delete this booking request?",
+        bookingData,
+        "Booking",
+        id,
+        async () => {
+            await deleteDoc(doc(db, "bookings", id));
+            
+            await addDoc(collection(db, "activity"), {
+                type: 'system',
+                title: 'Booking Deleted',
+                message: `Admin deleted Booking #${id}`,
+                timestamp: serverTimestamp()
+            });
+
+            alert("Booking deleted and backup downloaded.");
+        }
+    );
 };

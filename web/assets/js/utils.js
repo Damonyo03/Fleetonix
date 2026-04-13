@@ -203,3 +203,48 @@ async function copyToClipboard(text) {
     }
 }
 
+/**
+ * Mandatory Backup Protocol: Enforces a JSON download before any deletion.
+ */
+async function confirmWithBackup(message, data, type, id, callback) {
+    if (!confirm(message + "\n\nCRITICAL: A JSON backup will be downloaded automatically before this data is purged.")) {
+        return;
+    }
+
+    try {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `backup_${type}_${id}_${timestamp}.json`;
+        
+        const backupData = JSON.stringify({
+            metadata: {
+                type: type,
+                id: id,
+                exported_at: new Date().toISOString(),
+                exported_by: "Fleetonix Admin"
+            },
+            data: data
+        }, null, 2);
+
+        const blob = new Blob([backupData], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        console.log(`[Backup] Mandatory snapshot downloaded: ${filename}`);
+        
+        // Short delay to ensure browser registers the download intent
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        return await callback();
+    } catch (error) {
+        console.error("Backup/Delete failure:", error);
+        alert("CRITICAL ERROR: Failed to generate backup. Deletion aborted for data safety. " + error.message);
+    }
+}
+
+

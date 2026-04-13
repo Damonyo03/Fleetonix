@@ -210,37 +210,40 @@ window.updateScheduleStatus = async (id) => {
 };
 
 window.deleteSchedule = async (id) => {
-    if (!confirm("Are you sure you want to cancel and delete this schedule?")) return;
-    try {
-        const snap = await getDoc(doc(db, "schedules", id));
-        if (snap.exists()) {
-            const data = snap.data();
-            if (data.driver_id) {
-                await updateDoc(doc(db, "drivers", data.driver_id), {
+    const snap = await getDoc(doc(db, "schedules", id));
+    if (!snap.exists()) return;
+    const scheduleData = snap.data();
+
+    await confirmWithBackup(
+        "Are you sure you want to cancel and delete this schedule?",
+        scheduleData,
+        "Schedule",
+        id,
+        async () => {
+            if (scheduleData.driver_id) {
+                await updateDoc(doc(db, "drivers", scheduleData.driver_id), {
                     current_status: 'available',
                     updated_at: serverTimestamp()
                 });
             }
-            if (data.booking_id) {
-                await updateDoc(doc(db, "bookings", data.booking_id), {
+            if (scheduleData.booking_id) {
+                await updateDoc(doc(db, "bookings", scheduleData.booking_id), {
                     status: 'pending',
                     updated_at: serverTimestamp()
                 });
             }
+            
+            await deleteDoc(doc(db, "schedules", id));
+
+            // Audit log
+            await addDoc(collection(db, "activity"), {
+                type: 'security',
+                title: 'Trip Discarded',
+                message: `Admin cancelled & deleted Dispatch #${id}`,
+                timestamp: serverTimestamp()
+            });
+
+            alert("Schedule deleted successfully and backup downloaded.");
         }
-        await deleteDoc(doc(db, "schedules", id));
-
-        // Audit log
-        await addDoc(collection(db, "activity"), {
-            type: 'security',
-            title: 'Trip Discarded',
-            message: `Admin cancelled & deleted Dispatch #${id}`,
-            timestamp: serverTimestamp()
-        });
-
-        alert("Schedule deleted successfully.");
-    } catch (error) {
-        console.error("Delete schedule error:", error);
-        alert("Failed to delete schedule: " + error.message);
-    }
+    );
 };

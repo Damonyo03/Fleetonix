@@ -334,47 +334,42 @@ window.deleteUser = async (id) => {
     const user = allUsers.find(u => u.id === id);
     if (!user) return;
 
-    if (!confirm(`Are you sure you want to permanently delete the account for ${user.full_name || user.email}? This action cannot be undone and will recalibrate organizational fleet counts.`)) {
-        return;
-    }
+    await confirmWithBackup(
+        `Are you sure you want to permanently delete the account for ${user.full_name || user.email}? This action cannot be undone and will recalibrate organizational fleet counts.`,
+        user,
+        "User",
+        id,
+        async () => {
+            const idToken = await auth.currentUser.getIdToken();
+            const response = await fetch('https://us-central1-appfleetonix.cloudfunctions.net/adminDeleteUser', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`
+                },
+                body: JSON.stringify({
+                    uid: id,
+                    email: user.email
+                })
+            });
 
-    try {
-        // --- PHASE 6: JSON BACKUP PROTOCOL ---
-        const backupData = JSON.stringify({
-            user_metadata: user,
-            exported_at: new Date().toISOString(),
-            exported_by: auth.currentUser.email
-        }, null, 2);
-        
-        const blob = new Blob([backupData], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `backup_${user.id}_${Date.now()}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        
-        console.log("[Backup] JSON snapshot downloaded for user:", id);
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.message || "Failed to purge user account.");
+            }
 
-        const idToken = await auth.currentUser.getIdToken();
-        const response = await fetch('https://us-central1-appfleetonix.cloudfunctions.net/adminDeleteUser', {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${idToken}`
-            },
-            body: JSON.stringify({
-                uid: id,
-                email: user.email
-            })
-        });
+            // 3. Activity Audit
+            await addDoc(collection(db, "activity"), {
+                type: 'system',
+                title: 'User Deleted',
+                message: `Super Admin purged user account: ${user.full_name} (${user.email})`,
+                timestamp: serverTimestamp()
+            });
 
-        const result = await response.json();
-        if (!result.success) {
-            throw new Error(result.message || "Failed to purge user account.");
+            alert("User account successfully purged and backup downloaded.");
         }
+    );
+};
 
         // Removed company-specific counter logic for NSCRP
 

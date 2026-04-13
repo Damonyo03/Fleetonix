@@ -505,11 +505,22 @@ if (addDriverBtn) {
 }
 
 window.deleteDriver = async (id) => {
-    if (confirm("Permanently remove this driver and their assets? This action cannot be undone.")) {
-        await deleteDoc(doc(db, "drivers", id));
-        await deleteDoc(doc(db, "users", id)).catch(err => console.warn("User deletion failed:", err));
-        alert("Driver removed from system.");
-    }
+    const snap = await getDoc(doc(db, "drivers", id));
+    if (!snap.exists()) return;
+    const driverData = snap.data();
+
+    await confirmWithBackup(
+        "Permanently remove this driver and their assets? This action cannot be undone.",
+        driverData,
+        "Driver",
+        id,
+        async () => {
+            await deleteDoc(doc(db, "drivers", id));
+            await deleteDoc(doc(db, "users", id)).catch(err => console.warn("User deletion failed:", err));
+            alert("Driver removed from system and backup downloaded.");
+            location.reload();
+        }
+    );
 };
 // Auto-refresh UI every 30 seconds to update 'Stale' statuses without waiting for Firestore push
 setInterval(() => {
