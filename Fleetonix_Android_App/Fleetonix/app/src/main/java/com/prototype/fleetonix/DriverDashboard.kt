@@ -2613,14 +2613,12 @@ val phase = tripPhase ?: "pending"
                                                 }
                                                 context.startService(startTripIntent)
                                                 
-                                                val email = auth.currentUser?.email
-                                                if (email != null) {
-                                                    db.collection("drivers")
-                                                        .whereEqualTo("driver_email", email.lowercase().trim())
-                                                        .get().await().documents.firstOrNull()?.reference?.update(
-                                                            "current_status", "En Route to Pickup",
-                                                            "current_trip_phase", "en_route_pickup"
-                                                        )
+                                                val uid = auth.currentUser?.uid
+                                                if (uid != null) {
+                                                    db.collection("drivers").document(uid).update(
+                                                        "current_status", "En Route to Pickup",
+                                                        "current_trip_phase", "en_route_pickup"
+                                                    ).await()
                                                 }
                                             } catch (e: Exception) {
                                                 tripActionError = "Navigation failed: ${e.message}"
@@ -2810,26 +2808,22 @@ val phase = tripPhase ?: "pending"
                                 "completed_at" to FieldValue.serverTimestamp()
                             )
                             
-                            // Ensure activeTicketId is used OR recovered
-                            val finalTicketId = activeTicketId ?: "TKT_${dId}_${System.currentTimeMillis()}"
+                            // Use deterministic ID to prevent duplication
+                            val finalTicketId = "TKT_${dId}"
                             
                             db.collection("trip_tickets").document(finalTicketId).set(ticketData).await()
                             
                             // Update driver capacity/status
-                            val email = auth.currentUser?.email
-                            if (email != null) {
-                                val dSnap = db.collection("drivers")
-                                    .whereEqualTo("driver_email", email.lowercase().trim())
-                                    .get().await()
-                                    
-                                dSnap.documents.firstOrNull()?.reference?.update(
+                            val uid = auth.currentUser?.uid
+                            if (uid != null) {
+                                db.collection("drivers").document(uid).update(
                                     "current_status", "available",
                                     "current_trip_id", "",
                                     "current_trip_phase", "completed",
                                     "current_mileage", endOdometerValue,
                                     "active_ticket_id", "",
                                     "last_updated", FieldValue.serverTimestamp()
-                                )?.await()
+                                ).await()
                             }
 
                             showTripTicket = false
