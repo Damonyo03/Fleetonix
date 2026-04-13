@@ -26,7 +26,28 @@ class ShakeDetector(
     private val REQUIRED_SHAKES = 3 // Require 3 firm shakes
     private val SHAKE_WINDOW = 3000 // Increased from 2000ms for more natural timing
     
-    private val ACCIDENT_G_THRESHOLD = 2.2f // Threshold for intentional shaking
+    // Threshold for intentional shaking
+    private val ACCIDENT_G_THRESHOLD = 2.2f 
+
+    override fun onSensorChanged(event: SensorEvent?) {
+        if (event?.sensor?.type == Sensor.TYPE_ACCELEROMETER) {
+            val currentTime = System.currentTimeMillis()
+            
+            // Only process if enough time has passed since last reading
+            if ((currentTime - lastUpdate) > TIME_THRESHOLD) {
+                lastUpdate = currentTime
+                
+                val x = event.values[0]
+                val y = event.values[1]
+                val z = event.values[2]
+                
+                // Calculate G-force
+                val gX = x / SensorManager.GRAVITY_EARTH
+                val gY = y / SensorManager.GRAVITY_EARTH
+                val gZ = z / SensorManager.GRAVITY_EARTH
+                
+                // gForce will be near 1.0 when stationary
+                val gForce = sqrt(gX * gX + gY * gY + gZ * gZ)
                 
                 if (gForce > ACCIDENT_G_THRESHOLD) {
                     // Reset count if too much time passed
@@ -65,4 +86,3 @@ class ShakeDetector(
         // Not used
     }
 }
-
