@@ -10,6 +10,72 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+// Tracking listeners for modals
+let activeModalListeners = [];
+function clearModalListeners() {
+    activeModalListeners.forEach(unsub => unsub());
+    activeModalListeners = [];
+}
+
+function updateDriverDropdown(selectEl, drivers, locations, isAssignModal = false) {
+    if (!selectEl) return;
+    
+    const locationMap = {};
+    locations.forEach(doc => {
+        locationMap[(doc.data().driver_email || "").toLowerCase().trim()] = doc.data();
+    });
+
+    const driverMap = new Map();
+    const now = Date.now();
+    const tenMins = 10 * 60 * 1000;
+
+    drivers.forEach(dDoc => {
+        const data = dDoc.data();
+        const email = (data.driver_email || "").toLowerCase().trim();
+        if (!email || driverMap.has(email)) return;
+
+        const loc = locationMap[email];
+        let isOnline = false;
+        if (loc && loc.last_updated) {
+            const lastActive = loc.last_updated.toMillis ? loc.last_updated.toMillis() : (loc.last_updated.seconds * 1000);
+            if (now - lastActive < tenMins) isOnline = true;
+        }
+
+        driverMap.set(email, {
+            id: dDoc.id,
+            ...data,
+            isOnline: isOnline
+        });
+    });
+
+    const sortedDrivers = Array.from(driverMap.values()).sort((a, b) => {
+        if (a.isOnline === b.isOnline) {
+            const nameA = a.driver_name || "";
+            const nameB = b.driver_name || "";
+            return nameA.localeCompare(nameB);
+        }
+        return a.isOnline ? -1 : 1;
+    });
+
+    const currentVal = selectEl.value;
+    if (sortedDrivers.length > 0) {
+        selectEl.innerHTML = '<option value="">-- Select Driver --</option>' + 
+            sortedDrivers.map(d => `
+                <option value="${d.id}" ${d.id === currentVal ? 'selected' : ''}
+                    data-email="${d.driver_email || ''}" 
+                    data-name="${d.driver_name || ''}"
+                    data-image="${d.profile_image_url || ''}"
+                    data-details="${d.car_details || ''}"
+                    data-color="${d.car_color || ''}"
+                    data-vehicle="${d.vehicle_assigned || ''}">
+                    ${d.isOnline ? '🟢 [ONLINE]' : '⚪ [OFFLINE]'} ${d.driver_name} ${isAssignModal ? `- ${d.vehicle_assigned} (${d.plate_number})` : ''}
+                </option>`).join('');
+    } else {
+        selectEl.innerHTML = '<option value="">No drivers found</option>';
+    }
+}
+
+
 const bookingTableBody = document.getElementById('bookingTableBody');
 const statusFilter = document.getElementById('statusFilter');
 const newAdminBookingBtn = document.getElementById('newAdminBookingBtn');
@@ -343,9 +409,8 @@ async function showCreateBookingModal(clients) {
 
             await addDoc(collection(db, "schedules"), scheduleData);
 
-            // Update driver status
+            // Update driver trip metadata (Status remains 'available' until driver accepts)
             await updateDoc(doc(db, "drivers", driverId), {
-                current_status: "on_schedule",
                 current_trip_id: bookingId,
                 current_trip_phase: "pending",
                 updated_at: serverTimestamp()
@@ -383,63 +448,47 @@ async function showCreateBookingModal(clients) {
         });
 
         alert("Booking created successfully! " + (autoDispatch ? "It has been sent to dispatch." : "It is now pending approval."));
+        
+        if (autoDispatch) {
+            window.location.href = 'schedules.html';
+        }
     });
+
+    // Handle Unsubscribes when modal closes
+    const cleanup = () => {
+        clearModalListeners();
+    };
     
-    // ── Populate Drivers List for the newly opened Modal ─────────
-    setTimeout(async () => {
-        const driverSelect = document.getElementById('modal_driver');
-        if (driverSelect) {
-            try {
-                const [driversSnap, locationsSnap] = await Promise.all([
-                    getDocs(query(collection(db, "drivers"), where("current_status", "==", "available"))),
-                    getDocs(collection(db, "driver_locations"))
-                ]);
-                
-                const locationMap = {};
-                locationsSnap.docs.forEach(doc => {
-                    locationMap[doc.id.toLowerCase().trim()] = doc.data();
-                });
-
-                const driverMap = new Map();
-                const now = Date.now();
-                const tenMins = 10 * 60 * 1000;
-
-                driversSnap.docs.forEach(dDoc => {
-                    const data = dDoc.data();
-                    const email = (data.driver_email || "").toLowerCase().trim();
-                    if (!email || driverMap.has(email)) return;
-
-                    const loc = locationMap[email];
-                    let isOnline = false;
-                    if (loc && loc.last_updated) {
-                        const lastActive = loc.last_updated.toMillis ? loc.last_updated.toMillis() : (loc.last_updated.seconds * 1000);
-                        if (now - lastActive < tenMins) isOnline = true;
-                    }
-
-                    driverMap.set(email, {
-                        id: dDoc.id,
-                        name: data.driver_name,
-                        isOnline: isOnline
-                    });
-                });
-
-                const sortedDrivers = Array.from(driverMap.values()).sort((a, b) => {
-                    if (a.isOnline === b.isOnline) return a.name.localeCompare(b.name);
-                    return a.isOnline ? -1 : 1;
-                });
-
-                if (sortedDrivers.length > 0) {
-                    driverSelect.innerHTML = '<option value="">-- No Driver Assigned --</option>' + 
-                        sortedDrivers.map(d => `<option value="${d.id}">${d.isOnline ? '🟢 [ONLINE]' : '⚪ [OFFLINE]'} ${d.name}</option>`).join('');
-                } else {
-                    driverSelect.innerHTML = '<option value="">No available drivers found</option>';
-                }
-            } catch (err) {
-                console.error("Error populating drivers:", err);
-                driverSelect.innerHTML = '<option value="">Error loading drivers</option>';
-            }
+    // UI components are injected after showModal, so we wait a bit or use event delegation
+    setTimeout(() => {
+        const modal = document.querySelector('.modal-backdrop');
+        if (modal) {
+            modal.querySelector('.close-modal').addEventListener('click', cleanup);
+            modal.querySelector('.cancel-modal').addEventListener('click', cleanup);
         }
     }, 100);
+    
+    // ── Populate Drivers List REAL-TIME ─────────
+    setTimeout(() => {
+        const driverSelect = document.getElementById('modal_driver');
+        if (!driverSelect) return;
+
+        // Start listeners
+        const unsubDrivers = onSnapshot(collection(db, "drivers"), (driversSnap) => {
+            getDocs(collection(db, "driver_locations")).then(locsSnap => {
+                updateDriverDropdown(driverSelect, driversSnap.docs, locsSnap.docs);
+            });
+        });
+
+        const unsubLocs = onSnapshot(collection(db, "driver_locations"), (locsSnap) => {
+            getDocs(collection(db, "drivers")).then(driversSnap => {
+                updateDriverDropdown(driverSelect, driversSnap.docs, locsSnap.docs);
+            });
+        });
+
+        activeModalListeners.push(unsubDrivers, unsubLocs);
+    }, 100);
+
 
     // ── ALWAYS Initialize Autocompletes ───────────────────
     setTimeout(() => {
@@ -664,7 +713,6 @@ window.assignDriver = async (id) => {
         await setDoc(doc(db, "schedules", schedId), scheduleData);
 
         await updateDoc(doc(db, "drivers", driverId), {
-            current_status: "on_schedule",
             current_trip_id: id,
             current_trip_phase: "pending",
             updated_at: serverTimestamp()
@@ -696,7 +744,39 @@ window.assignDriver = async (id) => {
         });
 
         alert("Driver assigned and schedule created!");
+        clearModalListeners();
+        window.location.href = 'schedules.html';
     });
+
+    // Handle Unsubscribes for this modal
+    setTimeout(() => {
+        const modal = document.querySelector('.modal-backdrop');
+        if (modal) {
+            modal.querySelector('.close-modal').addEventListener('click', clearModalListeners);
+            modal.querySelector('.cancel-modal').addEventListener('click', clearModalListeners);
+        }
+    }, 100);
+
+    // Populate drivers REAL-TIME for manual assignment
+    setTimeout(() => {
+        const driverSelect = document.getElementById('modal_driver');
+        if (!driverSelect) return;
+
+        const unsubDrivers = onSnapshot(collection(db, "drivers"), (driversSnap) => {
+            getDocs(collection(db, "driver_locations")).then(locsSnap => {
+                updateDriverDropdown(driverSelect, driversSnap.docs, locsSnap.docs, true);
+            });
+        });
+
+        const unsubLocs = onSnapshot(collection(db, "driver_locations"), (locsSnap) => {
+            getDocs(collection(db, "drivers")).then(driversSnap => {
+                updateDriverDropdown(driverSelect, driversSnap.docs, locsSnap.docs, true);
+            });
+        });
+
+        activeModalListeners.push(unsubDrivers, unsubLocs);
+    }, 100);
+
 };
 
 window.deleteBooking = async (id) => {

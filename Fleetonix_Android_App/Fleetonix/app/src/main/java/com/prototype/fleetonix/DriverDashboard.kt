@@ -822,8 +822,13 @@ fun DriverDashboard(
                     return@launch
                 }
 
-                val lat = location?.latitude ?: 0.0
-                val lng = location?.longitude ?: 0.0
+                // Improvement: Fallback to dashboard's current coordinates if fresh location fetch fails
+                val lat = location?.latitude ?: currentLatitude
+                val lng = location?.longitude ?: currentLongitude
+                
+                if (lat == 0.0 && lng == 0.0) {
+                    throw Exception("Could not determine location. Please ensure GPS is enabled.")
+                }
 
                 val user = auth.currentUser
                 val schedule = nextSchedule
@@ -835,6 +840,7 @@ fun DriverDashboard(
                     "latitude" to lat,
                     "longitude" to lng,
                     "description" to "Accident reported via shake detection",
+                    "status" to "pending", // CRITICAL: Admin Dashboard filters for status != "acknowledged"
                     "reported_at" to FieldValue.serverTimestamp()
                 )
 

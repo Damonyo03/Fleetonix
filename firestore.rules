@@ -125,6 +125,21 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // ── notifications: users read own; admins full access ─────────
+    match /notifications/{docId} {
+      allow read: if isSignedIn() && (resource.data.user_id == request.auth.uid || isAdmin() || resource.data.user_id == 'guest');
+      allow create, update: if isSignedIn() && isAdmin();
+      allow delete: if isSignedIn() && isAdmin();
+    }
+
+    // ── activity & driver_activity: admins full access ──────────────────────────
+    match /activity/{docId} {
+      allow read, write: if isSignedIn() && isAdmin();
+    }
+    match /driver_activity/{docId} {
+      allow read, write: if isSignedIn() && isAdmin();
+    }
+
     // ── Everything else: Default Deny ───────────────────────────────
     match /{document=**} {
       allow read, write: if false;
