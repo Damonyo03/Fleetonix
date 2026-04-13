@@ -1595,23 +1595,14 @@ fun DriverDashboard(
                             )
                         }
 
-                        // Business Logic: 15-minute window or Standby check
+                        // Business Logic: Must have a schedule today to Time In/Out
                         val now = LocalDateTime.now()
+                        val todayStr = now.toLocalDate().toString()
+                        val hasSchedulesToday = feed?.schedules?.any { it.schedule_date == todayStr } ?: false
                         val hasStandby = feed?.schedules?.any { it.status?.lowercase() == "standby" || it.passenger_name?.lowercase()?.contains("standby") == true } ?: false
-                        val firstSchedToday = feed?.schedules?.filter { 
-                            it.schedule_date == now.toLocalDate().toString()
-                        }?.minByOrNull { it.scheduled_time ?: "23:59" }
                         
-                        val startWindowOpen = firstSchedToday?.let { 
-                            val schedTime = parseScheduleDateTime(it.schedule_date, it.scheduled_time)
-                            schedTime?.let { target ->
-                                val diffMinutes = java.time.Duration.between(now, target).toMinutes()
-                                diffMinutes <= 15 // Restricted to 15 mins before
-                            } ?: true
-                        } ?: hasStandby
-
                         val hasActiveTrips = feed?.schedules?.any { 
-                            it.trip_phase != "pending" && it.trip_phase != "completed" && it.trip_phase != "assigned" 
+                            it.trip_phase != "pending" && it.trip_phase != "completed" && it.trip_phase != "assigned" && it.trip_phase != "cancelled"
                         } ?: false
 
                         Row(
@@ -1642,7 +1633,8 @@ fun DriverDashboard(
                                             db.collection("dtr_logs").add(logData).await()
                                             db.collection("drivers").document(uid).update(
                                                 "is_currently_timed_in", true,
-                                                "last_time_in", FieldValue.serverTimestamp()
+                                                "last_time_in", FieldValue.serverTimestamp(),
+                                                "last_updated", FieldValue.serverTimestamp()
                                             ).await()
                                             
                                             isTimedIn = true
@@ -1656,7 +1648,7 @@ fun DriverDashboard(
                                     }
                                 },
                                 modifier = Modifier.weight(1f),
-                                enabled = !isTimedIn && !isDtrLoading && (startWindowOpen || hasStandby),
+                                enabled = !isTimedIn && !isDtrLoading && (hasSchedulesToday || hasStandby),
                                 colors = ButtonDefaults.buttonColors(containerColor = AccentTeal)
                             ) {
                                 Text("TIME IN", color = Midnight, fontWeight = FontWeight.Bold)
@@ -1703,7 +1695,8 @@ fun DriverDashboard(
                                             db.collection("dtr_logs").add(logData).await()
                                             db.collection("drivers").document(uid).update(
                                                 "is_currently_timed_in", false,
-                                                "last_time_out", FieldValue.serverTimestamp()
+                                                "last_time_out", FieldValue.serverTimestamp(),
+                                                "last_updated", FieldValue.serverTimestamp()
                                             ).await()
                                             
                                             isTimedIn = false
@@ -1716,23 +1709,23 @@ fun DriverDashboard(
                                     }
                                 },
                                 modifier = Modifier.weight(1f),
-                                enabled = isTimedIn && !isDtrLoading && !hasActiveTrips,
+                                enabled = isTimedIn && !isDtrLoading && !hasActiveTrips && (hasSchedulesToday || hasStandby),
                                 colors = ButtonDefaults.buttonColors(containerColor = AccentOrange)
                             ) {
                                 Text("TIME OUT", color = Midnight, fontWeight = FontWeight.Bold)
                             }
                         }
 
-                        if (!startWindowOpen && !isTimedIn && !hasStandby) {
+                        if (!hasSchedulesToday && !isTimedIn && !hasStandby) {
                             Text(
-                                text = "Access restricted until 15 mins before schedule.",
+                                text = "Daily schedule required to Time In.",
                                 color = AccentOrange,
                                 style = MaterialTheme.typography.labelSmall
                             )
                         }
                         if (hasActiveTrips && isTimedIn) {
                             Text(
-                                text = "Cannot time-out with pending/active trips.",
+                                text = "Cannot Time Out with active trips.",
                                 color = AccentOrange,
                                 style = MaterialTheme.typography.labelSmall
                             )
