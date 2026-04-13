@@ -35,6 +35,7 @@ service cloud.firestore {
     // ── drivers: self-update status/telemetry, admins full CRUD ────────────
     match /drivers/{userId} {
       allow read: if isSignedIn() && (isOwner(userId) || resource.data.get('driver_uid', '') == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() 
         && (isOwner(userId) || 
             resource.data.get('driver_uid', '') == request.auth.uid || 
             getAuthEmail() == resource.data.get('driver_email', '').lower() ||
@@ -108,7 +109,7 @@ service cloud.firestore {
       );
       allow create, update: if isSignedIn()
         && (request.resource.data.get('driver_email', '').lower() == getAuthEmail()
-            || request.resource.data.get('driver_uid', '') == request.auth.uid);
+            || request.resource.data.get('driver_uid', '') == request.auth.uid || isAdmin());
       allow delete: if isSignedIn() && isAdmin();
     }
 
@@ -135,11 +136,12 @@ service cloud.firestore {
         resource.data.get('user_id', '') == request.auth.uid || 
         resource.data.get('driver_uid', '') == request.auth.uid ||
         resource.data.get('user_email', '').lower() == getAuthEmail() ||
-        isAdmin() || 
-        resource.data.get('user_id', '') == 'guest'
+        resource.data.get('driver_email', '').lower() == getAuthEmail() ||
+        isAdmin()
       );
       allow create: if isSignedIn() && (
         request.resource.data.get('driver_uid', '') == request.auth.uid ||
+        request.resource.data.get('driver_email', '').lower() == getAuthEmail() ||
         isAdmin()
       );
       allow update, delete: if isSignedIn() && isAdmin();
@@ -155,8 +157,8 @@ service cloud.firestore {
       allow read, write: if isSignedIn() && isAdmin();
     }
     match /driver_activity/{docId} {
-      allow read: if isSignedIn() && (resource.data.get('driver_uid', '') == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && (request.resource.data.get('driver_uid', '') == request.auth.uid || isAdmin());
+      allow read: if isSignedIn() && (resource.data.get('driver_uid', '') == request.auth.uid || resource.data.get('driver_email', '').lower() == getAuthEmail() || isAdmin());
+      allow create: if isSignedIn() && (request.resource.data.get('driver_uid', '') == request.auth.uid || request.resource.data.get('driver_email', '').lower() == getAuthEmail() || isAdmin());
       allow update, delete: if isSignedIn() && isAdmin();
     }
 

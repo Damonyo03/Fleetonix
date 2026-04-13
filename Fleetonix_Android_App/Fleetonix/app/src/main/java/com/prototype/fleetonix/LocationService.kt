@@ -388,10 +388,16 @@ class LocationService : Service() {
                 clearGeofences()
             }
             ACTION_START_TRIP -> {
-                activeScheduleId = intent.getStringExtra(EXTRA_SCHEDULE_ID) ?: ""
-                totalDistanceMetres = 0f
-                actualRoutePoints.clear()
-                lastLocation = null
+                val newSchedId = intent.getStringExtra(EXTRA_SCHEDULE_ID) ?: ""
+                
+                // Only reset telemetry if this is a NEW trip, not a phase change for the same trip
+                if (newSchedId != activeScheduleId || !isTripActive) {
+                    activeScheduleId = newSchedId
+                    totalDistanceMetres = 0f
+                    actualRoutePoints.clear()
+                    lastLocation = null
+                }
+                
                 isTripActive = true
                 startLocationUpdates()
                 

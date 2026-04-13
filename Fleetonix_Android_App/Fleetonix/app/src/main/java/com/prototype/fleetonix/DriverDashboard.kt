@@ -2372,8 +2372,9 @@ val phase = tripPhase ?: "pending"
                                                              .get().await()
                                                          dSnap.documents.firstOrNull()?.reference?.update(
                                                              "current_status", "Passenger Dropped Off",
-                                                             "current_trip_phase", "dropped_off"
-                                                         )
+                                                             "current_trip_phase", "dropped_off",
+                                                             "updated_at", FieldValue.serverTimestamp()
+                                                         )?.await()
                                                      }
                                                      tripActionSuccess = "Arrived at destination!"
                                                      
@@ -2754,6 +2755,15 @@ val phase = tripPhase ?: "pending"
                                 } else {
                                     updateData["picked_up_at"] = FieldValue.serverTimestamp()
                                     pickedUpAt = timestampStr
+                                    
+                                    // Ensure service stays active for the second leg
+                                    val pickupIntent = Intent(context, LocationService::class.java).apply {
+                                        action = LocationService.ACTION_START_TRIP
+                                        putExtra(LocationService.EXTRA_DRIVER_UID, auth.currentUser?.uid)
+                                        putExtra(LocationService.EXTRA_DRIVER_EMAIL, auth.currentUser?.email?.lowercase()?.trim() ?: "")
+                                        putExtra(LocationService.EXTRA_SCHEDULE_ID, nextSchedule?.docId ?: "")
+                                    }
+                                    context.startService(pickupIntent)
                                 }
 
                                 db.collection("schedules").document(docId).update(updateData).await()
