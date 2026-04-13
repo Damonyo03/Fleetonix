@@ -111,10 +111,24 @@ function renderDrivers(docs) {
     driverGrid.innerHTML = docs.map(d => {
         const driver = d.data();
         const id = d.id;
-        const status = driver.current_status || 'offline';
+        
+        // --- Heartbeat-Aware Status Calculation ---
+        const lastUpdated = driver.last_updated?.toMillis 
+            ? driver.last_updated.toMillis() 
+            : (driver.last_updated?.seconds ? driver.last_updated.seconds * 1000 : 0);
+        
+        const now = Date.now();
+        const isStale = (now - lastUpdated) > (5 * 60 * 1000); // 5 Minutes Threshold
+        
+        let status = driver.current_status || 'offline';
+        if (isStale && status !== 'offline') {
+            status = 'offline'; // Force offline if data is stale
+        }
+        
         const displayStatus = status.replace(/_/g, ' ');
+        const isLive = !isStale && status !== 'offline';
         return `
-            <div class="driver-card" style="background: var(--glass-bg); backdrop-filter: blur(12px); border-radius: var(--radius-lg); border: 1px solid var(--glass-border); padding: 24px; position: relative;">
+            <div class="driver-card ${isLive ? 'pulse' : ''}" style="background: var(--glass-bg); backdrop-filter: blur(12px); border-radius: var(--radius-lg); border: 1px solid var(--glass-border); padding: 24px; position: relative;">
                 <div class="status-dot ${status}"></div>
                 <div class="driver-header" style="display: flex; gap: 16px; align-items: center; margin-bottom: 16px;">
                     <div class="avatar-large" style="width: 64px; height: 64px; border-radius: 50%; overflow: hidden; border: 2px solid var(--accent-blue);">
@@ -136,7 +150,9 @@ function renderDrivers(docs) {
                     </div>
                 </div>
                 <div style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center;">
-                    <span class="status-badge ${status}" style="text-transform: capitalize;">${displayStatus}</span>
+                    <span class="status-badge ${status}" style="text-transform: capitalize;">
+                        ${isLive ? '<i class="fas fa-satellite-dish" style="margin-right: 4px; font-size: 0.7rem;"></i>' : ''}${displayStatus}
+                    </span>
                     <div style="display: flex; gap: 8px;">
                         <button class="btn-icon" onclick="window.editDriver('${id}')" style="background: rgba(0,212,255,0.1); color: var(--accent-blue); border: none; padding: 8px; border-radius: 6px;"><i class="fas fa-edit"></i></button>
                         <button class="btn-icon" onclick="window.deleteDriver('${id}')" style="background: rgba(255,71,87,0.1); color: var(--accent-error); border: none; padding: 8px; border-radius: 6px;"><i class="fas fa-trash"></i></button>
@@ -495,4 +511,7 @@ window.deleteDriver = async (id) => {
         alert("Driver removed from system.");
     }
 };
-
+// Auto-refresh UI every 30 seconds to update 'Stale' statuses without waiting for Firestore push
+setInterval(() => {
+    applyFilters();
+}, 30000);

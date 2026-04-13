@@ -101,13 +101,26 @@ object PresenceManager {
         isBackground?.let { driverUpdateData["is_background"] = it }
         phone?.let { driverUpdateData["driver_phone"] = it }
 
-        // 2. Update 'drivers' collection
-        db.collection("drivers").whereEqualTo("driver_email", email).get()
-            .addOnSuccessListener { snapshot ->
-                for (doc in snapshot.documents) {
-                    doc.reference.update(driverUpdateData)
+        // 2. Update 'drivers' collection (Attempt by UID first, fallback to Email)
+        auth.currentUser?.uid?.let { uid ->
+            db.collection("drivers").document(uid).update(driverUpdateData)
+                .addOnFailureListener {
+                    // Fallback to email query if UID doc doesn't exist yet
+                    db.collection("drivers").whereEqualTo("driver_email", email).get()
+                        .addOnSuccessListener { snapshot ->
+                            for (doc in snapshot.documents) {
+                                doc.reference.update(driverUpdateData)
+                            }
+                        }
                 }
-            }
+        } ?: run {
+            db.collection("drivers").whereEqualTo("driver_email", email).get()
+                .addOnSuccessListener { snapshot ->
+                    for (doc in snapshot.documents) {
+                        doc.reference.update(driverUpdateData)
+                    }
+                }
+        }
             
         Log.d("PresenceManager", "Status updated: $status [Real-time: ${if(isOnline) "online" else "offline"}] for $email")
     }
@@ -135,12 +148,25 @@ object PresenceManager {
         )
         phone?.let { updateData["driver_phone"] = it }
 
-        db.collection("drivers").whereEqualTo("driver_email", email).get()
-            .addOnSuccessListener { snapshot ->
-                for (doc in snapshot.documents) {
-                    doc.reference.update(updateData)
+        // Attempt by UID first, fallback to Email
+        auth.currentUser?.uid?.let { uid ->
+            db.collection("drivers").document(uid).update(updateData)
+                .addOnFailureListener {
+                    db.collection("drivers").whereEqualTo("driver_email", email).get()
+                        .addOnSuccessListener { snapshot ->
+                            for (doc in snapshot.documents) {
+                                doc.reference.update(updateData)
+                            }
+                        }
                 }
-            }
+        } ?: run {
+            db.collection("drivers").whereEqualTo("driver_email", email).get()
+                .addOnSuccessListener { snapshot ->
+                    for (doc in snapshot.documents) {
+                        doc.reference.update(updateData)
+                    }
+                }
+        }
         
         Log.d("PresenceManager", "Background status updated to $isBackground for $email")
     }
