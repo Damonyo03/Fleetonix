@@ -384,7 +384,9 @@ async function showCreateBookingModal(clients) {
         // 2. Schedule Creation (if dispatched)
         if (autoDispatch && driverId) {
             const driverSelect = document.getElementById('modal_driver');
-            const driverName = driverSelect.options[driverSelect.selectedIndex].text.replace('🟢 ', '').replace('⚪ ', '');
+            const driverOption = driverSelect.options[driverSelect.selectedIndex];
+            const driverName = driverOption.getAttribute('data-name') || driverOption.text.replace('🟢 ', '').replace('⚪ ', '').replace('[ONLINE] ', '').replace('[OFFLINE] ', '').trim();
+
             
             const driverDoc = await getDoc(doc(db, "drivers", driverId));
             const dData = driverDoc.exists() ? driverDoc.data() : {};

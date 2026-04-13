@@ -9,10 +9,23 @@ import { initLayout } from "./modules/ui.js";
 import { exportGCRTripTicket, mapTicketsForExport } from "./modules/export_utils.js";
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-const auth = getAuth(app);
 const db = getFirestore(app);
+const auth = getAuth(app);
+
+// --- Normalization Helpers ---
+function getNormalizedId(id) {
+    if (!id) return '';
+    return id.toString().replace(/^(TKT_|SCHED_|booking_)/, '').replace(/^#/, '').trim();
+}
+
+function getNormalizedDriverName(name) {
+    if (!name) return '—';
+    // Remove status tags like [ONLINE], [OFFLINE], 🟢, ⚪ and common formatting glitches
+    return name.replace(/\[ONLINE\]|\[OFFLINE\]|🟢|⚪/g, '').replace(/^\s+/, '').replace(/\s+$/, '').trim();
+}
 
 let allTickets = [];
+
 let uniqueDrivers = new Set();
 let currentUserData = null; // Store admin user data for RBAC
 
@@ -71,11 +84,12 @@ function loadTickets() {
         rawTripTickets = snapshot.docs.map(d => {
             const data = d.data();
             const driverId = data.driver_id || data.driver_uid || '';
+            const rawName = data.driver_name || data.driverName || '—';
             return {
                 id: d.id,
                 _source: 'trip_tickets',
                 schedule_id: data.schedule_id || '',
-                driver_name: data.driver_name || data.driverName || '—',
+                driver_name: getNormalizedDriverName(rawName),
                 driver_id: driverId,
                 driver_uid: driverId,
                 driver_email: data.driver_email || '',
@@ -95,11 +109,14 @@ function loadTickets() {
                 completed_at: data.created_at || data.completed_at,
                 schedule_date: data.schedule_date || '',
                 schedule_time: data.schedule_time || '',
-                ...data
+                ...data,
+                // Override with normalized name if properties overlap
+                driver_name: getNormalizedDriverName(rawName)
             };
         });
         mergeAndRender();
     });
+
 
     // 2. Listen to completed schedules (Metadata registry)
     let schedulesQuery;
@@ -132,13 +149,18 @@ function mergeAndRender() {
     
     // First pass: add trip_tickets (Real-time data from Android)
     rawTripTickets.forEach(t => {
-        const key = t.schedule_id || t.id;
+        // Normalize IDs to prevent "TKT_..." and "..." from being treated as different trips
+        const key = getNormalizedId(t.schedule_id || t.id);
         existingTrips.set(key, t);
     });
 
     // Second pass: add schedules if not already represented/enrich existing
     rawSchedTickets.forEach(s => {
-        const key = s.schedule_id || s.id;
+        const key = getNormalizedId(s.schedule_id || s.id);
+        
+        // Normalize name from schedules too
+        if (s.driver_name) s.driver_name = getNormalizedDriverName(s.driver_name);
+
         if (!existingTrips.has(key)) {
             existingTrips.set(key, s);
         } else {
@@ -147,6 +169,7 @@ function mergeAndRender() {
             existingTrips.set(key, { ...s, ...existing });
         }
     });
+
 
     allTickets = Array.from(existingTrips.values());
     
