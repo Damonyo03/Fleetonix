@@ -760,12 +760,18 @@ fun AssignmentsScreen(onBack: () -> Unit) {
                                                         "trip_phase", "accepted",
                                                         "odometer_start", odo,
                                                         "driver_uid", auth.currentUser?.uid,
+                                                        "driver_id", auth.currentUser?.uid,
                                                         "accepted_at", com.google.firebase.firestore.FieldValue.serverTimestamp(),
                                                         "updated_at", com.google.firebase.firestore.FieldValue.serverTimestamp()
                                                     ).await()
+                                                } catch (e: Exception) {
+                                                    errorMsg = "Schedule Update Failed: ${e.message}"
+                                                    isLoading = false
+                                                    return@launch
+                                                }
 
-                                                    // Sync to drivers collection
-                                                    val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+                                                // Sync to drivers collection
+                                                try {
                                                     val email = auth.currentUser?.email
                                                     if (email != null) {
                                                         val driverSnap = db.collection("drivers")

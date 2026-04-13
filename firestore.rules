@@ -35,10 +35,9 @@ service cloud.firestore {
     // ── drivers: self-update status/telemetry, admins full CRUD ────────────
     match /drivers/{userId} {
       allow read: if isSignedIn() && (isOwner(userId) || resource.data.get('driver_uid', '') == request.auth.uid || isAdmin());
-      allow update: if isSignedIn() 
         && (isOwner(userId) || 
             resource.data.get('driver_uid', '') == request.auth.uid || 
-            ( (resource.data.get('driver_uid', '') == '' || resource.data.get('driver_uid', null) == null || resource.data.get('driver_uid', '') == 'undefined') && getAuthEmail() == resource.data.get('driver_email', '').lower() ) ||
+            getAuthEmail() == resource.data.get('driver_email', '').lower() ||
             isAdmin())
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
              'current_status', 'current_trip_id', 'current_trip_phase', 
@@ -60,7 +59,7 @@ service cloud.firestore {
       allow write: if isSignedIn() && isAdmin();
       allow update: if isSignedIn()
         && (resource.data.get('driver_uid', '') == request.auth.uid || 
-            ( (resource.data.get('driver_uid', '') == '' || resource.data.get('driver_uid', null) == null || resource.data.get('driver_uid', '') == 'undefined') && getAuthEmail() == resource.data.get('driver_email', '').lower()) || 
+            getAuthEmail() == resource.data.get('driver_email', '').lower() || 
             isAdmin())
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
              'status', 'trip_phase', 'accepted_at', 'started_at', 'picked_up_at', 
