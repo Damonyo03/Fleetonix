@@ -39,7 +39,7 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
              'current_status', 'current_trip_id', 'current_trip_phase', 
              'current_mileage', 'active_ticket_id', 'last_updated', 'on_break',
-             'profile_image_url'
+             'profile_image_url', 'incident_active'
            ]);
       allow write: if isSignedIn() && isAdmin();
     }
