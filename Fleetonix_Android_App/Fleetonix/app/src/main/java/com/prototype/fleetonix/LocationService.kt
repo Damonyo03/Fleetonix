@@ -71,6 +71,7 @@ class LocationService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var locationHandlerThread: HandlerThread // A4: Dedicated HandlerThread
+    private val db = FirebaseFirestore.getInstance()
     
     // Phase E: Connectivity
     private var commandListener: com.google.firebase.firestore.ListenerRegistration? = null
@@ -385,7 +386,6 @@ class LocationService : Service() {
                 // Fetch schedule details for rerouting context
                 serviceScope.launch {
                     try {
-                        val db = FirebaseFirestore.getInstance()
                         val doc = db.collection("schedules").document(activeScheduleId).get().await()
                         if (doc.exists()) {
                             val polyStr = doc.getString("route_polyline") ?: ""
@@ -864,7 +864,7 @@ class LocationService : Service() {
         
         db.collection("schedules").document(activeScheduleId)
             .update("actual_route_polyline", encodedActual)
-            .addOnFailureListener { e ->
+            .addOnFailureListener { e: Exception ->
                 Log.e("LocationService", "Breadcrumb sync failed: ${e.message}")
             }
     }
