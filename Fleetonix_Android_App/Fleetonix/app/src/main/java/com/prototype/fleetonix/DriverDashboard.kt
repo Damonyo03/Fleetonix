@@ -1736,7 +1736,7 @@ fun DriverDashboard(
                                     }
                                 },
                                 modifier = Modifier.weight(1f),
-                                enabled = isTimedIn && !isDtrLoading && !hasActiveTrips && (hasSchedulesToday || hasStandby),
+                                enabled = isTimedIn && !isDtrLoading && !hasActiveTrips,
                                 colors = ButtonDefaults.buttonColors(containerColor = AccentOrange)
                             ) {
                                 Text("TIME OUT", color = Midnight, fontWeight = FontWeight.Bold)
