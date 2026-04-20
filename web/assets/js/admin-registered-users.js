@@ -370,20 +370,3 @@ window.deleteUser = async (id) => {
         }
     );
 };
-
-        // Removed company-specific counter logic for NSCRP
-
-        // 3. Activity Audit
-        await addDoc(collection(db, "activity"), {
-            type: 'system',
-            title: 'User Deleted',
-            message: `Super Admin purged user account: ${user.full_name} (${user.email})`,
-            timestamp: serverTimestamp()
-        });
-
-        alert("User account successfully purged.");
-    } catch (error) {
-        console.error("Purge error:", error);
-        alert("CRITICAL ERROR: Failed to purge user account. " + error.message);
-    }
-};
