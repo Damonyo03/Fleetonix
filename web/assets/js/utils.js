@@ -247,4 +247,28 @@ window.confirmWithBackup = async function(message, data, type, id, callback) {
     }
 };
 
+/**
+ * Theme Management
+ * Switches between 'dark' (Deep Night) and 'light' modes.
+ */
+function initTheme() {
+    const savedTheme = localStorage.getItem('fleetonix-theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+}
 
+function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('fleetonix-theme', newTheme);
+    
+    // Dispatch custom event for components that need to re-render (like maps)
+    window.dispatchEvent(new CustomEvent('themeChanged', { detail: { theme: newTheme } }));
+    
+    console.log(`[Theme] Switched to ${newTheme} mode`);
+    return newTheme;
+}
+
+// Initialize theme immediately
+initTheme();

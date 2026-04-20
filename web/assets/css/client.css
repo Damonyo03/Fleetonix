@@ -85,7 +85,7 @@ body {
     padding: 25px 20px 10px;
     font-size: 0.72rem;
     font-weight: 800;
-    color: #ffffff;
+    color: var(--text-secondary);
     letter-spacing: 2px;
     text-transform: uppercase;
 }
@@ -449,7 +449,7 @@ body {
 }
 
 .stat-icon.blue { background: rgba(0, 212, 255, 0.1); color: var(--accent-blue); }
-.stat-icon.orange { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+.stat-icon.orange { background: rgba(245, 158, 11, 0.1); color: var(--accent-orange); }
 .stat-icon.teal { background: rgba(0, 201, 167, 0.1); color: var(--accent-teal); }
 .stat-icon.green { background: rgba(0, 255, 136, 0.1); color: var(--accent-green); }
 
@@ -565,10 +565,10 @@ body {
     display: inline-block;
 }
 
-.status-badge.pending { background: rgba(245, 158, 11, 0.1); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.2); }
+.status-badge.pending { background: rgba(245, 158, 11, 0.1); color: var(--accent-warning); border: 1px solid rgba(245, 158, 11, 0.2); }
 .status-badge.assigned, .status-badge.scheduled { background: rgba(0, 212, 255, 0.1); color: var(--accent-blue); border: 1px solid rgba(0, 212, 255, 0.2); }
 .status-badge.completed { background: rgba(0, 255, 136, 0.1); color: var(--accent-green); border: 1px solid rgba(0, 255, 136, 0.2); }
-.status-badge.cancelled { background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); }
+.status-badge.cancelled { background: rgba(239, 68, 68, 0.1); color: var(--accent-error); border: 1px solid rgba(239, 68, 68, 0.2); }
 
 /* Custom Scrollbar for sidebars and panels */
 ::-webkit-scrollbar {
