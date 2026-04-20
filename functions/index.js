@@ -492,105 +492,79 @@ exports.submitDriverApplication = onRequest({ cors: true }, async (req, res) => 
 
     try {
         const db = admin.firestore();
+
+        // 1. Validate OTP
         const otpDoc = await db.collection("registration_otps").doc(emailLower).get();
         if (!otpDoc.exists) return res.status(401).json({ success: false, message: "No verification session found." });
 
         const otpData = otpDoc.data();
         const incomingHash = crypto.createHash("sha256").update(String(otp).trim()).digest("hex");
-        
         if (otpData.code !== String(otp).trim() && otpData.hash !== incomingHash) {
             return res.status(401).json({ success: false, message: "Invalid OTP code." });
         }
-        
-        // Generate a random temporary password
-        const tempPassword = Math.random().toString(36).slice(-8) + Math.floor(Math.random() * 100).toString();
 
-        let userRecord;
-        try {
-            userRecord = await admin.auth().getUserByEmail(emailLower);
-            // If user exists, we probably shouldn't let them register again
-            return res.status(400).json({ success: false, message: "Email is already registered." });
-        } catch (error) {
-            if (error.code === 'auth/user-not-found') {
-                // Create the user
-                userRecord = await admin.auth().createUser({
-                    email: emailLower,
-                    password: tempPassword,
-                    displayName: fullName,
-                });
-            } else {
-                throw error;
-            }
+        // 2. Check for a duplicate PENDING application (do NOT check Firebase Auth)
+        const existingSnap = await db.collection("driver_applications")
+            .where("email", "==", emailLower)
+            .where("status", "==", "pending_approval")
+            .limit(1).get();
+
+        if (!existingSnap.empty) {
+            return res.status(409).json({
+                success: false,
+                message: "An application for this email is already pending review. Please wait for admin approval."
+            });
         }
 
-        const userData = {
+        // 3. Save the application — NO Firebase Auth account created here
+        await db.collection("driver_applications").add({
             full_name: fullName,
             email: emailLower,
             phone: phone || "",
-            role: "driver",
-            status: "pending_approval",
-            requiresPasswordChange: true,
-            created_at: admin.firestore.FieldValue.serverTimestamp(),
-        };
-
-        await db.collection("users").doc(userRecord.uid).set(userData);
-
-        await db.collection("drivers").doc(userRecord.uid).set({
-            driver_name: fullName,
-            driver_email: emailLower,
-            phone: phone || "",
             vehicle_type: vehicleType || "sedan",
             plate_number: plateNumber || "",
-            current_status: "offline",
             status: "pending_approval",
-            created_at: admin.firestore.FieldValue.serverTimestamp(),
+            submitted_at: admin.firestore.FieldValue.serverTimestamp(),
         });
 
-        // Delete OTP
+        // 4. Delete OTP
         await db.collection("registration_otps").doc(emailLower).delete();
 
-        // Send Email with Temp Credentials
-        const loginUrl = "https://appfleetonix.web.app/login.html";
+        // 5. Confirm email to the applicant (no credentials yet — admin will create the account)
         const emailHtml = `
             <!DOCTYPE html>
             <html>
-            <body style="font-family: Arial, sans-serif; background-color: #f4f7f6; padding: 20px;">
-                <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 8px; border: 1px solid #ddd;">
-                    <h2 style="color: #00d4ff; text-align: center;">Application Received</h2>
-                    <p>Hello <strong>${fullName}</strong>,</p>
-                    <p>Your driver application has been successfully submitted and is currently <strong>Pending Approval</strong>.</p>
-                    <p>You can log in to check your status. For your security, you must change your password upon your first login.</p>
-                    <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #00d4ff;">
-                        <p style="margin: 5px 0;"><strong>Email:</strong> ${emailLower}</p>
-                        <p style="margin: 5px 0;"><strong>Temporary Password:</strong> <span style="font-family: monospace; font-size: 1.1em;">${tempPassword}</span></p>
-                    </div>
-                    <div style="text-align: center; margin-top: 30px;">
-                        <a href="${loginUrl}" style="background-color: #00d4ff; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Go to Login</a>
-                    </div>
+            <body style="font-family: Arial, sans-serif; background-color: #0a0e27; padding: 20px;">
+                <div style="max-width: 600px; margin: 0 auto; background-color: #1a1f3a; padding: 30px; border-radius: 12px; border: 1px solid #2d3447;">
+                    <h2 style="color: #00d4ff; text-align: center;">Application Received!</h2>
+                    <p style="color:#b0b8c8;">Hello <strong style="color:#fff;">${fullName}</strong>,</p>
+                    <p style="color:#b0b8c8;">Your driver application has been successfully submitted and is now <strong style="color:#00c9a7;">Pending Admin Review</strong>.</p>
+                    <p style="color:#b0b8c8;">Once approved, you will receive another email with your login credentials so you can access the Fleetonix system.</p>
+                    <p style="color:#6b7280; font-size:12px; margin-top:30px;">If you did not submit this application, please ignore this email.</p>
                 </div>
             </body>
             </html>
         `;
-
         await getMailTransport().sendMail({
             from: '"Fleetonix System" <fleetonix.noreply@gmail.com>',
             to: emailLower,
-            subject: "Your Fleetonix Application & Temporary Credentials",
+            subject: "Fleetonix: Application Received — Pending Review",
             html: emailHtml,
         });
 
-        // AUDIT: Notify Admin for Approval
+        // 6. Notify Admin
         await db.collection("notifications").add({
             title: "New Driver Enrollment",
-            message: `New driver application received from ${fullName} (${emailLower}).`,
+            message: `New driver application from ${fullName} (${emailLower}) is awaiting your review.`,
             type: "enrollment",
             created_at: admin.firestore.FieldValue.serverTimestamp(),
             is_read: false,
             role: "admin"
         });
 
-        res.json({ success: true, message: "Application submitted successfully." });
+        res.json({ success: true, message: "Application submitted! We will email you once your account is ready." });
     } catch (error) {
+        logger.error("submitDriverApplication error:", error);
         res.status(500).json({ success: false, message: error.message });
     }
 });
