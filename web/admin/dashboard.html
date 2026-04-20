@@ -13,30 +13,16 @@
     <link rel="stylesheet" href="../assets/vendor/leaflet/leaflet.css">
     <script src="../assets/vendor/leaflet/leaflet.js"></script>
 
-    <!-- Tailwind Play CDN -->
+    <!-- Tailwind & Accessibility -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        'dashboard-dark': '#0b1120',
-                        'accent-blue': '#00d4ff',
-                        'accent-green': '#10b981',
-                        'accent-red': '#ef4444',
-                    }
-                }
-            }
-        }
-    </script>
+    <script src="../assets/js/tailwind-config.js"></script>
+    <link rel="stylesheet" href="../assets/css/accessibility.css">
 
     <style>
         :root {
             --bg-dashboard: #0b1120;
             --bg-card-glass: rgba(15, 23, 42, 0.7);
         }
-
-        body { background-color: var(--bg-dashboard); color: #f1f5f9; }
 
         #drivers-map { 
             width: 100%; 
@@ -162,34 +148,30 @@
         }
     </style>
 </head>
-<body>
+<body class="bg-background dark:bg-background-dark text-foreground dark:text-foreground-dark transition-colors duration-300">
     <div class="admin-layout">
         <!-- Unified Sidebar -->
-        <aside class="sidebar bg-slate-900 border-r border-slate-800" id="sidebar">
+        <aside class="sidebar bg-card dark:bg-card-dark border-r border-border dark:border-border-dark" id="sidebar">
             <div class="sidebar-header p-6">
                 <img src="../img/logo.jpg" alt="Logo" class="sidebar-logo w-10 h-10 rounded-lg">
-                <span class="sidebar-title text-xl font-bold ml-3 text-white">Fleetonix</span>
+                <span class="sidebar-title text-xl font-bold ml-3 text-foreground dark:text-foreground-dark">Fleetonix</span>
             </div>
             <nav class="sidebar-nav px-4">
-                <div class="nav-section text-[10px] uppercase text-slate-500 font-extrabold mb-3 mt-6 tracking-widest">MONITORING</div>
-                <a href="dashboard.html" class="nav-item active flex items-center p-3 rounded-xl text-slate-300 mb-1"><i class="fas fa-chart-line w-5"></i> <span class="ml-3">Dashboard Map</span></a>
-                <a href="dtr-monitoring.html" class="nav-item flex items-center p-3 rounded-xl text-slate-300 mb-1"><i class="fas fa-clock w-5"></i> <span class="ml-3">DTR Monitoring</span></a>
-                <a href="drivers.html" class="nav-item flex items-center p-3 rounded-xl text-slate-300 mb-1"><i class="fas fa-id-card w-5"></i> <span class="ml-3">Drivers Details</span></a>
-
-                <div class="nav-section text-[10px] uppercase text-slate-500 font-extrabold mb-3 mt-6 tracking-widest">OPERATIONS</div>
-                <a href="bookings.html" class="nav-item flex items-center p-3 rounded-xl text-slate-300 mb-1"><i class="fas fa-calendar-check w-5"></i> <span class="ml-3">Bookings</span></a>
-                <a href="schedules.html" class="nav-item flex items-center p-3 rounded-xl text-slate-300 mb-1"><i class="fas fa-list-alt w-5"></i> <span class="ml-3">List of Trips</span></a>
-                <a href="trip-tickets.html" class="nav-item flex items-center p-3 rounded-xl text-slate-300 mb-1"><i class="fas fa-ticket-alt w-5"></i> <span class="ml-3">Trip Tickets</span></a>
+                 <a href="dashboard.html" class="nav-item active flex items-center p-3 rounded-xl text-foreground dark:text-foreground-dark mb-1"><i class="fas fa-chart-line w-5"></i> <span class="ml-3">Dashboard Map</span></a>
+                <a href="dtr-monitoring.html" class="nav-item flex items-center p-3 rounded-xl text-foreground/70 dark:text-foreground-dark/70 hover:text-foreground dark:hover:text-foreground-dark mb-1"><i class="fas fa-clock w-5"></i> <span class="ml-3">DTR Monitoring</span></a>
+                <a href="drivers.html" class="nav-item flex items-center p-3 rounded-xl text-foreground/70 dark:text-foreground-dark/70 hover:text-foreground dark:hover:text-foreground-dark mb-1"><i class="fas fa-id-card w-5"></i> <span class="ml-3">Drivers Details</span></a>
+                <a href="bookings.html" class="nav-item flex items-center p-3 rounded-xl text-foreground/70 dark:text-foreground-dark/70 hover:text-foreground dark:hover:text-foreground-dark mb-1"><i class="fas fa-calendar-check w-5"></i> <span class="ml-3">Bookings Details</span></a>
+                <a href="trip-tickets.html" class="nav-item flex items-center p-3 rounded-xl text-foreground/70 dark:text-foreground-dark/70 hover:text-foreground dark:hover:text-foreground-dark mb-1"><i class="fas fa-ticket-alt w-5"></i> <span class="ml-3">Trip Tickets</span></a>
 
                 <div class="nav-section text-[10px] uppercase text-slate-500 font-extrabold mb-3 mt-6 tracking-widest">SYSTEM</div>
-                <a href="approvals.html" class="nav-item flex items-center p-3 rounded-xl text-slate-300 mb-1"><i class="fas fa-user-check w-5"></i> <span class="ml-3">Enrollment Approvals</span></a>
-                <a href="registered-users.html" class="nav-item flex items-center p-3 rounded-xl text-slate-300 mb-1"><i class="fas fa-users w-5"></i> <span class="ml-3">Registered Users</span></a>
-                <a href="settings.html" class="nav-item flex items-center p-3 rounded-xl text-slate-300 mb-1"><i class="fas fa-cog w-5"></i> <span class="ml-3">Settings</span></a>
+                <a href="approvals.html" class="nav-item flex items-center p-3 rounded-xl text-foreground/70 dark:text-foreground-dark/70 hover:text-foreground dark:hover:text-foreground-dark mb-1"><i class="fas fa-user-check w-5"></i> <span class="ml-3">Enrollment Approvals</span></a>
+                <a href="registered-users.html" class="nav-item flex items-center p-3 rounded-xl text-foreground/70 dark:text-foreground-dark/70 hover:text-foreground dark:hover:text-foreground-dark mb-1"><i class="fas fa-users w-5"></i> <span class="ml-3">Registered Users</span></a>
+                <a href="settings.html" class="nav-item flex items-center p-3 rounded-xl text-foreground/70 dark:text-foreground-dark/70 hover:text-foreground dark:hover:text-foreground-dark mb-1"><i class="fas fa-cog w-5"></i> <span class="ml-3">Settings</span></a>
 
                 <div class="nav-section text-[10px] uppercase text-slate-500 font-extrabold mb-3 mt-6 tracking-widest">NOTIFICATIONS</div>
-                <a href="notifications.html" class="nav-item flex items-center p-3 rounded-xl text-slate-300 mb-1"><i class="fas fa-bell w-5"></i> <span class="ml-3">Notifications</span></a>
+                <a href="notifications.html" class="nav-item flex items-center p-3 rounded-xl text-foreground/70 dark:text-foreground-dark/70 hover:text-foreground dark:hover:text-foreground-dark mb-1"><i class="fas fa-bell w-5"></i> <span class="ml-3">Notifications</span></a>
                 
-                <a href="#" id="logoutBtn" class="nav-item flex items-center p-3 rounded-xl text-red-400 mt-8"><i class="fas fa-sign-out-alt w-5"></i> <span class="ml-3">Logout</span></a>
+                <a href="#" id="logoutBtn" class="nav-item flex items-center p-3 rounded-xl text-red-500 hover:text-red-600 mt-8"><i class="fas fa-sign-out-alt w-5"></i> <span class="ml-3">Logout</span></a>
             </nav>
         </aside>
 

@@ -272,12 +272,18 @@ function createDotIcon(d, isMoving) {
     const statusClass = getDriverStatusClass(d, isMoving);
     const pulseHtml = isMoving || statusClass === 'accident' || statusClass === 'available' ? '<div class="dot-pulse"></div>' : '';
     const glowClass = statusClass === 'available' ? 'pulse-glow' : '';
+    const iconName = getStatusIcon(statusClass);
 
     return L.divIcon({
         className: 'custom-driver-marker',
-        html: `<div class="driver-dot ${statusClass} ${glowClass}">${pulseHtml}</div>`,
-        iconSize: [22, 22],
-        iconAnchor: [11, 11]
+        html: `
+            <div class="driver-dot ${statusClass} ${glowClass} flex items-center justify-center">
+                ${pulseHtml}
+                <i class="fas ${iconName} text-[10px] text-white z-10"></i>
+            </div>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
     });
 }
 
@@ -324,6 +330,20 @@ function getDriverStatusLabel(statusClass) {
         case 'accident': return 'Accident Reported';
         case 'stale': return 'Offline';
         default: return 'Online';
+    }
+}
+
+/**
+ * Returns FontAwesome icon class based on status class
+ */
+function getStatusIcon(statusClass) {
+    switch (statusClass) {
+        case 'available': return 'fa-check-circle';
+        case 'pickup': return 'fa-route';
+        case 'dropoff': return 'fa-map-marker-alt';
+        case 'accident': return 'fa-exclamation-triangle';
+        case 'stale': return 'fa-power-off';
+        default: return 'fa-info-circle';
     }
 }
 
@@ -403,7 +423,8 @@ function updateOnlineDriversList() {
                     </div>
                     
                     <div class="flex items-center">
-                         <span class="text-[10px] font-bold uppercase tracking-widest text-slate-500 bg-slate-900/40 px-3 py-1.5 rounded-lg border border-slate-700/50">
+                         <span class="status-indicator ${getDriverStatusClass(d, (d.current_speed || 0) > 1.4)}">
+                            <i class="fas ${getStatusIcon(getDriverStatusClass(d, (d.current_speed || 0) > 1.4))}"></i>
                             ${getDriverStatusLabel(getDriverStatusClass(d, (d.current_speed || 0) > 1.4))}
                          </span>
                     </div>
@@ -447,7 +468,13 @@ function showQuickInfoPanel(id, d) {
         </div>
 
         <div class="flex items-center gap-2 mb-6">
-            <span class="qip-badge ${status} pulse-glow">${status.replace(/_/g, ' ')}</span>
+            <span class="qip-badge ${status} flex items-center gap-2">
+                <i class="fas ${getStatusIcon(status)}"></i>
+                ${status.replace(/_/g, ' ')}
+            </span>
+            <span class="text-[10px] text-slate-500 bg-slate-800/40 px-2 py-0.5 rounded border border-slate-700/50">
+                ${speedKmh} km/h
+            </span>
             <div class="flex gap-1 ml-auto">
                 <div class="w-1.5 h-4 rounded-full bg-accent-green opacity-40"></div>
                 <div class="w-1.5 h-4 rounded-full bg-accent-green opacity-60"></div>

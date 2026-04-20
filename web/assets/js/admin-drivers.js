@@ -127,35 +127,44 @@ function renderDrivers(docs) {
         
         const displayStatus = status.replace(/_/g, ' ');
         const isLive = !isStale && status !== 'offline';
+        const getStatusIcon = (s) => {
+            if (s === 'available' || s === 'online') return 'fa-check-circle';
+            if (s === 'offline') return 'fa-power-off';
+            if (s.includes('pickup')) return 'fa-route';
+            if (s.includes('dropoff') || s === 'busy') return 'fa-map-marker-alt';
+            return 'fa-info-circle';
+        };
+
         return `
-            <div class="driver-card ${isLive ? 'pulse' : ''}" style="background: var(--glass-bg); backdrop-filter: blur(12px); border-radius: var(--radius-lg); border: 1px solid var(--glass-border); padding: 24px; position: relative;">
+            <div class="driver-card ${isLive ? 'pulse' : ''} bg-card dark:bg-card-dark border border-border dark:border-border-dark p-6 rounded-xl relative transition-all hover:scale-[1.02] shadow-lg">
                 <div class="status-dot ${status}"></div>
-                <div class="driver-header" style="display: flex; gap: 16px; align-items: center; margin-bottom: 16px;">
-                    <div class="avatar-large" style="width: 64px; height: 64px; border-radius: 50%; overflow: hidden; border: 2px solid var(--accent-blue);">
-                        ${driver.profile_image_url ? `<img src="${driver.profile_image_url}" style="width:100%; height:100%; object-fit:cover;">` : `<i class="fas fa-user-circle" style="font-size: 64px; color: var(--border-color);"></i>`}
+                <div class="driver-header flex gap-4 items-center mb-4">
+                    <div class="avatar-large w-16 h-16 rounded-full overflow-hidden border-2 border-primary">
+                        ${driver.profile_image_url ? `<img src="${driver.profile_image_url}" class="w-full h-full object-cover">` : `<i class="fas fa-user-circle text-6xl text-slate-400"></i>`}
                     </div>
                     <div>
-                        <h3 style="margin: 0; font-size: 1.1rem; font-weight: 700;">${driver.driver_name}</h3>
-                        <p style="margin: 2px 0 0; font-size: 0.8rem; color: var(--accent-blue);"><i class="fas fa-id-card"></i> ${driver.plate_number}</p>
+                        <h3 class="m-0 text-lg font-bold text-foreground dark:text-foreground-dark">${driver.driver_name}</h3>
+                        <p class="m-0.5 text-sm text-primary flex items-center gap-1.5"><i class="fas fa-id-card"></i> ${driver.plate_number}</p>
                     </div>
                 </div>
-                <div class="driver-stats-mini">
-                    <div class="stat-box">
-                        <span>Vehicle</span>
-                        <strong>${driver.vehicle_assigned || 'N/A'}</strong>
+                <div class="driver-stats-mini grid grid-cols-2 gap-3 mt-4">
+                    <div class="stat-box bg-slate-500/5 p-2 rounded-lg border border-border/50 text-center">
+                        <span class="text-[10px] uppercase text-slate-500 font-bold">Vehicle</span>
+                        <strong class="block text-sm text-foreground dark:text-foreground-dark">${driver.vehicle_assigned || 'N/A'}</strong>
                     </div>
-                    <div class="stat-box">
-                        <span>Odometer</span>
-                        <strong>${(driver.current_mileage || 0).toFixed(2)} KM</strong>
+                    <div class="stat-box bg-slate-500/5 p-2 rounded-lg border border-border/50 text-center">
+                        <span class="text-[10px] uppercase text-slate-500 font-bold">Odometer</span>
+                        <strong class="block text-sm text-foreground dark:text-foreground-dark">${(driver.current_mileage || 0).toFixed(2)} KM</strong>
                     </div>
                 </div>
-                <div style="margin-top: 16px; display: flex; justify-content: space-between; align-items: center;">
-                    <span class="status-badge ${status}" style="text-transform: capitalize;">
-                        ${isLive ? '<i class="fas fa-satellite-dish" style="margin-right: 4px; font-size: 0.7rem;"></i>' : ''}${displayStatus}
+                <div class="mt-4 flex justify-between items-center">
+                    <span class="status-badge ${status} flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full">
+                        <i class="fas ${getStatusIcon(status)}"></i>
+                        ${displayStatus.toUpperCase()}
                     </span>
-                    <div style="display: flex; gap: 8px;">
-                        <button class="btn-icon" onclick="window.editDriver('${id}')" style="background: rgba(0,212,255,0.1); color: var(--accent-blue); border: none; padding: 8px; border-radius: 6px;"><i class="fas fa-edit"></i></button>
-                        <button class="btn-icon" onclick="window.deleteDriver('${id}')" style="background: rgba(255,71,87,0.1); color: var(--accent-error); border: none; padding: 8px; border-radius: 6px;"><i class="fas fa-trash"></i></button>
+                    <div class="flex gap-2">
+                        <button class="w-9 h-9 flex items-center justify-center rounded-lg bg-primary/10 text-primary hover:bg-primary hover:text-white transition-all" onclick="window.editDriver('${id}')"><i class="fas fa-edit"></i></button>
+                        <button class="w-9 h-9 flex items-center justify-center rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all" onclick="window.deleteDriver('${id}')"><i class="fas fa-trash"></i></button>
                     </div>
                 </div>
             </div>

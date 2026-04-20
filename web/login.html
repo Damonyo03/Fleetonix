@@ -12,13 +12,18 @@
     <title>Fleetonix - Login</title>
     <link rel="icon" type="image/jpeg" href="img/logo.jpg">
     <link rel="stylesheet" href="assets/css/style.css">
+    <!-- Tailwind & Accessibility -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="assets/js/tailwind-config.js"></script>
+    <link rel="stylesheet" href="assets/css/accessibility.css">
+    
     <style>
         .alert { padding: 10px; margin-bottom: 15px; border-radius: 4px; display: none; }
         .alert-error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
         .loading { opacity: 0.7; pointer-events: none; }
     </style>
 </head>
-<body class="login-body">
+<body class="login-body bg-background dark:bg-background-dark text-foreground dark:text-foreground-dark transition-colors duration-300">
     <div class="login-container">
         <div class="logo-section">
             <img src="img/logo.jpg" alt="Fleettonix Logo" class="logo-main">
@@ -203,6 +208,10 @@
                     return "An error occurred. Please try again later.";
             }
         }
+    </script>
+    <script type="module">
+        import { initLayout } from './assets/js/modules/ui.js';
+        initLayout('Login');
     </script>
 </body>
 </html>

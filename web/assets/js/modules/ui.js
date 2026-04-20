@@ -86,6 +86,8 @@ export function clearUserCache() {
     localStorage.removeItem(USER_ROLE_KEY);
 }
 
+import { initTheme, toggleTheme } from './theme.js';
+
 /**
  * Initialises the shared page layout (header title, user menu, sidebar toggle, notification badge).
  *
@@ -96,6 +98,10 @@ export function clearUserCache() {
 export function initLayout(pageTitle, userName, unreadCount = 0, role = '') {
     const sidebar    = document.getElementById('sidebar');
     const menuToggle = document.getElementById('menuToggle');
+
+    // ── Theme Management ─────────────────────────────────────────────────────
+    initTheme();
+    _injectThemeToggle();
 
     if (menuToggle && sidebar) {
         menuToggle.addEventListener('click', (e) => {
@@ -170,6 +176,23 @@ export function initLayout(pageTitle, userName, unreadCount = 0, role = '') {
     if (resolvedRole) {
         _applyRoleNavRestrictions(resolvedRole);
     }
+}
+
+/** Injects a fixed theme toggle button into the body */
+function _injectThemeToggle() {
+    if (document.getElementById('globalThemeToggle')) return;
+
+    const toggle = document.createElement('button');
+    toggle.id = 'globalThemeToggle';
+    toggle.className = 'w-14 h-14 rounded-full bg-primary text-white flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-2xl focus-visible:ring-4 focus-visible:ring-primary focus-visible:ring-offset-2';
+    toggle.setAttribute('aria-label', 'Toggle Dark Mode');
+    toggle.innerHTML = `
+        <i id="theme-sun" class="fas fa-sun text-xl"></i>
+        <i id="theme-moon" class="fas fa-moon text-xl hidden"></i>
+    `;
+    
+    toggle.onclick = toggleTheme;
+    document.body.appendChild(toggle);
 }
 
 // ── Modal helpers ─────────────────────────────────────────────────────────────

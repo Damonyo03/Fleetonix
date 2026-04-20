@@ -11,11 +11,15 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Maps JS -->
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBWal4kXhImWNvJL2jV4LG0FvftdN2J9DQ&libraries=places,geometry" defer></script>
+    <!-- Tailwind & Accessibility -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="../assets/js/tailwind-config.js"></script>
+    <link rel="stylesheet" href="../assets/css/accessibility.css">
 </head>
-<body>
+<body class="bg-background dark:bg-background-dark text-foreground dark:text-foreground-dark transition-colors duration-300">
     <div class="admin-layout">
         <!-- Unified Sidebar -->
-        <aside class="sidebar" id="sidebar">
+        <aside class="sidebar bg-card dark:bg-card-dark border-r border-border dark:border-border-dark" id="sidebar">
             <div class="sidebar-header">
                 <img src="../img/logo.jpg" alt="Logo" class="sidebar-logo">
                 <span class="sidebar-title">Fleetonix</span>
@@ -45,7 +49,7 @@
 
         <!-- Main Content -->
         <main class="main-content">
-            <header class="header">
+            <header class="header bg-card/80 dark:bg-card-dark/80 backdrop-blur-md border-b border-border dark:border-border-dark">
                 <div class="header-left">
                     <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
                     <h2>Booking Requests</h2>

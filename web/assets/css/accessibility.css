@@ -1,0 +1,74 @@
+/* 
+ * Fleetonix Accessibility & Theme Base
+ * Focuses on contrast, spacing, and focus states.
+ */
+
+:root {
+    --ring-offset-width: 2px;
+}
+
+/* Base Body Spacing */
+body {
+    letter-spacing: 0.025em;
+    line-height: 1.75;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* High Visibility Focus States */
+:focus-visible {
+    outline: none !important;
+    box-shadow: 0 0 0 var(--ring-offset-width) white, 0 0 0 6px #2563eb !important;
+    border-radius: 4px;
+    z-index: 50;
+}
+
+.dark :focus-visible {
+    box-shadow: 0 0 0 var(--ring-offset-width) #09090b, 0 0 0 6px #60a5fa !important;
+}
+
+/* Interactive Elements */
+button, a, input, select, textarea {
+    @apply transition-all duration-200;
+}
+
+/* Fixed Theme Toggle Position */
+#globalThemeToggle {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    z-index: 9999;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}
+
+.dark #globalThemeToggle {
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+}
+
+/* Accessibility: Visual distinctions for status */
+.status-indicator {
+    @apply flex items-center gap-2 font-bold px-3 py-1 rounded-full border-2;
+}
+
+/* Status: Moving (Success) */
+.status-moving {
+    @apply bg-green-100 text-green-800 border-green-600;
+}
+.dark .status-moving {
+    @apply bg-green-900/30 text-green-400 border-green-500/50;
+}
+
+/* Status: Idle (Warning) */
+.status-idle {
+    @apply bg-yellow-100 text-yellow-800 border-yellow-600;
+}
+.dark .status-idle {
+    @apply bg-yellow-900/30 text-yellow-400 border-yellow-500/50;
+}
+
+/* Status: Offline (Danger) */
+.status-offline {
+    @apply bg-red-100 text-red-800 border-red-600;
+}
+.dark .status-offline {
+    @apply bg-red-900/30 text-red-400 border-red-500/50;
+}
