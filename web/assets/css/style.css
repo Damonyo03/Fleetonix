@@ -544,9 +544,13 @@ select.form-input option[value=""] {
 }
 
 .btn-primary {
-    background: var(--accent-teal);
-    color: var(--text-primary);
-    box-shadow: 0 4px 15px rgba(0, 201, 167, 0.3);
+    background: var(--accent);
+    color: #ffffff !important;
+    box-shadow: 0 4px 15px var(--glow-blue);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
 }
 
 .btn-primary:hover {
