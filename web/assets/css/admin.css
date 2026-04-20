@@ -228,7 +228,7 @@ body {
 .header {
     height: 72px;
     padding: 0 32px;
-    background: rgba(5, 8, 16, 0.8);
+    background: var(--glass-bg);
     backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--border-color);
     display: flex;

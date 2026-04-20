@@ -2,7 +2,30 @@
    FLEETONIX - CLIENT DASHBOARD REFINED
    ============================================ */
 
+/* Theme Variables */
+:root {
+    --bg-primary: #0a0e27;
+    --bg-secondary: #1e2338;
+    --text-primary: #ffffff;
+    --text-secondary: #b0b8c8;
+    --text-muted: #6b7280;
+    --accent-blue: #00d4ff;
+    --border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="light"] {
+    --bg-primary: #f1f5f9;
+    --bg-secondary: #ffffff;
+    --bg-card: #ffffff;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #64748b;
+    --accent-blue: #0284c7;
+    --border-color: rgba(0, 0, 0, 0.1);
+}
+
 /* Layout Reset */
+
 body {
     background-color: var(--bg-primary);
     color: var(--text-primary);

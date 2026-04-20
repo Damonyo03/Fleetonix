@@ -256,25 +256,50 @@ function initTheme() {
     document.documentElement.setAttribute('data-theme', savedTheme);
     
     // Inject theme toggle button into header if it doesn't exist
-    window.addEventListener('DOMContentLoaded', () => {
-        if (!document.getElementById('theme-toggle-btn')) {
-            // Target common header containers (Admin/Client dashboards)
-            const target = document.querySelector('.header-right') || document.querySelector('.user-menu');
+    const injectToggle = () => {
+        if (document.getElementById('theme-toggle-btn')) return;
+
+        // Target containers in order of priority
+        const target = document.querySelector('.header-right') || 
+                       document.querySelector('.user-menu') || 
+                       document.querySelector('.admin-header') ||
+                       document.querySelector('.header') ||
+                       document.querySelector('.login-container') ||
+                       document.querySelector('.activation-container');
+        
+        if (target) {
+            const toggleBtn = document.createElement('button');
+            toggleBtn.id = 'theme-toggle-btn';
+            toggleBtn.className = 'theme-toggle';
             
-            if (target) {
-                const toggleBtn = document.createElement('button');
-                toggleBtn.id = 'theme-toggle-btn';
-                toggleBtn.className = 'theme-toggle';
-                toggleBtn.title = 'Switch Theme';
-                toggleBtn.innerHTML = `
-                    <i class="fas fa-sun text-yellow-400"></i>
-                    <i class="fas fa-moon text-blue-400"></i>
-                `;
-                toggleBtn.addEventListener('click', toggleTheme);
+            // For login/activation pages, make it float if it's in a container
+            if (target.classList.contains('login-container') || target.classList.contains('activation-container')) {
+                toggleBtn.style.position = 'fixed';
+                toggleBtn.style.top = '20px';
+                toggleBtn.style.right = '20px';
+                toggleBtn.style.zIndex = '1000';
+            }
+
+            toggleBtn.title = 'Switch Theme';
+            toggleBtn.innerHTML = `
+                <i class="fas fa-sun text-yellow-400"></i>
+                <i class="fas fa-moon text-blue-400"></i>
+            `;
+            toggleBtn.addEventListener('click', toggleTheme);
+            
+            if (target.firstChild) {
                 target.insertBefore(toggleBtn, target.firstChild);
+            } else {
+                target.appendChild(toggleBtn);
             }
         }
-    });
+    };
+
+    if (document.readyState === 'loading') {
+        window.addEventListener('DOMContentLoaded', injectToggle);
+    } else {
+        injectToggle();
+    }
 }
 
 function toggleTheme() {
