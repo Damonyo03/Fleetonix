@@ -254,6 +254,27 @@ window.confirmWithBackup = async function(message, data, type, id, callback) {
 function initTheme() {
     const savedTheme = localStorage.getItem('fleetonix-theme') || 'dark';
     document.documentElement.setAttribute('data-theme', savedTheme);
+    
+    // Inject theme toggle button into header if it doesn't exist
+    window.addEventListener('DOMContentLoaded', () => {
+        if (!document.getElementById('theme-toggle-btn')) {
+            // Target common header containers (Admin/Client dashboards)
+            const target = document.querySelector('.header-right') || document.querySelector('.user-menu');
+            
+            if (target) {
+                const toggleBtn = document.createElement('button');
+                toggleBtn.id = 'theme-toggle-btn';
+                toggleBtn.className = 'theme-toggle';
+                toggleBtn.title = 'Switch Theme';
+                toggleBtn.innerHTML = `
+                    <i class="fas fa-sun text-yellow-400"></i>
+                    <i class="fas fa-moon text-blue-400"></i>
+                `;
+                toggleBtn.addEventListener('click', toggleTheme);
+                target.insertBefore(toggleBtn, target.firstChild);
+            }
+        }
+    });
 }
 
 function toggleTheme() {
