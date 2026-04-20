@@ -57,14 +57,16 @@
 [data-theme="light"] {
     --bg-app: #f1f5f9;
     --bg-card: #ffffff;
+    --bg-secondary: #ffffff;
     --bg-accent: #f8fafc;
     --text-main: #0f172a;
-    --text-secondary: #475569;
+    --text-secondary: #334155;
     --text-muted: #64748b;
     --accent: #0284c7;
-    --border-ui: rgba(0, 0, 0, 0.1);
+    --border-ui: rgba(0, 0, 0, 0.08);
+    --border-color: rgba(0, 0, 0, 0.08);
     
-    --glass-bg: rgba(255, 255, 255, 0.9);
+    --glass-bg: rgba(255, 255, 255, 0.95);
     --glass-border: rgba(0, 0, 0, 0.05);
     --glass-shadow: 0 8px 32px 0 rgba(15, 23, 42, 0.08);
 
@@ -151,9 +153,8 @@ body {
     font-weight: 800;
     font-size: 1.25rem;
     letter-spacing: -0.025em;
-    background: var(--grad-primary);
+    background: linear-gradient(135deg, var(--text-main) 0%, var(--accent) 100%);
     -webkit-background-clip: text;
-    background-clip: text; /* Standard property for compatibility */
     -webkit-text-fill-color: transparent;
 }
 
@@ -1111,7 +1112,7 @@ body {
 .btn-view-route { width: 100%; padding: 10px; background: rgba(0, 212, 255, 0.05); border: 1px solid rgba(0, 212, 255, 0.2); border-radius: var(--radius-md); color: var(--accent-blue); font-weight: 600; cursor: pointer; transition: all 0.2s; }
 .btn-view-route:hover { background: rgba(0, 212, 255, 0.1); border-color: var(--accent-blue); }
 
-.metric-box { background: rgba(255,255,255,0.03); padding: 10px; border-radius: var(--radius-md); border: 1px solid var(--border-color); }
+.metric-box { background: var(--bg-accent); padding: 10px; border-radius: var(--radius-md); border: 1px solid var(--border-color); }
 .metric-label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; }
 .metric-value { font-size: 1rem; font-weight: 700; color: var(--text-primary); }
 

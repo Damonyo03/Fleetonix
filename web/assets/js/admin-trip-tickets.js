@@ -282,15 +282,15 @@ function renderTickets(tickets) {
                 </div>
 
                 <div class="ticket-metrics" style="display: flex; gap: 12px; margin-bottom: 24px;">
-                    <div class="metric-box" style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); flex: 1; text-align: center;">
+                    <div class="metric-box" style="background: var(--bg-accent); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); flex: 1; text-align: center;">
                         <div class="metric-label" style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;"><i class="fas fa-flag-checkered"></i> Start Time</div>
                         <div class="metric-value" style="font-size: 1rem; color: var(--accent-blue); font-weight: 700;">${startTime}</div>
                     </div>
-                    <div class="metric-box" style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); flex: 1; text-align: center;">
+                    <div class="metric-box" style="background: var(--bg-accent); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); flex: 1; text-align: center;">
                         <div class="metric-label" style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;"><i class="fas fa-flag"></i> Arrival</div>
                         <div class="metric-value" style="font-size: 1rem; color: var(--accent-green); font-weight: 700;">${arrivalAt}</div>
                     </div>
-                    <div class="metric-box" style="background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); flex: 1; text-align: center;">
+                    <div class="metric-box" style="background: var(--bg-accent); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); flex: 1; text-align: center;">
                         <div class="metric-label" style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase;"><i class="fas fa-road"></i> Distance</div>
                         <div class="metric-value" style="font-size: 1rem; color: var(--accent-teal); font-weight: 700;">${totalKm} km</div>
                     </div>
