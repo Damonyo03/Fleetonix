@@ -126,6 +126,33 @@ function renderLogs(docs) {
             "Audit Notes": log.notes || ''
         });
         
+        let systemStatusHtml = '';
+        if (log.status === 'system_closed') {
+            systemStatusHtml = `<span class="status-badge" style="background: var(--accent-orange); color: #fff; padding: 3px 6px; border-radius: 4px; font-size: 0.75rem;">System Closed</span>`;
+            if (log.time_out) {
+                systemStatusHtml += `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Out: ${log.time_out}</div>`;
+            }
+            systemStatusHtml += `<button onclick="promptForceReset('${logId}')" class="btn btn-secondary" style="font-size: 0.7rem; padding: 4px 8px; margin-top: 5px;">Force Reset</button>`;
+        } else if (log.status === 'manual_override') {
+            systemStatusHtml = `<span class="status-badge" style="background: var(--accent-purple); color: #fff; padding: 3px 6px; border-radius: 4px; font-size: 0.75rem;">Manual Override</span>`;
+            if (log.time_out) {
+                systemStatusHtml += `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Out: ${log.time_out}</div>`;
+            }
+        } else if (log.action === 'time_in' && !log.time_out) {
+            // Check if it's stale (older than today)
+            const logDateStr = log.date || (timestamp && timestamp.toISOString().split('T')[0]);
+            const todayStr = new Date().toISOString().split('T')[0];
+            if (logDateStr && logDateStr < todayStr) {
+                systemStatusHtml = `<span class="status-badge" style="background: var(--accent-red); color: #fff; padding: 3px 6px; border-radius: 4px; font-size: 0.75rem;">Stale Record</span>`;
+                systemStatusHtml += `<button onclick="autoResolveDTR('${logId}')" class="btn btn-primary" style="font-size: 0.7rem; padding: 4px 8px; margin-top: 5px;">Auto Resolve</button>`;
+            } else {
+                systemStatusHtml = `<span style="color: var(--accent-green); font-size: 0.8rem;">Active Shift</span>`;
+                systemStatusHtml += `<br><button onclick="promptForceReset('${logId}')" class="btn btn-secondary" style="font-size: 0.7rem; padding: 4px 8px; margin-top: 5px;">Force Time Out</button>`;
+            }
+        } else {
+            systemStatusHtml = `<span style="color: var(--text-muted); font-size: 0.8rem;">Normal</span>`;
+        }
+
         return `
             <tr>
                 <td style="font-weight: 600;">${log.driver_name || 'Driver'}</td>
@@ -136,6 +163,7 @@ function renderLogs(docs) {
                 </td>
                 <td>${timeString}</td>
                 <td style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${typeof gpsText === 'string' && !gpsText.includes('<a') ? gpsText : ''}">${gpsText}</td>
+                <td>${systemStatusHtml}</td>
             </tr>
         `;
     }).join('');
@@ -188,3 +216,62 @@ function updateAddressUI(logId, address) {
         el.innerHTML = `<span title="${address}" style="cursor:help;">${address}</span>`;
     }
 }
+
+/**
+ * ── DTR Resolution Actions ─────────────────────────────────────────────
+ */
+const CLOUD_REGION = "us-central1";
+const PROJECT_ID = "appfleetonix";
+// Assume useEmulators is false for production admin panel, or fetch it if needed.
+const useEmulators = false; 
+const getFunctionUrl = (functionName) => {
+    if (useEmulators) {
+        return `http://127.0.0.1:5001/${PROJECT_ID}/${CLOUD_REGION}/${functionName}`;
+    }
+    return `https://${CLOUD_REGION}-${PROJECT_ID}.cloudfunctions.net/${functionName}`;
+};
+
+window.autoResolveDTR = async function(logId) {
+    if (!confirm("Are you sure you want the system to auto-resolve this stale record by checking their last trip/GPS ping?")) return;
+
+    try {
+        const response = await fetch(getFunctionUrl('resolveStaleDTR'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ logId })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            alert(data.message);
+        } else {
+            alert("Failed to auto-resolve: " + data.message);
+        }
+    } catch (error) {
+        console.error("Auto-resolve error:", error);
+        alert("Network error occurred.");
+    }
+};
+
+window.promptForceReset = async function(logId) {
+    const manualTime = prompt("Enter the correct Time Out (e.g. '05:30 PM'):");
+    if (!manualTime) return;
+
+    try {
+        const response = await fetch(getFunctionUrl('forceResetDTR'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ logId, manualTimeOut: manualTime })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            alert("Record successfully updated.");
+        } else {
+            alert("Update failed: " + data.message);
+        }
+    } catch (error) {
+        console.error("Force reset error:", error);
+        alert("Network error occurred.");
+    }
+};

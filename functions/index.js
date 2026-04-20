@@ -7,6 +7,7 @@
 const { setGlobalOptions } = require("firebase-functions");
 const { onRequest } = require("firebase-functions/v2/https");
 const { onDocumentUpdated, onDocumentCreated, onDocumentDeleted } = require("firebase-functions/v2/firestore");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 const nodemailer = require("nodemailer");
@@ -481,6 +482,118 @@ exports.verifyAndActivateAccount = onRequest({ cors: true }, async (req, res) =>
 // ALIAS for Android compatibility
 exports.completeRegistration = exports.verifyAndActivateAccount;
 
+exports.submitDriverApplication = onRequest({ cors: true }, async (req, res) => {
+    if (req.method === "OPTIONS") { res.status(204).send(""); return; }
+    
+    const { email, otp, fullName, phone, vehicleType, plateNumber } = req.body;
+    if (!email || !otp || !fullName) return res.status(400).json({ success: false, message: "Missing required fields" });
+    
+    const emailLower = email.toLowerCase().trim();
+
+    try {
+        const db = admin.firestore();
+        const otpDoc = await db.collection("registration_otps").doc(emailLower).get();
+        if (!otpDoc.exists) return res.status(401).json({ success: false, message: "No verification session found." });
+
+        const otpData = otpDoc.data();
+        const incomingHash = crypto.createHash("sha256").update(String(otp).trim()).digest("hex");
+        
+        if (otpData.code !== String(otp).trim() && otpData.hash !== incomingHash) {
+            return res.status(401).json({ success: false, message: "Invalid OTP code." });
+        }
+        
+        // Generate a random temporary password
+        const tempPassword = Math.random().toString(36).slice(-8) + Math.floor(Math.random() * 100).toString();
+
+        let userRecord;
+        try {
+            userRecord = await admin.auth().getUserByEmail(emailLower);
+            // If user exists, we probably shouldn't let them register again
+            return res.status(400).json({ success: false, message: "Email is already registered." });
+        } catch (error) {
+            if (error.code === 'auth/user-not-found') {
+                // Create the user
+                userRecord = await admin.auth().createUser({
+                    email: emailLower,
+                    password: tempPassword,
+                    displayName: fullName,
+                });
+            } else {
+                throw error;
+            }
+        }
+
+        const userData = {
+            full_name: fullName,
+            email: emailLower,
+            phone: phone || "",
+            role: "driver",
+            status: "pending_approval",
+            requiresPasswordChange: true,
+            created_at: admin.firestore.FieldValue.serverTimestamp(),
+        };
+
+        await db.collection("users").doc(userRecord.uid).set(userData);
+
+        await db.collection("drivers").doc(userRecord.uid).set({
+            driver_name: fullName,
+            driver_email: emailLower,
+            phone: phone || "",
+            vehicle_type: vehicleType || "sedan",
+            plate_number: plateNumber || "",
+            current_status: "offline",
+            status: "pending_approval",
+            created_at: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        // Delete OTP
+        await db.collection("registration_otps").doc(emailLower).delete();
+
+        // Send Email with Temp Credentials
+        const loginUrl = "https://appfleetonix.web.app/login.html";
+        const emailHtml = `
+            <!DOCTYPE html>
+            <html>
+            <body style="font-family: Arial, sans-serif; background-color: #f4f7f6; padding: 20px;">
+                <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 8px; border: 1px solid #ddd;">
+                    <h2 style="color: #00d4ff; text-align: center;">Application Received</h2>
+                    <p>Hello <strong>${fullName}</strong>,</p>
+                    <p>Your driver application has been successfully submitted and is currently <strong>Pending Approval</strong>.</p>
+                    <p>You can log in to check your status. For your security, you must change your password upon your first login.</p>
+                    <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #00d4ff;">
+                        <p style="margin: 5px 0;"><strong>Email:</strong> ${emailLower}</p>
+                        <p style="margin: 5px 0;"><strong>Temporary Password:</strong> <span style="font-family: monospace; font-size: 1.1em;">${tempPassword}</span></p>
+                    </div>
+                    <div style="text-align: center; margin-top: 30px;">
+                        <a href="${loginUrl}" style="background-color: #00d4ff; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Go to Login</a>
+                    </div>
+                </div>
+            </body>
+            </html>
+        `;
+
+        await getMailTransport().sendMail({
+            from: '"Fleetonix System" <fleetonix.noreply@gmail.com>',
+            to: emailLower,
+            subject: "Your Fleetonix Application & Temporary Credentials",
+            html: emailHtml,
+        });
+
+        // AUDIT: Notify Admin for Approval
+        await db.collection("notifications").add({
+            title: "New Driver Enrollment",
+            message: `New driver application received from ${fullName} (${emailLower}).`,
+            type: "enrollment",
+            created_at: admin.firestore.FieldValue.serverTimestamp(),
+            is_read: false,
+            role: "admin"
+        });
+
+        res.json({ success: true, message: "Application submitted successfully." });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
 // RESTORED: Admin Delete with Archival
 exports.adminDeleteUser = onRequest({ cors: true }, async (req, res) => {
     const caller = await requireRole(req, res, ["super_admin", "admin"]);
@@ -603,4 +716,136 @@ exports.onUserStatusUpdated = onDocumentUpdated({
       logger.error("Failed to send approval email:", error);
     }
   }
+});
+// === DTR AUTO-CLOCK OUT LOGIC ===
+
+async function processStaleDTR(db, dtrDoc) {
+    const data = dtrDoc.data();
+    const driverId = data.driver_id;
+    const dateStr = data.date; // e.g. "2026-04-20"
+
+    // 1. Look for last completed trip ticket for this driver on this date
+    const tripsSnap = await db.collection("trip_tickets")
+        .where("driver_id", "==", driverId)
+        .where("status", "==", "completed")
+        .orderBy("completed_at", "desc")
+        .limit(1)
+        .get();
+
+    let resolvedTimeOut = null;
+    let fallbackUsed = false;
+
+    if (!tripsSnap.empty) {
+        const tripData = tripsSnap.docs[0].data();
+        if (tripData.completed_at) {
+            resolvedTimeOut = tripData.completed_at;
+        }
+    }
+
+    // 2. Telemetry Fallback: if no completed trips, find last activity/location ping
+    if (!resolvedTimeOut) {
+        const activitySnap = await db.collection("activity")
+            .where("driver_id", "==", driverId)
+            .orderBy("timestamp", "desc")
+            .limit(1)
+            .get();
+        
+        if (!activitySnap.empty) {
+            resolvedTimeOut = activitySnap.docs[0].data().timestamp;
+            fallbackUsed = true;
+        } else {
+            // Absolute fallback to end of the day if no telemetry found
+            const endOfDay = new Date(`${dateStr}T23:59:59Z`);
+            resolvedTimeOut = admin.firestore.Timestamp.fromDate(endOfDay);
+            fallbackUsed = true;
+        }
+    }
+
+    // Convert timestamp to string formatted time if needed, or just store the timestamp.
+    // Assuming time_in is a string like "08:00 AM", but let's store standard Date object or timestamp
+    // and format it for the UI.
+    const dateObj = resolvedTimeOut.toDate ? resolvedTimeOut.toDate() : new Date(resolvedTimeOut);
+    const formattedTime = dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+    await dtrDoc.ref.update({
+        time_out: formattedTime,
+        status: "system_closed",
+        resolved_at: admin.firestore.FieldValue.serverTimestamp(),
+        fallback_used: fallbackUsed
+    });
+
+    return formattedTime;
+}
+
+// Scheduled Function (Runs Daily at 1:00 AM)
+exports.autoResolveStaleDTRs = onSchedule("0 1 * * *", async (event) => {
+    const db = admin.firestore();
+    // Get today's date string
+    const today = new Date().toISOString().split('T')[0];
+
+    const staleSnap = await db.collection("dtr_logs")
+        .where("time_out", "==", null)
+        .where("date", "<", today)
+        .get();
+
+    if (staleSnap.empty) {
+        logger.log("No stale DTR records found.");
+        return;
+    }
+
+    let processedCount = 0;
+    for (const doc of staleSnap.docs) {
+        try {
+            await processStaleDTR(db, doc);
+            processedCount++;
+        } catch (error) {
+            logger.error(`Error processing DTR ${doc.id}:`, error);
+        }
+    }
+    logger.log(`Successfully resolved ${processedCount} stale DTR records.`);
+});
+
+// Callable HTTP endpoint for Admin manual resolution of a specific driver's record
+exports.resolveStaleDTR = onRequest({ cors: true }, async (req, res) => {
+    if (req.method === "OPTIONS") { res.status(204).send(""); return; }
+    const caller = await requireRole(req, res, ["super_admin", "admin"]);
+    if (!caller) return;
+
+    const { logId } = req.body;
+    if (!logId) return res.status(400).json({ success: false, message: "Missing logId" });
+
+    try {
+        const db = admin.firestore();
+        const dtrDoc = await db.collection("dtr_logs").doc(logId).get();
+        if (!dtrDoc.exists) {
+            return res.status(404).json({ success: false, message: "DTR record not found." });
+        }
+
+        const resolvedTime = await processStaleDTR(db, dtrDoc);
+        res.json({ success: true, message: `Record system_closed with time: ${resolvedTime}` });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+exports.forceResetDTR = onRequest({ cors: true }, async (req, res) => {
+    if (req.method === "OPTIONS") { res.status(204).send(""); return; }
+    const caller = await requireRole(req, res, ["super_admin", "admin"]);
+    if (!caller) return;
+
+    const { logId, manualTimeOut } = req.body;
+    if (!logId || !manualTimeOut) return res.status(400).json({ success: false, message: "Missing fields" });
+
+    try {
+        const db = admin.firestore();
+        await db.collection("dtr_logs").doc(logId).update({
+            time_out: manualTimeOut,
+            status: "manual_override",
+            overridden_by: caller.email,
+            resolved_at: admin.firestore.FieldValue.serverTimestamp()
+        });
+        res.json({ success: true, message: "DTR manually overridden." });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
 });
