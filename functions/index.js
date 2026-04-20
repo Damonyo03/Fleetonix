@@ -373,58 +373,111 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
   const caller = await requireRole(req, res, ["super_admin", "admin"]);
   if (!caller) return;
 
-  const { email, password, fullName, role } = req.body;
+  const { email, fullName, role, phone, vehicle_type, plate_number } = req.body;
+  if (!email || !fullName || !role) {
+    return res.status(400).json({ success: false, message: "Missing required fields: email, fullName, role" });
+  }
   const emailLower = email.toLowerCase().trim();
+
+  // Auto-generate a secure temporary password
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#";
+  let tempPassword = "";
+  for (let i = 0; i < 10; i++) tempPassword += chars[Math.floor(Math.random() * chars.length)];
 
   try {
     const userRecord = await admin.auth().createUser({
       email: emailLower,
-      password: password,
+      password: tempPassword,
       displayName: fullName,
     });
 
-    const userData = {
+    const db = admin.firestore();
+
+    await db.collection("users").doc(userRecord.uid).set({
       full_name: fullName,
       email: emailLower,
+      phone: phone || "",
       role: role,
       company_name: "Jettsan",
-      status: "pending_verification",
+      status: "active",
+      requiresPasswordChange: true,
       isFirstLogin: true,
       created_at: admin.firestore.FieldValue.serverTimestamp(),
-    };
-
-    await admin.firestore().collection("users").doc(userRecord.uid).set(userData);
+      approved_by: caller.email,
+      approved_at: admin.firestore.FieldValue.serverTimestamp(),
+    });
 
     if (role === "driver") {
-        await admin.firestore().collection("drivers").doc(userRecord.uid).set({
-            driver_name: fullName,
-            driver_email: emailLower,
-            current_status: "offline",
-            status: "pending_verification",
-            created_at: admin.firestore.FieldValue.serverTimestamp(),
-        });
+      await db.collection("drivers").doc(userRecord.uid).set({
+        driver_name: fullName,
+        driver_email: emailLower,
+        phone: phone || "",
+        vehicle_type: vehicle_type || "sedan",
+        plate_number: plate_number || "",
+        current_status: "offline",
+        status: "active",
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+      });
     }
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
-    await admin.firestore().collection("registration_otps").doc(emailLower).set({
-        email: emailLower,
-        hash: otpHash,
-        attempts: 0,
-        // REMOVED: Insecure plaintext 'code' field
-        created_at: admin.firestore.FieldValue.serverTimestamp(),
-        expires_at: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 24 * 60 * 60 * 1000)),
-    });
+    // Email the driver their actual login credentials
+    const loginUrl = "https://appfleetonix.web.app/login.html";
+    const credentialsEmailHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head><meta charset="utf-8"></head>
+      <body style="font-family:'Segoe UI',Arial,sans-serif; margin:0; padding:0; background:#0a0e27;">
+        <div style="max-width:600px; margin:40px auto; background:#1a1f3a; border-radius:12px; border:1px solid #2d3447; padding:40px;">
+          <div style="text-align:center; margin-bottom:30px;">
+            <img src="https://appfleetonix.web.app/img/logo.jpg" alt="Fleetonix" style="width:80px; border-radius:12px;">
+          </div>
+          <h2 style="color:#fff; text-align:center; font-size:22px; margin-bottom:8px;">Welcome to Fleetonix! 🎉</h2>
+          <p style="color:#b0b8c8; text-align:center; margin-bottom:30px;">Your driver account has been approved. Here are your login credentials.</p>
+
+          <div style="background:#252b42; border-radius:10px; padding:24px; border:1px solid #2d3447; margin-bottom:24px;">
+            <p style="color:#6b7280; font-size:12px; text-transform:uppercase; letter-spacing:1px; margin:0 0 16px;">Your Login Details</p>
+            <div style="margin-bottom:14px;">
+              <span style="color:#6b7280; font-size:12px;">EMAIL ADDRESS</span><br>
+              <span style="color:#00d4ff; font-size:16px; font-weight:600;">${emailLower}</span>
+            </div>
+            <div>
+              <span style="color:#6b7280; font-size:12px;">TEMPORARY PASSWORD</span><br>
+              <span style="color:#00c9a7; font-size:20px; font-weight:800; letter-spacing:3px; font-family:monospace;">${tempPassword}</span>
+            </div>
+          </div>
+
+          <div style="background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:8px; padding:14px; margin-bottom:24px;">
+            <p style="color:#f59e0b; font-size:13px; margin:0;">⚠️ <strong>Important:</strong> You will be required to change this password immediately after your first login for security purposes.</p>
+          </div>
+
+          <ol style="color:#b0b8c8; font-size:14px; line-height:2; padding-left:20px; margin-bottom:30px;">
+            <li>Click the button below and log in with the credentials above.</li>
+            <li>Set a new, secure password when prompted.</li>
+            <li>Download the Fleetonix Driver App from the dashboard.</li>
+            <li>Log in to the app and start accepting trips!</li>
+          </ol>
+
+          <div style="text-align:center; margin-top:10px;">
+            <a href="${loginUrl}" style="background:#00d4ff; color:#0a0e27; padding:14px 32px; text-decoration:none; border-radius:8px; font-weight:700; font-size:15px; display:inline-block;">Login to Fleetonix →</a>
+          </div>
+
+          <p style="color:#4b5563; font-size:11px; text-align:center; margin-top:30px;">If you did not expect this email, please contact your fleet administrator.</p>
+        </div>
+      </body>
+      </html>
+    `;
 
     await getMailTransport().sendMail({
-        from: '"Fleetonix Activation" <fleetonix.noreply@gmail.com>',
-        to: emailLower,
-        subject: "Welcome to Fleetonix: Activation Code",
-        html: getOTPHtmlTemplate(otp, emailLower, true),
+      from: '"Fleetonix System" <fleetonix.noreply@gmail.com>',
+      to: emailLower,
+      subject: `Welcome to Fleetonix — Your Account is Ready, ${fullName}!`,
+      html: credentialsEmailHtml,
     });
 
-    res.json({ success: true, message: "Account created and OTP sent.", uid: userRecord.uid });
+    logger.log(`Admin ${caller.email} created account for ${emailLower} (role: ${role})`);
+    res.json({ success: true, message: `Account created. Login credentials emailed to ${emailLower}.`, uid: userRecord.uid });
   } catch (error) {
+    logger.error("adminCreateUser error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 });

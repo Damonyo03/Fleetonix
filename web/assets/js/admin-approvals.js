@@ -122,14 +122,12 @@ function renderApprovals(applications) {
 }
 
 window.approveApplication = async (appId, fullName, email, phone, vehicleType, plateNumber) => {
-    const tempPassword = Math.random().toString(36).slice(-8) + Math.floor(Math.random() * 100).toString();
-
-    if (!confirm(`Create a Fleetonix account for ${fullName} (${email})?\n\nA temporary password will be generated and emailed to them.`)) return;
+    if (!confirm(`Create a Fleetonix account for ${fullName} (${email})?\n\nA temporary password will be automatically generated and emailed to them.`)) return;
 
     try {
         const idToken = await auth.currentUser.getIdToken();
 
-        // 1. Call adminCreateUser to provision the Firebase Auth account + user/driver docs
+        // Call adminCreateUser — password is auto-generated on the backend
         const response = await fetch(getFunctionUrl('adminCreateUser'), {
             method: 'POST',
             headers: {
@@ -138,13 +136,11 @@ window.approveApplication = async (appId, fullName, email, phone, vehicleType, p
             },
             body: JSON.stringify({
                 email: email,
-                password: tempPassword,
                 fullName: fullName,
                 role: 'driver',
                 phone: phone || '',
                 vehicle_type: vehicleType || 'sedan',
                 plate_number: plateNumber || '',
-                companyName: 'Jettsan'
             })
         });
 
