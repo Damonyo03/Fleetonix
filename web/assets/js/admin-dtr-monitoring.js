@@ -130,13 +130,16 @@ function renderLogs(docs) {
         if (log.status === 'system_closed') {
             systemStatusHtml = `<span class="status-badge" style="background: var(--accent-orange); color: #fff; padding: 3px 6px; border-radius: 4px; font-size: 0.75rem;">System Closed</span>`;
             if (log.time_out) {
-                systemStatusHtml += `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Out: ${log.time_out}</div>`;
+                systemStatusHtml += `<div style="font-size: 0.75rem; color: var(--accent); margin-top: 4px; cursor: pointer; text-decoration: underline;" onclick="promptForceReset('${logId}')" title="Click to manually edit time out">Out: ${log.time_out}</div>`;
+            } else {
+                systemStatusHtml += `<br><button onclick="promptForceReset('${logId}')" class="btn btn-secondary" style="font-size: 0.7rem; padding: 4px 8px; margin-top: 5px;">Force Reset</button>`;
             }
-            systemStatusHtml += `<button onclick="promptForceReset('${logId}')" class="btn btn-secondary" style="font-size: 0.7rem; padding: 4px 8px; margin-top: 5px;">Force Reset</button>`;
         } else if (log.status === 'manual_override') {
             systemStatusHtml = `<span class="status-badge" style="background: var(--accent-purple); color: #fff; padding: 3px 6px; border-radius: 4px; font-size: 0.75rem;">Manual Override</span>`;
             if (log.time_out) {
-                systemStatusHtml += `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Out: ${log.time_out}</div>`;
+                systemStatusHtml += `<div style="font-size: 0.75rem; color: var(--accent); margin-top: 4px; cursor: pointer; text-decoration: underline;" onclick="promptForceReset('${logId}')" title="Click to manually edit time out">Out: ${log.time_out}</div>`;
+            } else {
+                systemStatusHtml += `<br><button onclick="promptForceReset('${logId}')" class="btn btn-secondary" style="font-size: 0.7rem; padding: 4px 8px; margin-top: 5px;">Force Reset</button>`;
             }
         } else if (log.action === 'time_in' && !log.time_out) {
             // Check if it's stale (older than today)
@@ -144,7 +147,8 @@ function renderLogs(docs) {
             const todayStr = new Date().toISOString().split('T')[0];
             if (logDateStr && logDateStr < todayStr) {
                 systemStatusHtml = `<span class="status-badge" style="background: var(--accent-red); color: #fff; padding: 3px 6px; border-radius: 4px; font-size: 0.75rem;">Stale Record</span>`;
-                systemStatusHtml += `<button onclick="autoResolveDTR('${logId}')" class="btn btn-primary" style="font-size: 0.7rem; padding: 4px 8px; margin-top: 5px;">Auto Resolve</button>`;
+                systemStatusHtml += `<br><button onclick="autoResolveDTR('${logId}')" class="btn btn-primary" style="font-size: 0.7rem; padding: 4px 8px; margin-top: 5px; margin-right: 5px;">Auto Resolve</button>`;
+                systemStatusHtml += `<button onclick="promptForceReset('${logId}')" class="btn btn-secondary" style="font-size: 0.7rem; padding: 4px 8px; margin-top: 5px;" title="Manually input time out">Manual</button>`;
             } else {
                 systemStatusHtml = `<span style="color: var(--accent-green); font-size: 0.8rem;">Active Shift</span>`;
                 systemStatusHtml += `<br><button onclick="promptForceReset('${logId}')" class="btn btn-secondary" style="font-size: 0.7rem; padding: 4px 8px; margin-top: 5px;">Force Time Out</button>`;
@@ -235,9 +239,13 @@ window.autoResolveDTR = async function(logId) {
     if (!confirm("Are you sure you want the system to auto-resolve this stale record by checking their last trip/GPS ping?")) return;
 
     try {
+        const idToken = await auth.currentUser.getIdToken();
         const response = await fetch(getFunctionUrl('resolveStaleDTR'), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${idToken}`
+            },
             body: JSON.stringify({ logId })
         });
         
@@ -258,9 +266,13 @@ window.promptForceReset = async function(logId) {
     if (!manualTime) return;
 
     try {
+        const idToken = await auth.currentUser.getIdToken();
         const response = await fetch(getFunctionUrl('forceResetDTR'), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${idToken}`
+            },
             body: JSON.stringify({ logId, manualTimeOut: manualTime })
         });
         
