@@ -1765,6 +1765,70 @@ fun DriverDashboard(
                             val timeFormatter = DateTimeFormatter.ofPattern("hh:mm a")
                             val dateFormatter = DateTimeFormatter.ofPattern("MMM dd")
 
+                            if (isFromPreviousDay) {
+                                LaunchedEffect(sessionStart) {
+                                    try {
+                                        isDtrLoading = true
+                                        val uid = auth.currentUser?.uid ?: return@LaunchedEffect
+                                        val email = auth.currentUser?.email ?: ""
+                                        
+                                        val tripsSnap = db.collection("trip_tickets")
+                                            .whereEqualTo("driver_id", uid)
+                                            .whereEqualTo("status", "completed")
+                                            .orderBy("completed_at", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                                            .limit(1)
+                                            .get()
+                                            .await()
+
+                                        var resolvedTimeOut = sessionStart.withHour(23).withMinute(59)
+
+                                        if (!tripsSnap.isEmpty) {
+                                            val tripData = tripsSnap.documents[0]
+                                            val completedAtTS = tripData.getTimestamp("completed_at")
+                                            if (completedAtTS != null) {
+                                                val completedAtLDT = LocalDateTime.ofInstant(completedAtTS.toDate().toInstant(), ZoneId.systemDefault())
+                                                if (completedAtLDT.toLocalDate().isEqual(sessionStart.toLocalDate())) {
+                                                    resolvedTimeOut = completedAtLDT
+                                                }
+                                            }
+                                        }
+
+                                        val totalHours = java.time.Duration.between(sessionStart, resolvedTimeOut).toMinutes() / 60.0
+                                        val qualifiedForOT = resolvedTimeOut.hour >= 17 && totalHours >= 0.5
+                                        
+                                        val logData = hashMapOf(
+                                            "driver_uid" to uid,
+                                            "driver_email" to email,
+                                            "driver_name" to liveDriverName,
+                                            "accredited_company_id" to accreditedCompanyId,
+                                            "action" to "time_out",
+                                            "timestamp" to FieldValue.serverTimestamp(),
+                                            "device_time" to resolvedTimeOut.toString(),
+                                            "latitude" to currentLatitude,
+                                            "longitude" to currentLongitude,
+                                            "location_name" to "Auto-resolved local",
+                                            "total_hours" to "%.2f".format(totalHours).toDouble(),
+                                            "is_overtime" to qualifiedForOT,
+                                            "status" to "system_closed"
+                                        )
+                                        
+                                        db.collection("dtr_logs").add(logData).await()
+                                        db.collection("drivers").document(uid).update(
+                                            "is_currently_timed_in", false,
+                                            "last_time_out", FieldValue.serverTimestamp(),
+                                            "last_updated", FieldValue.serverTimestamp()
+                                        ).await()
+                                        
+                                        isTimedIn = false
+                                        tripActionSuccess = "Previous session was automatically timed out based on last trip."
+                                    } catch (e: Exception) {
+                                        Log.e("DriverDashboard", "Auto DTR resolution failed: ${e.message}")
+                                    } finally {
+                                        isDtrLoading = false
+                                    }
+                                }
+                            }
+
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(
                                     text = "Session Started: ${sessionStart.format(timeFormatter)}${if (isFromPreviousDay) " (${sessionStart.format(dateFormatter)})" else ""}",
@@ -1775,7 +1839,7 @@ fun DriverDashboard(
                                 
                                 if (isFromPreviousDay) {
                                     Text(
-                                        text = "⚠️ You are still Timed-In from a previous day. Please Time Out to reset your session.",
+                                        text = "⚠️ Auto-resolving previous DTR session...",
                                         color = AccentOrange,
                                         style = MaterialTheme.typography.labelSmall,
                                         fontStyle = FontStyle.Italic
