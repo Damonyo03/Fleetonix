@@ -12,10 +12,32 @@
     <title>Fleetonix - Login</title>
     <link rel="icon" type="image/jpeg" href="img/logo.jpg">
     <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         .alert { padding: 10px; margin-bottom: 15px; border-radius: 4px; display: none; }
         .alert-error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
         .loading { opacity: 0.7; pointer-events: none; }
+
+        .password-wrapper {
+            position: relative;
+        }
+        .password-wrapper .form-input {
+            padding-right: 44px;
+        }
+        .password-toggle {
+            position: absolute;
+            right: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            color: var(--text-muted, #6b7280);
+            font-size: 15px;
+            transition: color 0.2s;
+            user-select: none;
+        }
+        .password-toggle:hover {
+            color: var(--accent, #00d4ff);
+        }
     </style>
 </head>
 <body class="login-body">
@@ -174,14 +196,10 @@
         const passwordInput = document.getElementById('password');
 
         passwordInput.addEventListener('input', function() {
-            if (this.value.length > 0) {
-                togglePassword.classList.add('visible');
-            } else {
-                togglePassword.classList.remove('visible');
-                // Also reset to password type if cleared
+            if (this.value.length === 0) {
                 passwordInput.setAttribute('type', 'password');
-                togglePassword.classList.add('fa-eye');
                 togglePassword.classList.remove('fa-eye-slash');
+                togglePassword.classList.add('fa-eye');
             }
         });
 
