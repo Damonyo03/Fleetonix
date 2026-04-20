@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Get the Driver App - Fleetonix</title>
+    <link rel="icon" type="image/jpeg" href="img/logo.jpg">
+    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .download-container {
+            max-width: 600px;
+            margin: 50px auto;
+            background: var(--bg-card);
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-color);
+            padding: 40px;
+            text-align: center;
+        }
+        
+        .app-icon {
+            width: 120px;
+            height: 120px;
+            border-radius: 25px;
+            box-shadow: 0 10px 25px rgba(0, 212, 255, 0.2);
+            margin-bottom: 25px;
+            border: 2px solid var(--border-color);
+        }
+
+        .download-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            background: #000000;
+            color: #ffffff;
+            padding: 15px 30px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: 1px solid #333;
+            margin-top: 20px;
+            width: 100%;
+            max-width: 300px;
+        }
+
+        .download-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4);
+            background: #111;
+        }
+
+        .download-button i {
+            font-size: 24px;
+        }
+
+        .download-text {
+            display: flex;
+            flex-direction: column;
+            text-align: left;
+        }
+
+        .download-text span:first-child {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.8;
+        }
+
+        .download-text span:last-child {
+            font-size: 1.2rem;
+        }
+    </style>
+</head>
+<body class="login-body">
+    <div class="download-container">
+        <img src="img/logo.jpg" alt="Fleetonix Driver App" class="app-icon">
+        
+        <h2 style="color: var(--text-main); margin-bottom: 15px; font-size: 1.8rem;">You're All Set!</h2>
+        <p style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 30px; font-size: 1.1rem;">
+            Your account is active and your password has been secured.<br>
+            To start accepting trips and tracking your schedule, please download the Fleetonix Driver App.
+        </p>
+
+        <a href="downloads/Fleetonix_Driver.apk" class="download-button" download>
+            <i class="fab fa-android"></i>
+            <div class="download-text">
+                <span>DIRECT DOWNLOAD</span>
+                <span>Android APK</span>
+            </div>
+        </a>
+
+        <div style="margin-top: 25px; padding: 15px; background: rgba(0, 212, 255, 0.05); border: 1px solid var(--border-color); border-radius: 8px; text-align: left;">
+            <p style="color: var(--accent-blue); font-weight: bold; margin-bottom: 5px; font-size: 0.95rem;">
+                <i class="fas fa-info-circle"></i> Installation Guide
+            </p>
+            <ol style="color: var(--text-secondary); font-size: 0.85rem; padding-left: 20px; margin: 0; line-height: 1.5;">
+                <li>Download the APK file using the button above.</li>
+                <li>Open the downloaded file.</li>
+                <li>If prompted, go to Settings and enable <strong>"Install from Unknown Sources"</strong>.</li>
+                <li>Complete the installation and open Fleetonix.</li>
+            </ol>
+        </div>
+
+        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border-color);">
+            <p style="color: var(--text-muted); font-size: 0.9rem;">
+                Need help? <a href="#" style="color: var(--accent); text-decoration: none;">Contact Support</a>
+            </p>
+            <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 10px;">
+                <a href="#" id="btnLogout" style="color: var(--text-secondary); text-decoration: underline;">Log out</a>
+            </p>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { firebaseConfig } from "./assets/js/firebase-config.js";
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        document.getElementById('btnLogout').addEventListener('click', async (e) => {
+            e.preventDefault();
+            await signOut(auth);
+            window.location.href = 'login.html';
+        });
+    </script>
+    <script src="assets/js/utils.js"></script>
+</body>
+</html>

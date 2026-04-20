@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Driver Registration - Fleetonix</title>
+    <link rel="icon" type="image/jpeg" href="img/logo.jpg">
+    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .registration-container {
+            max-width: 600px;
+            margin: 50px auto;
+            background: var(--bg-card);
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-color);
+            padding: 40px;
+        }
+        
+        .step {
+            display: none;
+        }
+        
+        .step.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .step-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 30px;
+            position: relative;
+        }
+        
+        .step-indicator::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--border-color);
+            z-index: 0;
+        }
+        
+        .step-dot {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: var(--bg-input);
+            border: 2px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: var(--text-muted);
+            position: relative;
+            z-index: 1;
+            transition: all 0.3s ease;
+        }
+        
+        .step-dot.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+            box-shadow: 0 0 10px var(--glow-blue);
+        }
+        
+        .step-dot.completed {
+            background: var(--accent-teal);
+            border-color: var(--accent-teal);
+            color: #fff;
+        }
+        
+        .input-group {
+            margin-bottom: 20px;
+        }
+        
+        .input-label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        
+        .alert {
+            display: none;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .alert.show {
+            display: flex;
+        }
+    </style>
+</head>
+<body class="login-body">
+    <div class="registration-container">
+        <div style="text-align: center; margin-bottom: 30px;">
+            <img src="img/logo.jpg" alt="Fleetonix Logo" class="logo-main" style="width: 100px; height: 100px; border-radius: 50%;">
+            <h2 style="color: var(--text-main); margin-top: 15px;">Driver Enrollment</h2>
+            <p style="color: var(--text-secondary);">Join the Fleetonix logistics network</p>
+        </div>
+        
+        <div class="step-indicator">
+            <div class="step-dot active" id="dot-1">1</div>
+            <div class="step-dot" id="dot-2">2</div>
+            <div class="step-dot" id="dot-3">3</div>
+        </div>
+        
+        <div id="alertBox" class="alert">
+            <i id="alertIcon" class="fas"></i>
+            <span id="alertMsg"></span>
+        </div>
+        
+        <!-- Step 1: Email Verification -->
+        <div class="step active" id="step-1">
+            <div class="input-group">
+                <label class="input-label">Email Address</label>
+                <div class="input-icon-wrapper" style="position: relative;">
+                    <i class="fas fa-envelope" style="position: absolute; left: 15px; top: 16px; color: var(--text-muted);"></i>
+                    <input type="email" id="regEmail" class="form-input" style="padding-left: 45px;" placeholder="Enter your email address" required>
+                </div>
+            </div>
+            <button class="btn btn-primary" id="btnSendOTP">
+                Send Verification Code
+            </button>
+            <div style="text-align: center; margin-top: 20px;">
+                <a href="login.html" class="forgot-link">Already have an account? Log in</a>
+            </div>
+        </div>
+        
+        <!-- Step 2: OTP Entry -->
+        <div class="step" id="step-2">
+            <p style="color: var(--text-secondary); text-align: center; margin-bottom: 20px;">
+                We've sent a 6-digit code to <strong id="displayEmail" style="color: var(--text-main);"></strong>
+            </p>
+            <div class="input-group">
+                <label class="input-label">Verification Code</label>
+                <input type="text" id="regOTP" class="form-input" placeholder="000000" maxlength="6" style="text-align: center; font-size: 1.5rem; letter-spacing: 5px;" required>
+            </div>
+            <button class="btn btn-primary" id="btnVerifyOTP">
+                Verify Code & Continue
+            </button>
+            <div style="text-align: center; margin-top: 20px;">
+                <a href="#" id="btnBackToEmail" class="forgot-link">Change email address</a>
+            </div>
+        </div>
+        
+        <!-- Step 3: Profile Details -->
+        <div class="step" id="step-3">
+            <div class="input-group">
+                <label class="input-label">Full Name</label>
+                <div class="input-icon-wrapper" style="position: relative;">
+                    <i class="fas fa-user" style="position: absolute; left: 15px; top: 16px; color: var(--text-muted);"></i>
+                    <input type="text" id="regName" class="form-input" style="padding-left: 45px;" placeholder="e.g. Juan Dela Cruz" required>
+                </div>
+            </div>
+            
+            <div class="input-group">
+                <label class="input-label">Contact Number</label>
+                <div class="input-icon-wrapper" style="position: relative;">
+                    <i class="fas fa-phone" style="position: absolute; left: 15px; top: 16px; color: var(--text-muted);"></i>
+                    <input type="tel" id="regPhone" class="form-input" style="padding-left: 45px;" placeholder="e.g. 09123456789" required>
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 15px; margin-bottom: 20px;">
+                <div style="flex: 1;">
+                    <label class="input-label">Vehicle Type</label>
+                    <select id="regVehicleType" class="form-input" style="appearance: none;">
+                        <option value="sedan">Sedan</option>
+                        <option value="suv">SUV / AUV</option>
+                        <option value="van">Passenger Van</option>
+                        <option value="truck">Light Truck</option>
+                        <option value="motorcycle">Motorcycle</option>
+                    </select>
+                </div>
+                <div style="flex: 1;">
+                    <label class="input-label">Plate Number</label>
+                    <input type="text" id="regPlate" class="form-input" placeholder="ABC 1234">
+                </div>
+            </div>
+            
+            <button class="btn btn-primary" id="btnSubmitProfile">
+                Submit Application
+            </button>
+        </div>
+        
+        <!-- Step 4: Success -->
+        <div class="step" id="step-success" style="text-align: center;">
+            <i class="fas fa-check-circle" style="font-size: 4rem; color: var(--accent-teal); margin-bottom: 20px;"></i>
+            <h3 style="color: var(--text-main); margin-bottom: 15px;">Application Received!</h3>
+            <p style="color: var(--text-secondary); line-height: 1.6;">
+                Your application has been successfully submitted and is currently pending admin approval.<br><br>
+                We have sent an email with your <strong>temporary login credentials</strong>. Please check your inbox (and spam folder).
+            </p>
+            <a href="login.html" class="btn btn-primary" style="margin-top: 30px; text-decoration: none; display: inline-block; width: auto; padding: 12px 30px;">
+                Go to Login
+            </a>
+        </div>
+    </div>
+    
+    <script type="module" src="assets/js/register-driver.js"></script>
+    <script src="assets/js/utils.js"></script>
+</body>
+</html>

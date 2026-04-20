@@ -124,6 +124,12 @@
                         return;
                     }
 
+                    // Security Gate: Mandatory Password Change for new drivers
+                    if (userData.requiresPasswordChange) {
+                        window.location.href = 'change-password.html?email=' + encodeURIComponent(email);
+                        return;
+                    }
+
                     // Lifecycle Guard: Approval
                     if (status === 'pending_approval') {
                         errorMessage.innerHTML = `<i class="fas fa-clock"></i> Account pending final Super Admin approval. <br><span style="font-size:0.75rem; opacity:0.8;">You will receive an email once your credentials have been vetted.</span>`;
@@ -140,11 +146,8 @@
                     if (adminRoles.includes(userData.user_type || userData.role)) {
                         window.location.href = 'admin/dashboard.html';
                     } else if (userData.user_type === 'driver' || userData.role === 'driver') {
-                        // Drivers use the mobile app usually, but redirect to a placeholder if needed
-                        errorMessage.innerText = "Driver access is restricted to the mobile application.";
-                        errorMessage.style.display = 'block';
-                        loginBtn.classList.remove('loading');
-                        loginBtn.innerText = 'Log in';
+                        // Drivers are directed to download the mobile application
+                        window.location.href = 'driver-app-download.html';
                     } else {
                         console.warn("User type not recognized:", userData.user_type);
                         window.location.href = 'login.html?error=invalid_role';
