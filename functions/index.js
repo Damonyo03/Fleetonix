@@ -342,8 +342,17 @@ exports.sendRegistrationOTP = onRequest({ cors: true }, async (req, res) => {
   if (req.method === "OPTIONS") { res.status(204).send(""); return; }
   const { email } = req.body;
   if (!email) return res.status(400).json({ success: false, message: "Email required" });
+  const emailLower = email.toLowerCase().trim();
 
   try {
+    const db = admin.firestore();
+    
+    // Check if email already exists in users collection
+    const userSnap = await db.collection("users").where("email", "==", emailLower).limit(1).get();
+    if (!userSnap.empty) {
+      return res.status(409).json({ success: false, message: "This email is already registered. Please log in instead." });
+    }
+
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
 
@@ -376,6 +385,7 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
   if (!email || !fullName || !role) {
     return res.status(400).json({ success: false, message: "Missing required fields: email, fullName, role" });
   }
+  const db = admin.firestore();
   const emailLower = email.toLowerCase().trim();
 
   // Auto-generate a secure temporary password (alphanumeric only to avoid email encoding issues)
@@ -384,14 +394,34 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
   for (let i = 0; i < 12; i++) tempPassword += chars[Math.floor(Math.random() * chars.length)];
 
   try {
-    const userRecord = await admin.auth().createUser({
-      email: emailLower,
-      password: tempPassword,
-      displayName: fullName,
-    });
+    // 1. Check for duplicate in Firestore database first
+    const existingUserQuery = await db.collection("users").where("email", "==", emailLower).limit(1).get();
+    if (!existingUserQuery.empty) {
+      return res.status(409).json({ success: false, message: "A user with this email already exists in the system database." });
+    }
 
-    const db = admin.firestore();
+    // 2. Check if they exist in Firebase Auth (orphan account case)
+    let userRecord;
+    try {
+      userRecord = await admin.auth().getUserByEmail(emailLower);
+      // User exists in Auth but not in Firestore. We'll "link" them by using their existing UID.
+      // We also update their display name for consistency.
+      await admin.auth().updateUser(userRecord.uid, { displayName: fullName });
+      logger.log(`Found orphan Auth account for ${emailLower}, linking to new Firestore record.`);
+    } catch (e) {
+      if (e.code === 'auth/user-not-found') {
+        // 3. True new user: create in Auth
+        userRecord = await admin.auth().createUser({
+          email: emailLower,
+          password: tempPassword,
+          displayName: fullName,
+        });
+      } else {
+        throw e; // Rethrow unexpected Auth errors
+      }
+    }
 
+    // 4. Create Firestore records
     await db.collection("users").doc(userRecord.uid).set({
       full_name: fullName,
       email: emailLower,
@@ -555,7 +585,13 @@ exports.submitDriverApplication = onRequest({ cors: true }, async (req, res) => 
             return res.status(401).json({ success: false, message: "Invalid OTP code." });
         }
 
-        // 2. Check for a duplicate PENDING application (do NOT check Firebase Auth)
+        // 2. Check for duplicate account in system
+        const userSnap = await db.collection("users").where("email", "==", emailLower).limit(1).get();
+        if (!userSnap.empty) {
+            return res.status(409).json({ success: false, message: "An account with this email already exists. Please log in." });
+        }
+
+        // 3. Check for a duplicate PENDING application
         const existingSnap = await db.collection("driver_applications")
             .where("email", "==", emailLower)
             .where("status", "==", "pending_approval")
