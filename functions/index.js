@@ -405,8 +405,13 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
     try {
       userRecord = await admin.auth().getUserByEmail(emailLower);
       // User exists in Auth but not in Firestore. We'll "link" them by using their existing UID.
-      // We also update their display name for consistency.
-      await admin.auth().updateUser(userRecord.uid, { displayName: fullName });
+      // We also update their display name and set the new temporary password for consistency.
+      await admin.auth().updateUser(userRecord.uid, { 
+        displayName: fullName,
+        password: tempPassword,
+        disabled: false,
+        emailVerified: true
+      });
       logger.log(`Found orphan Auth account for ${emailLower}, linking to new Firestore record.`);
     } catch (e) {
       if (e.code === 'auth/user-not-found') {
@@ -415,6 +420,7 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
           email: emailLower,
           password: tempPassword,
           displayName: fullName,
+          emailVerified: true
         });
       } else {
         throw e; // Rethrow unexpected Auth errors
@@ -429,6 +435,7 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
       role: role,
       company_name: "Jettsan",
       status: "active",
+      temp_password: tempPassword, // Storing for system recognition as requested
       requiresPasswordChange: true,
       isFirstLogin: true,
       created_at: admin.firestore.FieldValue.serverTimestamp(),
