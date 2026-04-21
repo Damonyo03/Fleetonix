@@ -25,7 +25,29 @@ onAuthStateChanged(auth, async (user) => {
     initPasswordChange();
     initClearDataFeature();
     initRestoreFeature();
+    initPasswordToggles();
 });
+
+function initPasswordToggles() {
+    const toggles = [
+        { id: 'toggleCurrentPassword', inputId: 'currentPassword' },
+        { id: 'toggleNewPassword', inputId: 'newPassword' },
+        { id: 'toggleConfirmPassword', inputId: 'confirmPassword' }
+    ];
+
+    toggles.forEach(({ id, inputId }) => {
+        const toggle = document.getElementById(id);
+        const input = document.getElementById(inputId);
+        if (toggle && input) {
+            toggle.onclick = () => {
+                const isPass = input.type === 'password';
+                input.type = isPass ? 'text' : 'password';
+                toggle.classList.toggle('fa-eye', !isPass);
+                toggle.classList.toggle('fa-eye-slash', isPass);
+            };
+        }
+    });
+}
 
 function initMfaToggle(uid) {
     const toggle = document.getElementById('mfaToggle');

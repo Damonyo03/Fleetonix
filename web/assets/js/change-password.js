@@ -15,6 +15,23 @@ document.addEventListener('DOMContentLoaded', () => {
         alertBox.style.display = 'flex';
     }
 
+    // Toggle Password Visibility Logic
+    const initToggle = (toggleId, inputId) => {
+        const toggle = document.getElementById(toggleId);
+        const input = document.getElementById(inputId);
+        if (!toggle || !input) return;
+
+        toggle.onclick = () => {
+            const isPass = input.type === 'password';
+            input.type = isPass ? 'text' : 'password';
+            toggle.classList.toggle('fa-eye', !isPass);
+            toggle.classList.toggle('fa-eye-slash', isPass);
+        };
+    };
+
+    initToggle('toggleNewPassword', 'newPassword');
+    initToggle('toggleConfirmPassword', 'confirmPassword');
+
     // Ensure the user is actually authenticated
     auth.onAuthStateChanged(async (user) => {
         if (!user) {
