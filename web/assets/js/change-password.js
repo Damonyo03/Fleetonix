@@ -64,10 +64,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update password in Firebase Auth
             await updatePassword(user, newPassword);
 
-            // Update user document in Firestore to remove the requiresPasswordChange flag
+            // Update user document in Firestore to remove the flags and clear temp password
             const userRef = doc(db, 'users', user.uid);
             await updateDoc(userRef, {
-                requiresPasswordChange: false
+                requiresPasswordChange: false,
+                temp_password: null
             });
 
             // Check if they are still pending approval or a driver

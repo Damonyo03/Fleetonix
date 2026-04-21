@@ -132,7 +132,7 @@ service cloud.firestore {
       allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
       allow update: if isSignedIn() && (isOwner(userId) || isAdmin())
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-             'profile_image_url', 'full_name', 'phone', 'updated_at', 'isFirstLogin', 'status', 'role', 'requiresPasswordChange'
+             'profile_image_url', 'full_name', 'phone', 'updated_at', 'isFirstLogin', 'status', 'role', 'requiresPasswordChange', 'last_password_change', 'temp_password'
            ]);
       allow write: if isSignedIn() && isAdmin();
     }
