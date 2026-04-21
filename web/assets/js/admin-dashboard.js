@@ -68,7 +68,6 @@ onAuthStateChanged(auth, async (user) => {
 
     // Feature Init
     initGlobalStats();
-    initGlobalAdminListeners();
     initDispatchFeature();
 
     // Phase 2: Incident Listener
@@ -498,14 +497,6 @@ window.closeQuickInfoPanel = function () {
 
 function initDispatchFeature() {
     // Legacy dispatch logic point
-}
-
-function initGlobalAdminListeners() {
-    document.addEventListener('click', (e) => {
-        if (e.target.closest('#logoutBtn')) {
-            if (confirm("Sign out?")) signOut(auth).then(() => window.location.href = '../login.html');
-        }
-    });
 }
 
 function initGlobalStats() {

@@ -9,8 +9,29 @@
  *   - On logout, call clearUserCache() to remove the cached data.
  */
 
+import { auth } from "../firebase-init.js";
+import { signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
 const USER_CACHE_KEY = 'fleetonix_display_name';
 const USER_ROLE_KEY  = 'fleetonix_user_role';
+
+// ── Global Session Listener ──────────────────────────────────────────────────
+// This ensures logout works anywhere in the system without page-specific code.
+document.addEventListener('click', (e) => {
+    const logoutBtn = e.target.closest('#logoutBtn') || e.target.closest('.nav-item.logout') || e.target.closest('.logout-link');
+    if (logoutBtn) {
+        e.preventDefault();
+        if (confirm("Sign out of the system?")) {
+            localStorage.removeItem(USER_CACHE_KEY);
+            localStorage.removeItem(USER_ROLE_KEY);
+            signOut(auth).catch(err => {
+                console.error("Logout failed:", err);
+                // Fallback redirect
+                window.location.href = '/login.html';
+            });
+        }
+    }
+});
 
 // ── Auto-apply on every page load ────────────────────────────────────────────
 // Reads from localStorage as soon as the DOM is ready, before Firebase resolves.
