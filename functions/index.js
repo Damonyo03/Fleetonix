@@ -7,7 +7,6 @@
 const { setGlobalOptions } = require("firebase-functions");
 const { onRequest } = require("firebase-functions/v2/https");
 const { onDocumentUpdated, onDocumentCreated, onDocumentDeleted } = require("firebase-functions/v2/firestore");
-const { onSchedule } = require("firebase-functions/v2/scheduler");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 const nodemailer = require("nodemailer");
@@ -805,9 +804,17 @@ async function processStaleDTR(db, dtrDoc) {
 }
 
 // Scheduled Function (Runs Daily at 1:00 AM)
-exports.autoResolveStaleDTRs = onSchedule("0 1 * * *", async (event) => {
+// Converted from onSchedule to onRequest so CI can deploy it without Cloud Scheduler IAM issues.
+// The Cloud Scheduler job calls this URL directly with OIDC auth.
+// Manually manage the job with: gcloud scheduler jobs create http ...
+exports.autoResolveStaleDTRs = onRequest({ cors: false }, async (req, res) => {
+    // Only allow Cloud Scheduler (or project owners manually triggering it)
+    const isScheduler = !!req.headers['x-cloudscheduler-jobname'];
+    const isPost = req.method === 'POST';
+    if (!isPost) { return res.status(405).json({ error: 'Method not allowed' }); }
+    if (!isScheduler) { return res.status(403).json({ error: 'Forbidden: must be invoked by Cloud Scheduler' }); }
+
     const db = admin.firestore();
-    // Get today's date string
     const today = new Date().toISOString().split('T')[0];
 
     const staleSnap = await db.collection("dtr_logs")
@@ -817,7 +824,7 @@ exports.autoResolveStaleDTRs = onSchedule("0 1 * * *", async (event) => {
 
     if (staleSnap.empty) {
         logger.log("No stale DTR records found.");
-        return;
+        return res.json({ success: true, processed: 0 });
     }
 
     let processedCount = 0;
@@ -830,6 +837,7 @@ exports.autoResolveStaleDTRs = onSchedule("0 1 * * *", async (event) => {
         }
     }
     logger.log(`Successfully resolved ${processedCount} stale DTR records.`);
+    res.json({ success: true, processed: processedCount });
 });
 
 // Callable HTTP endpoint for Admin manual resolution of a specific driver's record
