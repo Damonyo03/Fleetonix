@@ -379,10 +379,10 @@ exports.adminCreateUser = onRequest({ cors: true }, async (req, res) => {
   }
   const emailLower = email.toLowerCase().trim();
 
-  // Auto-generate a secure temporary password
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#";
+  // Auto-generate a secure temporary password (alphanumeric only to avoid email encoding issues)
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
   let tempPassword = "";
-  for (let i = 0; i < 10; i++) tempPassword += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < 12; i++) tempPassword += chars[Math.floor(Math.random() * chars.length)];
 
   try {
     const userRecord = await admin.auth().createUser({

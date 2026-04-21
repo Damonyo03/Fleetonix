@@ -17,27 +17,6 @@
         .alert { padding: 10px; margin-bottom: 15px; border-radius: 4px; display: none; }
         .alert-error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
         .loading { opacity: 0.7; pointer-events: none; }
-
-        .password-wrapper {
-            position: relative;
-        }
-        .password-wrapper .form-input {
-            padding-right: 44px;
-        }
-        .password-toggle {
-            position: absolute;
-            right: 14px;
-            top: 50%;
-            transform: translateY(-50%);
-            cursor: pointer;
-            color: var(--text-muted, #6b7280);
-            font-size: 15px;
-            transition: color 0.2s;
-            user-select: none;
-        }
-        .password-toggle:hover {
-            color: var(--accent, #00d4ff);
-        }
     </style>
 </head>
 <body class="login-body">
@@ -85,7 +64,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, connectAuthEmulator } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, collection, query, where, getDocs, connectFirestoreEmulator } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, connectFirestoreEmulator } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBWal4kXhImWNvJL2jV4LG0FvftdN2J9DQ",
@@ -132,16 +111,13 @@
 
             try {
                 const userCredential = await signInWithEmailAndPassword(auth, email, password);
-                console.log("Logged in:", userCredential.user);
-                
-                // Lookup user by email in Firestore (since UID might not match if not seeded by UID)
-                const q = query(collection(db, "users"), where("email", "==", email));
-                const querySnapshot = await getDocs(q);
-                
-                if (!querySnapshot.empty) {
-                    const userData = querySnapshot.docs[0].data();
-                    console.log("User found in Firestore:", userData);
-                    
+                const uid = userCredential.user.uid;
+
+                // Lookup user by UID — avoids Firestore permission issues with email queries
+                const userSnap = await getDoc(doc(db, "users", uid));
+
+                if (userSnap.exists()) {
+                    const userData = userSnap.data();
                     const status = userData.status || 'active';
 
                     // Lifecycle Guard: Verification
@@ -158,7 +134,7 @@
 
                     // Lifecycle Guard: Approval
                     if (status === 'pending_approval') {
-                        errorMessage.innerHTML = `<i class="fas fa-clock"></i> Account pending final Super Admin approval. <br><span style="font-size:0.75rem; opacity:0.8;">You will receive an email once your credentials have been vetted.</span>`;
+                        errorMessage.innerHTML = `<i class="fas fa-clock"></i> Account pending final Super Admin approval. <br><span style="font-size:0.75rem; opacity:0.8;">You will receive an email once your account is activated.</span>`;
                         errorMessage.style.background = 'rgba(0, 212, 255, 0.1)';
                         errorMessage.style.color = '#00d4ff';
                         errorMessage.style.borderColor = 'rgba(0, 212, 255, 0.2)';
@@ -172,14 +148,13 @@
                     if (adminRoles.includes(userData.user_type || userData.role)) {
                         window.location.href = 'admin/dashboard.html';
                     } else if (userData.user_type === 'driver' || userData.role === 'driver') {
-                        // Drivers are directed to download the mobile application
                         window.location.href = 'driver-app-download.html';
                     } else {
                         console.warn("User type not recognized:", userData.user_type);
                         window.location.href = 'login.html?error=invalid_role';
                     }
                 } else {
-                    console.warn("User auth'd but not found in Firestore meta-data.");
+                    console.warn("User auth'd but no Firestore profile found for UID:", uid);
                     window.location.href = 'login.html?login=partial';
                 }
             } catch (error) {
