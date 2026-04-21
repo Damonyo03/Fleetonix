@@ -46,7 +46,13 @@
     --border-ui: rgba(0, 0, 0, 0.1);
     
     /* Update dependent variables for light mode */
-    --accent-blue: var(--accent);
+    --accent-blue: #0284c7;
+    --accent-teal: #0891b2;
+    --accent-green: #166534;
+    --accent-purple: #6d28d9;
+    --accent-error: #991b1b;
+    --accent-warning: #854d0e;
+    --accent-orange: #c2410c;
     --border-color: var(--border-ui);
     --glow-blue: rgba(2, 132, 199, 0.15);
 }

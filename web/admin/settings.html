@@ -16,7 +16,7 @@
             padding: 20px; 
             border-radius: var(--radius-md); 
             margin-bottom: 24px; 
-            color: #ff6b6b; 
+            color: var(--accent-error); 
             font-size: 0.875rem;
             display: flex;
             gap: 12px;
@@ -140,7 +140,7 @@
                             <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 8px;">
                                 <strong>Factory Reset:</strong> Downloads a full JSON backup then wipes operational collections.
                             </p>
-                            <button id="clearDataBtn" class="btn btn-secondary" style="width: 100%; justify-content: center; border-color: rgba(255, 77, 77, 0.3); color: #ff6b6b; padding: 12px;">
+                            <button id="clearDataBtn" class="btn btn-secondary" style="width: 100%; justify-content: center; border-color: rgba(255, 77, 77, 0.3); color: var(--accent-error); padding: 12px;">
                                 <i class="fas fa-trash-alt"></i> Execute Global Factory Reset
                             </button>
 
@@ -148,7 +148,7 @@
                                 <p style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 8px;">
                                     <strong>Restore Data:</strong> Re-upload previously downloaded backup files to recover transactional records.
                                 </p>
-                                <button id="restoreDataBtn" class="btn btn-primary" style="width: 100%; justify-content: center; background: rgba(0, 212, 255, 0.1); color: var(--accent-blue); border: 1px solid rgba(0, 212, 255, 0.3);">
+                                <button id="restoreDataBtn" class="btn btn-primary" style="width: 100%; justify-content: center;">
                                     <i class="fas fa-file-import"></i> Restore from JSON Backup
                                 </button>
                                 <input type="file" id="restoreFileInput" accept=".json" style="display: none;">

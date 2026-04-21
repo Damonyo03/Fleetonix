@@ -70,10 +70,24 @@
     --glass-border: rgba(0, 0, 0, 0.05);
     --glass-shadow: 0 8px 32px 0 rgba(15, 23, 42, 0.08);
 
-    /* Update accents for light mode visibility */
+    /* Update accents for high contrast in light mode */
+    --accent-blue: #0284c7;
+    --accent-teal: #0891b2;
     --accent-green: #166534;
+    --accent-purple: #6d28d9;
     --accent-error: #991b1b;
     --accent-warning: #854d0e;
+    --accent-orange: #c2410c;
+    --accent-teal-bright: #0f766e;
+    --accent-emerald: #047857;
+}
+
+[data-theme="light"] .nav-item:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="light"] .nav-item.active {
+    color: #ffffff;
 }
 
 /* ── Mobile Overrides for Root Variables ────────────────────────────────────── */
