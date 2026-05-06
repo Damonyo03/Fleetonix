@@ -85,13 +85,18 @@ let allBookings = [];
 // Phase 5: Geographic Sector Groups
 const SECTORS = {
     NORTH: [
-        'Baguio', 'Laoag', 'Vigan', 'Tuguegarao', 'Santiago', 'San Fernando', 'Angeles', 'Mabalacat', 'Malolos', 'San Jose del Monte',
-        'Pampanga', 'Bulacan', 'Tarlac', 'Pangasinan', 'Zambales', 'Bataan', 'Nueva Ecija', 'Aurora', 'Ilocos', 'Cagayan', 'Isabela', 
-        'Nueva Vizcaya', 'Quirino', 'Benguet', 'Kalinga', 'Ifugao', 'Abra', 'Apayao', 'Mountain Province', 'La Union'
+        'New Clark City', 'Clark International Airport', 'Clark', 'Angeles', 'San Fernando', 'Apalit', 
+        'Calumpit', 'Malolos', 'Guiguinto', 'Balagtas', 'Bocaue', 'Marilao', 'Meycauayan',
+        'Pampanga', 'Bulacan', 'Tarlac', 'Pangasinan', 'Zambales', 'Bataan', 'Nueva Ecija'
+    ],
+    NCR: [
+        'West Valenzuela', 'Valenzuela', 'Caloocan', 'Solis', 'Tutuban', 'Blumentritt', 'Espana', 'Santa Mesa', 
+        'Paco', 'Buendia', 'EDSA', 'Senate-DepEd', 'FTI', 'Bicutan', 'Sucat',
+        'Manila', 'Makati', 'Pasay', 'Taguig', 'Parañaque', 'Quezon City', 'Las Piñas', 'Muntinlupa'
     ],
     SOUTH: [
-        'Batangas', 'Lucena', 'Naga', 'Legazpi', 'Calamba', 'Santa Rosa', 'Dasmariñas', 'San Pedro', 'Biñan', 'Cabuyao', 'Lipa', 'Tanauan',
-        'Cavite', 'Laguna', 'Rizal', 'Quezon', 'Mindoro', 'Marinduque', 'Romblon', 'Palawan', 'Camarines', 'Albay', 'Sorsogon', 'Masbate', 'Catanduanes'
+        'Alabang', 'Muntinlupa', 'San Pedro', 'Pacita', 'Biñan', 'Santa Rosa', 'Cabuyao', 'Banlic', 'Calamba',
+        'Laguna', 'Batangas', 'Cavite', 'Rizal', 'Quezon', 'Mindoro', 'Camarines', 'Albay', 'Sorsogon'
     ]
 };
 
@@ -104,6 +109,7 @@ function detectArea(address, city, province, lat) {
     // 1. Keyword Check
     if (SECTORS.NORTH.some(k => fullText.includes(k.toLowerCase()))) return "North";
     if (SECTORS.SOUTH.some(k => fullText.includes(k.toLowerCase()))) return "South";
+    if (SECTORS.NCR.some(k => fullText.includes(k.toLowerCase()))) return "NCR";
 
     // 2. Latitude Check (Fallback for missing keywords)
     if (lat > 14.8) return "North";
