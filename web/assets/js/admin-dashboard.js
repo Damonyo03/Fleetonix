@@ -100,42 +100,8 @@ function initMap() {
 function startRealtimeDriverTracking() {
     console.log("[Dashboard] Tracking drivers...");
 
-    // 1. Live Locations
-    onSnapshot(collection(db, "driver_locations"), (snapshot) => {
-        snapshot.docChanges().forEach(change => {
-            const docId = change.doc.id; // Could be email or UID
-            const data = change.doc.data();
-
-            // AUTHORIZATION SYNC: Skip ghost users not in 'drivers' collection
-            if (!authorizedDriverIds.has(docId) && !emailToUidMap[docId.toLowerCase()]) {
-                // If it's a ghost, ignore it and ensure its marker is removed
-                removeMarker(docId);
-                return;
-            }
-
-            const id = emailToUidMap[docId.toLowerCase()] || docId;
-
-            if (change.type === "added" || change.type === "modified") {
-                const lat = data.current_latitude || data.latitude || 0;
-                const lng = data.current_longitude || data.longitude || 0;
-                if (lat === 0 && lng === 0) return;
-
-                updateDriverState(id, {
-                    ...data,
-                    current_latitude: lat,
-                    current_longitude: lng,
-                    last_updated: data.last_updated || data.timestamp || serverTimestamp()
-                }, 'realtime');
-            } else if (change.type === "removed") {
-                removeMarker(id);
-                delete allDriversData[id];
-            }
-        });
-    });
-
-    // 2. Authorized Drivers & Metadata
+    // 1. Authorized Drivers & Metadata (Load this first or concurrently)
     onSnapshot(collection(db, "drivers"), (snapshot) => {
-        authorizedDriverIds.clear();
         snapshot.docs.forEach(doc => {
             const data = doc.data();
             authorizedDriverIds.add(doc.id);
@@ -145,6 +111,51 @@ function startRealtimeDriverTracking() {
                 ...data,
                 driver_name: data.driver_name || 'Fleet Driver'
             }, 'metadata');
+        });
+        console.log(`[Dashboard] ${authorizedDriverIds.size} authorized drivers loaded.`);
+        
+        // Re-process any pending locations if needed (optional optimization)
+    });
+
+    // 2. Live Locations (The primary real-time stream)
+    onSnapshot(collection(db, "driver_locations"), (snapshot) => {
+        snapshot.docChanges().forEach(change => {
+            const docId = change.doc.id;
+            const data = change.doc.data();
+
+            // Attempt to resolve UID from email if necessary
+            const id = emailToUidMap[docId.toLowerCase()] || docId;
+
+            // SECURITY & SYNC: Ensure we only show drivers registered in the fleet
+            if (!authorizedDriverIds.has(id)) {
+                // If it's not a known driver UID yet, check if the docId is an email we know
+                const resolvedId = emailToUidMap[docId.toLowerCase()];
+                if (!resolvedId) {
+                    // console.warn(`[Dashboard] Skipping unauthorized location: ${docId}`);
+                    removeMarker(docId);
+                    return;
+                }
+            }
+
+            if (change.type === "added" || change.type === "modified") {
+                const lat = data.current_latitude || data.latitude || 0;
+                const lng = data.current_longitude || data.longitude || 0;
+                if (lat === 0 && lng === 0) return;
+
+                // Robust Timestamp Handling
+                let lastUpdated = data.last_updated || data.timestamp;
+                if (!lastUpdated) lastUpdated = new Date(); // Fallback to now for immediate reflection
+
+                updateDriverState(id, {
+                    ...data,
+                    current_latitude: lat,
+                    current_longitude: lng,
+                    last_updated: lastUpdated
+                }, 'realtime');
+            } else if (change.type === "removed") {
+                removeMarker(id);
+                delete allDriversData[id];
+            }
         });
     });
 
@@ -185,25 +196,106 @@ function checkHeartbeats() {
  * ── Incident & Accident Monitoring ───────────────────────────
  */
 function startIncidentMonitoring() {
-    console.log("[Dashboard] Monitoring incidents...");
-    onSnapshot(query(collection(db, "incidents"), where("status", "==", "reported"), limit(10)), (snapshot) => {
-        snapshot.docChanges().forEach(change => {
-            if (change.type === "added") {
-                const data = change.doc.data();
-                const driverId = data.driver_id;
+    console.log("[Dashboard] Monitoring incidents and accidents...");
+    
+    const collectionsToWatch = ['incidents', 'accidents'];
+    
+    collectionsToWatch.forEach(collName => {
+        onSnapshot(query(collection(db, collName), where("status", "==", "reported"), limit(5)), (snapshot) => {
+            snapshot.docChanges().forEach(change => {
+                if (change.type === "added") {
+                    const data = change.doc.data();
+                    const docId = change.doc.id;
+                    const driverId = data.driver_uid || data.driver_id;
+                    const driverEmail = data.driver_email;
 
-                // Alert Action: Auto-focus and notify
-                if (driverMarkers[driverId]) {
-                    const marker = driverMarkers[driverId].marker;
-                    driversMap.setView(marker.getLatLng(), 18);
+                    console.warn(`[EMERGENCY] ${collName.toUpperCase()} reported by ${driverEmail}`);
+                    
+                    showEmergencyNotification(driverId, docId, collName, driverEmail, data.description || "Emergency Alert");
 
-                    // Trigger sound indicator or visual toast if needed
-                    console.warn(`[ACCIDENT] High Priority Incident for ${data.driver_email}`);
+                    if (driverMarkers[driverId]) {
+                        const marker = driverMarkers[driverId].marker;
+                        driversMap.setView(marker.getLatLng(), 18);
+                        marker.openPopup();
+                    }
                 }
-            }
+            });
         });
     });
 }
+
+function showEmergencyNotification(driverId, docId, collectionName, email, message) {
+    const alertId = `alert-${docId}`;
+    if (document.getElementById(alertId)) return;
+
+    const alertBox = document.createElement('div');
+    alertBox.id = alertId;
+    alertBox.className = 'fixed top-5 left-1/2 -translate-x-1/2 z-[9999] bg-slate-900 border-2 border-red-500 text-white px-6 py-4 rounded-2xl shadow-[0_0_50px_rgba(239,68,68,0.4)] flex items-center gap-6 animate-bounce min-w-[400px]';
+    alertBox.innerHTML = `
+        <div class="bg-red-500 p-3 rounded-xl animate-pulse">
+            <i class="fas fa-exclamation-triangle text-2xl text-white"></i>
+        </div>
+        <div class="flex-1">
+            <div class="font-black text-red-500 text-lg tracking-tighter uppercase">Emergency Reported</div>
+            <div class="text-sm font-bold text-slate-300 truncate max-w-[200px]">${email}</div>
+        </div>
+        <div class="flex items-center gap-2">
+            <button class="bg-red-500 hover:bg-red-600 text-white text-[10px] font-black px-4 py-2 rounded-lg transition-all" onclick="resolveAccident('${driverId}', '${docId}', '${collectionName}')">RESOLVE</button>
+            <button class="text-slate-500 hover:text-white transition-colors" onclick="this.closest('#${alertId}').remove()">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+    `;
+    document.body.appendChild(alertBox);
+    
+    try {
+        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2558/2558-preview.mp3');
+        audio.play().catch(() => {});
+    } catch (e) {}
+}
+
+window.resolveAccident = async function(driverId, docId, collName) {
+    const isManual = docId === 'MANUAL';
+    const confirmMsg = isManual 
+        ? "Manual Resolution: This will clear the emergency blinking indicator for this driver. Proceed?" 
+        : "Are you sure you want to mark this incident as resolved? This will clear the emergency flag for the driver.";
+
+    if (!confirm(confirmMsg)) return;
+
+    try {
+        // 1. Update the accident/incident record if not a manual map-only resolution
+        if (!isManual) {
+            await updateDoc(doc(db, collName, docId), {
+                status: 'resolved',
+                resolved_at: serverTimestamp(),
+                resolved_by: auth.currentUser?.email || 'admin'
+            });
+        }
+
+        // 2. Clear the incident_active flag for the driver
+        if (driverId) {
+            await updateDoc(doc(db, "drivers", driverId), {
+                incident_active: false,
+                updated_at: serverTimestamp()
+            });
+            console.log(`[Dashboard] Resolved incident for driver ${driverId}`);
+        }
+
+        // 3. Remove the UI notification if it exists
+        const alertBox = document.getElementById(`alert-${docId}`);
+        if (alertBox) alertBox.remove();
+
+        // 4. Close map popups if open
+        if (driverMarkers[driverId]) {
+            driverMarkers[driverId].marker.closePopup();
+        }
+
+        alert("Incident successfully resolved.");
+    } catch (error) {
+        console.error("Error resolving accident:", error);
+        alert("Failed to resolve incident: " + error.message);
+    }
+};
 
 function updateDriverState(id, data, source) {
     if (!allDriversData[id]) allDriversData[id] = { id, driver_name: 'Loading...' };
@@ -225,6 +317,8 @@ function updateDriverState(id, data, source) {
 /**
  * ── Marker & Animation Logic ──────────────────────────────────────────
  */
+let hasAutoCentered = false;
+
 function refreshMarker(id) {
     const d = allDriversData[id];
     if (!d || !d.current_latitude || !d.current_longitude || !driversMap) return;
@@ -238,10 +332,28 @@ function refreshMarker(id) {
         const { marker } = driverMarkers[id];
         animateMarkerTo(marker, L.latLng(latlng));
         marker.setIcon(createDotIcon(d, isMoving));
+        
+        let popupHtml = `<b>${d.driver_name}</b><br>${d.vehicle_assigned || 'Driver'}<br><span class="text-xs uppercase font-bold text-accent-blue">${getDriverStatusLabel(statusClass)}</span>`;
+        if (d.incident_active) {
+            popupHtml += `<div class="mt-2 pt-2 border-t border-slate-700/30 text-center">
+                <button class="bg-red-500 hover:bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded" 
+                        onclick="resolveAccident('${id}', 'MANUAL', 'accidents')">RESOLVE ACCIDENT</button>
+            </div>`;
+        }
+        marker.setPopupContent(popupHtml);
     } else {
         const marker = L.marker(latlng, {
             icon: createDotIcon(d, isMoving)
         }).addTo(driversMap);
+
+        let popupHtml = `<b>${d.driver_name}</b><br>${d.vehicle_assigned || 'Driver'}<br><span class="text-xs uppercase font-bold text-accent-blue">${getDriverStatusLabel(statusClass)}</span>`;
+        if (d.incident_active) {
+            popupHtml += `<div class="mt-2 pt-2 border-t border-slate-700/30 text-center">
+                <button class="bg-red-500 hover:bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded" 
+                        onclick="resolveAccident('${id}', 'MANUAL', 'accidents')">RESOLVE ACCIDENT</button>
+            </div>`;
+        }
+        marker.bindPopup(popupHtml);
 
         marker.on('click', () => {
             driversMap.setView(latlng, 17);
@@ -249,6 +361,14 @@ function refreshMarker(id) {
         });
 
         driverMarkers[id] = { marker, data: d };
+    }
+
+    // Auto-center map on first drivers detected
+    if (!hasAutoCentered && Object.keys(driverMarkers).length > 0) {
+        const markerGroup = L.featureGroup(Object.values(driverMarkers).map(m => m.marker));
+        driversMap.fitBounds(markerGroup.getBounds().pad(0.2));
+        hasAutoCentered = true;
+        console.log("[Dashboard] Auto-centered map to active fleet.");
     }
 }
 

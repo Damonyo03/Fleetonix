@@ -816,68 +816,48 @@ fun DriverDashboard(
         scope.launch {
             isReportingAccident = true
             try {
-                // Check permission before accessing location
-                if (!hasLocationPermission(context)) {
-                    tripActionError = "Location permission is required to report accidents"
-                    isReportingAccident = false
-                    return@launch
-                }
-
-                val locationClient = LocationServices.getFusedLocationProviderClient(context)
-                val locationRequest =
-                    LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10000)
-                        .setWaitForAccurateLocation(false)
-                        .build()
-
-                val cancellationTokenSource = CancellationTokenSource()
-                val location = try {
-                    val locationTask = locationClient.getCurrentLocation(
-                        locationRequest.priority,
-                        cancellationTokenSource.token
-                    )
-                    locationTask.await()
-                } catch (securityException: SecurityException) {
-                    Log.e("AccidentReport", "Location permission denied: ${securityException.message}")
-                    tripActionError = "Location permission denied. Please grant location access."
-                    isReportingAccident = false
-                    return@launch
-                }
-
-                // Improvement: Fallback to dashboard's current coordinates if fresh location fetch fails
-                val lat = location?.latitude ?: currentLatitude
-                val lng = location?.longitude ?: currentLongitude
-                
-                if (lat == 0.0 && lng == 0.0) {
-                    throw Exception("Could not determine location. Please ensure GPS is enabled.")
-                }
-
+                // 1. IMMEDIATE FLAG: Set incident_active in drivers collection right away
+                // This triggers the blinking indicator on Admin Map INSTANTLY
                 val user = auth.currentUser
+                if (user?.uid != null) {
+                    db.collection("drivers").document(user.uid).update(
+                        "incident_active", true,
+                        "last_updated", FieldValue.serverTimestamp()
+                    )
+                }
+
+                // 2. COORDINATES: Use dashboard's current coordinates immediately for the report
+                // This avoids waiting for locationClient.getCurrentLocation which can take 10s
+                val lat = if (currentLatitude != 0.0) currentLatitude else 0.0
+                val lng = if (currentLongitude != 0.0) currentLongitude else 0.0
+                
                 val schedule = nextSchedule
 
                 val accidentData = hashMapOf(
                     "driver_email" to user?.email?.lowercase()?.trim(),
-                    "driver_uid" to (user?.uid ?: ""), // Add UID for rule matching
+                    "driver_uid" to (user?.uid ?: ""),
                     "schedule_id" to (schedule?.scheduleId ?: 0),
-                    "firebase_schedule_id" to schedule?.docId,
+                    "firebase_schedule_id" to (schedule?.docId ?: "none"),
                     "latitude" to lat,
                     "longitude" to lng,
-                    "description" to "Accident reported via shake detection",
-                    "status" to "pending", // CRITICAL: Admin Dashboard filters for status != "acknowledged"
+                    "description" to "Accident reported by driver (Urgent)",
+                    "status" to "reported", // Match web app's listener
                     "reported_at" to FieldValue.serverTimestamp()
                 )
 
-                db.collection("accidents").add(accidentData).await()
+                // Write to both for compatibility during transition
+                val accidentsRef = db.collection("accidents").add(accidentData)
+                val incidentsRef = db.collection("incidents").add(accidentData)
                 
-                // Set incident_active in drivers collection for blinking indicator on Admin Map
-                if (user?.uid != null) {
-                    db.collection("drivers").document(user.uid).update("incident_active", true).await()
-                }
+                // Wait for either/both but don't block UI if possible
+                accidentsRef.await()
+                incidentsRef.await()
                 
-                tripActionSuccess = "Accident reported successfully. Emergency services have been notified."
+                tripActionSuccess = "Accident reported! Admin has been notified immediately."
                 showAccidentDialog = false
             } catch (e: Exception) {
-                Log.e("AccidentReport", "Error reporting accident: ${e.message}", e)
-                tripActionError = "Failed to report accident: ${e.message}"
+                Log.e("AccidentReport", "Error: ${e.message}", e)
+                tripActionError = "Report failed: ${e.message}"
             } finally {
                 isReportingAccident = false
             }

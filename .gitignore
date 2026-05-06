@@ -15,3 +15,7 @@ captures/
 *.output.txt
 *.log
 FLEETONIX_SECRETS_BACKUP.txt
+
+# JDK downloads
+jdk-21.0.6+7/
+jdk21.zip
