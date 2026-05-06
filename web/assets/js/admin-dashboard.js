@@ -203,9 +203,10 @@ function startIncidentMonitoring() {
     collectionsToWatch.forEach(collName => {
         onSnapshot(query(collection(db, collName), where("status", "==", "reported"), limit(5)), (snapshot) => {
             snapshot.docChanges().forEach(change => {
+                const data = change.doc.data();
+                const docId = change.doc.id;
+                
                 if (change.type === "added") {
-                    const data = change.doc.data();
-                    const docId = change.doc.id;
                     const driverId = data.driver_uid || data.driver_id;
                     const driverEmail = data.driver_email;
 
@@ -217,6 +218,13 @@ function startIncidentMonitoring() {
                         const marker = driverMarkers[driverId].marker;
                         driversMap.setView(marker.getLatLng(), 18);
                         marker.openPopup();
+                    }
+                } else if (change.type === "removed" || (change.type === "modified" && data.status !== "reported")) {
+                    // Auto-dismiss the notification if it falls out of the 'reported' query or changes status
+                    const alertBox = document.getElementById(`alert-${docId}`);
+                    if (alertBox) {
+                        alertBox.remove();
+                        console.log(`[Dashboard] Auto-dismissed notification for resolved incident: ${docId}`);
                     }
                 }
             });
