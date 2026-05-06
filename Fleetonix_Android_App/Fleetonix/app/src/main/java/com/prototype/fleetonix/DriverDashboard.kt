@@ -813,54 +813,48 @@ fun DriverDashboard(
 
     // Handle accident report
     val handleAccidentReport: () -> Unit = {
-        scope.launch {
-            isReportingAccident = true
-            try {
-                // 1. IMMEDIATE FLAG: Set incident_active in drivers collection right away
-                // This triggers the blinking indicator on Admin Map INSTANTLY
-                val user = auth.currentUser
-                if (user?.uid != null) {
-                    db.collection("drivers").document(user.uid).update(
-                        "incident_active", true,
-                        "last_updated", FieldValue.serverTimestamp()
-                    )
-                }
-
-                // 2. COORDINATES: Use dashboard's current coordinates immediately for the report
-                // This avoids waiting for locationClient.getCurrentLocation which can take 10s
-                val lat = if (currentLatitude != 0.0) currentLatitude else 0.0
-                val lng = if (currentLongitude != 0.0) currentLongitude else 0.0
-                
-                val schedule = nextSchedule
-
-                val accidentData = hashMapOf(
-                    "driver_email" to user?.email?.lowercase()?.trim(),
-                    "driver_uid" to (user?.uid ?: ""),
-                    "schedule_id" to (schedule?.scheduleId ?: 0),
-                    "firebase_schedule_id" to (schedule?.docId ?: "none"),
-                    "latitude" to lat,
-                    "longitude" to lng,
-                    "description" to "Accident reported by driver (Urgent)",
-                    "status" to "reported", // Match web app's listener
-                    "reported_at" to FieldValue.serverTimestamp()
+        isReportingAccident = true
+        
+        try {
+            // 1. IMMEDIATE FLAG: Set incident_active in drivers collection right away
+            // This triggers the blinking indicator on Admin Map INSTANTLY
+            val user = auth.currentUser
+            if (user?.uid != null) {
+                db.collection("drivers").document(user.uid).update(
+                    "incident_active", true,
+                    "last_updated", FieldValue.serverTimestamp()
                 )
-
-                // Write to both for compatibility during transition
-                val accidentsRef = db.collection("accidents").add(accidentData)
-                val incidentsRef = db.collection("incidents").add(accidentData)
-                
-                // Wait for either/both but don't block UI if possible
-                accidentsRef.await()
-                incidentsRef.await()
-                
-                tripActionSuccess = "Accident reported! Admin has been notified immediately."
-                showAccidentDialog = false
-            } catch (e: Exception) {
-                Log.e("AccidentReport", "Error: ${e.message}", e)
-                tripActionError = "Report failed: ${e.message}"
-            } finally {
-                isReportingAccident = false
             }
+
+            // 2. COORDINATES: Use dashboard's current coordinates immediately for the report
+            val lat = if (currentLatitude != 0.0) currentLatitude else 0.0
+            val lng = if (currentLongitude != 0.0) currentLongitude else 0.0
+            
+            val schedule = nextSchedule
+
+            val accidentData = hashMapOf(
+                "driver_email" to user?.email?.lowercase()?.trim(),
+                "driver_uid" to (user?.uid ?: ""),
+                "schedule_id" to (schedule?.scheduleId ?: 0),
+                "firebase_schedule_id" to (schedule?.docId ?: "none"),
+                "latitude" to lat,
+                "longitude" to lng,
+                "description" to "Accident reported by driver (Urgent)",
+                "status" to "reported", // Match web app's listener
+                "reported_at" to FieldValue.serverTimestamp()
+            )
+
+            // Write to both for compatibility without blocking the UI
+            db.collection("accidents").add(accidentData)
+            db.collection("incidents").add(accidentData)
+            
+            tripActionSuccess = "Accident reported! Admin has been notified immediately."
+            showAccidentDialog = false
+        } catch (e: Exception) {
+            Log.e("AccidentReport", "Error: ${e.message}", e)
+            tripActionError = "Report failed: ${e.message}"
+        } finally {
+            isReportingAccident = false
         }
     }
 
