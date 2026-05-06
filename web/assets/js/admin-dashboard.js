@@ -199,32 +199,46 @@ function startIncidentMonitoring() {
     console.log("[Dashboard] Monitoring incidents and accidents...");
     
     const collectionsToWatch = ['incidents', 'accidents'];
+    const FIVE_MINUTES_MS = 5 * 60 * 1000;
     
     collectionsToWatch.forEach(collName => {
-        onSnapshot(query(collection(db, collName), where("status", "==", "reported"), limit(5)), (snapshot) => {
+        // Query only reported incidents, ordered by time
+        const q = query(
+            collection(db, collName), 
+            where("status", "==", "reported"), 
+            orderBy("reported_at", "desc"),
+            limit(10)
+        );
+
+        onSnapshot(q, (snapshot) => {
             snapshot.docChanges().forEach(change => {
                 const data = change.doc.data();
                 const docId = change.doc.id;
                 
                 if (change.type === "added") {
-                    const driverId = data.driver_uid || data.driver_id;
-                    const driverEmail = data.driver_email;
+                    // Only show pop-up alert if it's very recent (within 5 minutes)
+                    // This prevents old "reported" but unresolved incidents from popping up on every refresh
+                    const reportedAt = data.reported_at?.toDate ? data.reported_at.toDate() : new Date();
+                    const now = new Date();
+                    const isRecent = (now - reportedAt) < FIVE_MINUTES_MS;
 
-                    console.warn(`[EMERGENCY] ${collName.toUpperCase()} reported by ${driverEmail}`);
-                    
-                    showEmergencyNotification(driverId, docId, collName, driverEmail, data.description || "Emergency Alert");
+                    if (isRecent) {
+                        const driverId = data.driver_uid || data.driver_id;
+                        const driverEmail = data.driver_email;
 
-                    if (driverMarkers[driverId]) {
-                        const marker = driverMarkers[driverId].marker;
-                        driversMap.setView(marker.getLatLng(), 18);
-                        marker.openPopup();
+                        console.warn(`[EMERGENCY] Recent ${collName.toUpperCase()} reported by ${driverEmail}`);
+                        showEmergencyNotification(driverId, docId, collName, driverEmail, data.description || "Emergency Alert");
+
+                        if (driverMarkers[driverId]) {
+                            const marker = driverMarkers[driverId].marker;
+                            driversMap.setView(marker.getLatLng(), 18);
+                            marker.openPopup();
+                        }
                     }
                 } else if (change.type === "removed" || (change.type === "modified" && data.status !== "reported")) {
-                    // Auto-dismiss the notification if it falls out of the 'reported' query or changes status
                     const alertBox = document.getElementById(`alert-${docId}`);
                     if (alertBox) {
                         alertBox.remove();
-                        console.log(`[Dashboard] Auto-dismissed notification for resolved incident: ${docId}`);
                     }
                 }
             });
